@@ -229,24 +229,9 @@ export const technicianRepositoryV2 = {
     });
   },
 
-  async getPublicProfiles(minYearsExperience?: number): Promise<TechnicianProfile[]> {
-    const { data, error, count } = await applyMinYearsFilter(
-      supabase
-        .from('technician_public_view')
-        .select(PUBLIC_SELECT, { count: 'exact' })
-        .eq('verification_status', 'verified'),
-      minYearsExperience,
-    ).range(0, TECHNICIAN_FETCH_LIMIT - 1);
-    throwIfError(error);
-    warnIfTruncated('getPublicProfiles', (data ?? []).length, count ?? null);
-    const rows = (data ?? []) as DbRow[];
-    const types = await loadTechnicianProfileTypes(rows.map((row) => row.id));
-    return rows.map((row) => {
-      const full = publicRowToPrivateCompat(row);
-      const { licenses: _licenses, habilitations: _habilitations, ...profile } = full;
-      return { ...profile, technicianTypes: types[row.id] ?? [] };
-    });
-  },
+  // getPublicProfiles() eliminado (Fase 10, paso 5b): su único llamante era
+  // el bucle de getTechnicianMatchesForOffer, que el paso 5a sustituyó por
+  // getPublicMatchCandidates (misma consulta, con las relaciones en lote).
 
   async getById(id: string): Promise<TechnicianProfile | null> {
     const { data, error } = await supabase
@@ -302,14 +287,15 @@ export const technicianRepositoryV2 = {
   /**
    * Los candidatos de una oferta, en un lote (Fase 10, paso 5a).
    *
-   * Sustituye al bucle de getTechnicianMatchesForOffer, que por cada técnico
-   * llamaba en serie a getPublicWithRelations y a getSafeView: dos lecturas de
-   * la vista y dos cargas de relaciones (cinco tablas cada una) POR TÉCNICO.
-   * Aquí es una lectura de la vista y un lote de relaciones para todos, igual
-   * que search().
+   * Sustituye al bucle de getTechnicianMatchesForOffer, que llamaba a
+   * getPublicProfiles y luego, por cada técnico y en serie, a
+   * getPublicWithRelations y a getSafeView: dos lecturas de la vista y dos
+   * cargas de relaciones (cinco tablas cada una) POR TÉCNICO. Aquí es una
+   * lectura de la vista y un lote de relaciones para todos, igual que search().
+   * Las dos primeras se borraron en el paso 5b al quedarse sin llamantes.
    *
-   * Mismo conjunto que antes: verificados (lo que filtraban getPublicProfiles
-   * y getPublicWithRelations) y con el filtro duro de años en el servidor.
+   * Mismo conjunto que antes: sólo verificados, y con el filtro duro de años
+   * en el servidor.
    */
   async getPublicMatchCandidates(minYearsExperience?: number): Promise<TechnicianMatchCandidate[]> {
     const { data, error, count } = await applyMinYearsFilter(
@@ -328,13 +314,6 @@ export const technicianRepositoryV2 = {
       technician: publicRowToPrivateCompat(row, relations[row.id]),
       preview: mapPublicTechnicianRow(row, relations[row.id]),
     }));
-  },
-
-  async getPublicWithRelations(id: string): Promise<TechnicianWithRelations | null> {
-    const publicRow = await getPublicRow(id);
-    if (!publicRow || publicRow.verification_status !== 'verified') return null;
-    const relations = await loadTechnicianRelations([id]);
-    return publicRowToPrivateCompat(publicRow, relations[id]);
   },
 
   async getSafeView(id: string): Promise<SafeTechnicianPreview | null> {

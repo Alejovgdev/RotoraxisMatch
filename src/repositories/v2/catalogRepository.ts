@@ -61,7 +61,7 @@ const AIRCRAFT_TYPE_RATINGS_SELECT = `
 // caché TTL compartida, el recorte se propagaría a toda la app durante toda
 // la vida útil de la caché.
 //
-// Por eso aquí NO vale un aviso (a diferencia de search()/getPublicProfiles(),
+// Por eso aquí NO vale un aviso (a diferencia de search()/getPublicMatchCandidates(),
 // donde sí — ver technicianRepositoryV2). Dos garantías:
 //   1. Se pagina hasta agotar, nunca una ventana.
 //   2. Se compara lo traído contra un `count: 'exact'` y se LANZA si no

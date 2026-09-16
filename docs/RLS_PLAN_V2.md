@@ -34,7 +34,7 @@ Before Supabase is live, the local demo enforces privacy through TypeScript repo
 
 **Rules for company-facing screens:**
 - Only call `technicianRepositoryV2.getSafeView()`, `getViewForCompany()`, or `search()`.
-- Never call `getAll()`, `getById()`, `getWithRelations()`, or `getPublicProfiles()` from company screens.
+- Never call `getAll()`, `getById()` or `getWithRelations()` from company screens.
 - Use `isUnlocked(techView)` as the type guard before accessing any identity field.
 - When Supabase is live, replace the repository calls with `technician_public_view` / `search_technicians_public()` / `get_unlocked_technician()` — the DTO shapes stay identical.
 
