@@ -217,6 +217,59 @@ export function IconBox({
   );
 }
 
+// A labelled checkbox row. Same look as the "needs ALL of these aircraft" box in
+// TypeRatingRequirementsEditor, extracted when the offer form grew two more
+// (equivalent authorities, only technicians without a licence).
+export function CompanyCheckRow({
+  label,
+  helper,
+  checked,
+  onChange,
+}: {
+  label: string;
+  helper?: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={checkRowStyles.row}
+      onPress={() => onChange(!checked)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
+      activeOpacity={0.75}
+    >
+      <View style={[checkRowStyles.box, checked && checkRowStyles.boxOn]}>
+        {checked ? <Text style={checkRowStyles.mark}>✓</Text> : null}
+      </View>
+      <View style={checkRowStyles.copy}>
+        <Text style={checkRowStyles.label}>{label}</Text>
+        {helper ? <Text style={checkRowStyles.helper}>{helper}</Text> : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const checkRowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: spacing.xs },
+  box: {
+    width: 18,
+    height: 18,
+    marginTop: 1,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: companyUi.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxOn: { borderColor: companyUi.accent, backgroundColor: companyUi.accentSoft },
+  mark: { fontSize: 12, lineHeight: 14, fontWeight: '700', color: companyUi.accent },
+  copy: { flex: 1, minWidth: 0, gap: 2 },
+  label: { fontSize: 12, lineHeight: 17, fontWeight: '600', color: companyUi.textSoft },
+  helper: { fontSize: 11, lineHeight: 15, fontWeight: '500', color: companyUi.textMuted },
+});
+
 export function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={companyStyles.infoRow}>

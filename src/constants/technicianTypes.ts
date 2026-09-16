@@ -1,4 +1,10 @@
-import { TechnicianTypeCatalog } from '../types/catalog';
+import { TechnicianTypeCatalog, TechnicianTypeCode } from '../types/catalog';
+
+// El oficio que hace elegible para una oferta de motor aunque no se declare
+// ningún motor (Fase 10, paso 5a — ver isTechnicianEligibleForOffer). Con
+// nombre porque el filtro de elegibilidad lo compara, y un literal suelto en el
+// scorer es el que se escribe mal en la segunda copia.
+export const ENGINE_TECHNICIAN_TYPE_CODE: TechnicianTypeCode = 'engine_technician';
 
 export const TECHNICIAN_TYPES: TechnicianTypeCatalog[] = [
   { code: 'mechanic',           label: 'Mechanic',            requiresLicense: true,  isActive: true,  sortOrder: 1 },
@@ -7,6 +13,11 @@ export const TECHNICIAN_TYPES: TechnicianTypeCatalog[] = [
   { code: 'painter',            label: 'Aircraft Painter',    requiresLicense: false, isActive: true,  sortOrder: 4 },
   { code: 'composite',          label: 'Composite Technician',requiresLicense: false, isActive: true,  sortOrder: 5 },
   { code: 'pilot',              label: 'Pilot',               requiresLicense: true,  isActive: false, sortOrder: 6 },
+  // Fase 10: creada inactiva en la 076 (paso 5a, sin UI) y activada en la 078
+  // (paso 5b), a la vez en la base y aquí, cuando existieron las pantallas de
+  // motores. Hace elegible para una oferta de motor aunque no se declaren
+  // motores — ver ENGINE_TECHNICIAN_TYPE_CODE arriba.
+  { code: 'engine_technician',  label: 'Engine Technician',   requiresLicense: false, isActive: true,  sortOrder: 7 },
 ];
 
 // Display label for a technician type code. The catalog above is the only

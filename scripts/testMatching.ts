@@ -14,10 +14,31 @@
 // Run via: npm run test:matching  (compiles with tsc to a scratch dir, then
 // runs the plain JS output with node — see package.json).
 import assert from 'node:assert/strict';
-import { calculateOfferTechnicianMatch, getMatchLabel, applyScoreCeilings, getMatchScoreWeights } from '../src/utils/offerMatchExplain';
+import {
+  calculateOfferTechnicianMatch,
+  getMatchLabel,
+  applyScoreCeilings,
+  getMatchScoreWeights,
+  isTechnicianEligibleForOffer,
+  rankTechniciansForOffer,
+  rankOffersForTechnician,
+} from '../src/utils/offerMatchExplain';
 import { OfferWithRequirements, OfferRequiredHabilitation } from '../src/types/offer';
-import { TechnicianWithRelations, TechnicianHabilitation, TechnicianLicense, TechnicianAircraftExperience } from '../src/types/technician';
-import { AircraftTypeRatingCatalog } from '../src/types/catalog';
+import {
+  TechnicianWithRelations,
+  TechnicianHabilitation,
+  TechnicianLicense,
+  TechnicianAircraftExperience,
+  TechnicianEngineExperience,
+} from '../src/types/technician';
+import {
+  AircraftTypeRatingCatalog,
+  AuthorityCode,
+  AuthorityLicenseCode,
+  EngineCatalog,
+  LicenseCode,
+  TechnicianTypeCode,
+} from '../src/types/catalog';
 import {
   buildAircraftRatingIndex,
   getAircraftTypeRatingLabel,
@@ -27,7 +48,20 @@ import {
   AircraftTypeRatingRow,
 } from '../src/constants/aircraftTypeRatings';
 import { createAircraftTypeRatingsCache } from '../src/repositories/v2/aircraftTypeRatingsCache';
-import { planLicenseRemoval } from '../src/utils/licenseUpdatePlan';
+import { createEnginesCache } from '../src/repositories/v2/enginesCache';
+import { createMatchingService } from '../src/utils/matchingService';
+import { offerShapeViolations } from '../src/utils/offerShape';
+import {
+  heldCountByAuthority,
+  heldLicenseCodes,
+  holdsLicense,
+  licensesForHabilitations,
+  sortHeldLicenses,
+  toggleHeldLicense,
+  updateHeldLicenseDates,
+} from '../src/utils/profileLicenses';
+import { SafeTechnicianPreview } from '../src/types/privacy';
+import { planLicenseRemoval, planLicenseRemovalById } from '../src/utils/licenseUpdatePlan';
 import { getFamilies, getByProductType, searchRatings, resolveAircraftCategoryForFamilyKeys } from '../src/constants/aircraftTypeRatingViews';
 import { getAircraftFamilyKey } from '../src/constants/aircraftTypeRatings';
 import {
@@ -48,7 +82,11 @@ import { canHold, getCompatiblePropulsion } from '../src/utils/habilitationScope
 import { HabilitationScope } from '../src/types/habilitationScope';
 import { isLicensedTechnicianType, offerTargetsLicensedProfiles } from '../src/constants/technicianTypes';
 import {
+  AUTHORITY_LICENSES,
   LICENSE_CODES,
+  authorityLicenseCanExpire,
+  equivalentAuthorities,
+  isValidAuthorityLicense,
   licensesSelectableForOfferType,
   typesAfterLicenseChange,
   typesImpliedByLicenses,
@@ -61,6 +99,9 @@ import {
   validateSignupYearsExperience,
   validateProfileYearsExperience,
 } from '../src/utils/yearsExperienceValidation';
+import { AircraftRatingIndex } from '../src/constants/aircraftTypeRatings';
+import { EngineIndex, buildEngineIndex } from '../src/constants/engines';
+import { MatchScore } from '../src/types/matching';
 
 let passed = 0;
 let failed = 0;
@@ -77,10 +118,42 @@ async function test(name: string, fn: () => void | Promise<void>) {
   }
 }
 
+// ── Fase 10, paso 4: lo pendiente ya existe ───────────────────────────────
+//
+// Aquí vivía `pendiente(módulo, 'nombre')`, un lector por string que permitía
+// escribir la red ANTES que el scorer: con `tsc && node`, un import con nombre
+// de algo inexistente tumbaba los 185 tests de arriba en vez de fallar sólo el
+// suyo. Con el paso 4 las ocho exportaciones existen, así que entran por
+// nombre y el compilador comprueba además sus firmas — que es justo lo que
+// `pendiente` no podía hacer.
+//
+// También se han ido `PendingOfferFields` (acceptsEquivalent, offerKind,
+// requiredEngineId y onlyUnlicensed son ya campos de `Offer`) y los alias de
+// firma ScoreFnV3 / RankTechniciansFn / RankOffersFn / EligibilityFn, que
+// describían a mano lo que ahora declara el propio módulo.
+
+// `licenseCode` SIGUE abierto a string, y no por pereza: los códigos FAA (A, P,
+// A&P) SÍ existen como tipo (`AuthorityLicenseCode`), y
+// `TechnicianLicense.licenseCode` ya los admite; `Offer.licenseCode` no,
+// mientras el formulario de oferta no sepa elegir autoridad. El scorer sí sabe
+// puntuarlos, que es lo que estos tests comprueban. Es del paso 5b. Ver el cast
+// de makeOffer.
+//
+// `technicianType` ya no: 'engine_technician' es fila de `technician_types`
+// desde la migración 076 (paso 5a) y está en `TechnicianTypeCode`, así que un
+// oficio mal escrito en un fixture deja de compilar.
+type OfferOverrides = Omit<Partial<OfferWithRequirements>, 'licenseCode'> & {
+  licenseCode?: string;
+};
+
+// Sin nada abierto desde el paso 5a: `engines` es relación del técnico desde la
+// Fase 10 y 'engine_technician' está en `TechnicianTypeCode`.
+type TechnicianOverrides = Partial<TechnicianWithRelations>;
+
 // ── Offer/technician fixture builders ─────────────────────────────────────
 
-function makeOffer(overrides: Partial<OfferWithRequirements> = {}): OfferWithRequirements {
-  const offer: OfferWithRequirements = {
+function makeOffer(overrides: OfferOverrides = {}): OfferWithRequirements {
+  const offer = {
     id: 'offer-test',
     companyId: 'company-test',
     title: 'Test offer',
@@ -116,8 +189,16 @@ function makeOffer(overrides: Partial<OfferWithRequirements> = {}): OfferWithReq
     licenseCode: 'B1.1',
     requiresAllAircraft: false,
     requiredHabilitations: [],
+    acceptsEquivalent: false,
+    offerKind: 'aircraft',
+    onlyUnlicensed: false,
     ...overrides,
-  };
+    // El cast cubre EXACTAMENTE un campo, el de OfferOverrides: los códigos
+    // FAA (Offer.licenseCode sigue siendo Part-66 hasta el paso 5b). Todo lo
+    // demás de aquí arriba —technicianType, offerKind, acceptsEquivalent,
+    // requiredEngineId, onlyUnlicensed— son campos de `Offer` y los comprueba
+    // el compilador.
+  } as OfferWithRequirements;
 
   // Fase 9: la fila que sale de aquí tiene que ser una fila que Postgres
   // aceptaría. `chk_offers_license_matches_certification` (migración 053) ata
@@ -138,7 +219,42 @@ function makeOffer(overrides: Partial<OfferWithRequirements> = {}): OfferWithReq
     );
   }
 
+  // Fase 10: la autoridad es la tercera mitad de la misma fila. Sin licencia
+  // no hay autoridad que declarar; con licencia y sin autoridad declarada se
+  // asume EASA, que es lo que describen los 180 tests anteriores a la fase.
+  if (offer.licenseCode === undefined && offer.licenseAuthority !== undefined) {
+    throw new Error(`makeOffer: fila imposible — licenseAuthority=${offer.licenseAuthority} sin licenseCode.`);
+  }
+  if (offer.licenseCode !== undefined && offer.licenseAuthority === undefined) {
+    offer.licenseAuthority = 'EASA';
+  }
+
+  // Paso 5b: el resto de la forma lo dice el mismo espejo de los CHECK que usa
+  // offerRepository (motor sin licencia ni aeronaves y con motor, aeronave sin
+  // motor, "sólo sin licencia" sin licencia). Una fixture que Postgres
+  // rechazaría no llega al scorer. Las dos guardas de arriba se quedan: dan un
+  // mensaje que dice qué override falta.
+  const violations = offerShapeViolations(offer);
+  if (violations.length > 0) {
+    throw new Error(`makeOffer: fila imposible — ${violations.join(' ')} Para motor usa makeEngineOffer().`);
+  }
+
   return offer;
+}
+
+// Fase 10: oferta de motor. El tipo de perfil es 'engine_technician' porque
+// la columna es NOT NULL, pero en estas ofertas el oficio NO puntúa — hay un
+// test que lo fija.
+function makeEngineOffer(requiredEngineId: string, overrides: OfferOverrides = {}): OfferWithRequirements {
+  return makeOffer({
+    offerKind: 'engine',
+    requiredEngineId,
+    technicianType: 'engine_technician',
+    requiresCertification: false,
+    licenseCode: undefined,
+    requiredHabilitations: [],
+    ...overrides,
+  });
 }
 
 // Fase 6 tanda D: una fila de requisito es UNA AERONAVE, y este helper sólo
@@ -154,22 +270,87 @@ function makeHabReq(aircraftTypeRatingId: string): OfferRequiredHabilitation {
   };
 }
 
+// Dos casts, los dos estructurales:
+//  - `as TechnicianHabilitation` porque una habilitación nombra la CREDENCIAL
+//    de la que cuelga, y ese id no existe hasta que existe el técnico que la
+//    tiene. makeTechnician lo rellena al enlazar (linkHabilitationToLicense) y
+//    LANZA si no puede, así que una fixture sin licencia no llega nunca al
+//    scorer disfrazada de válida.
+//  - `as LicenseCode` porque el parámetro acepta el código de CUALQUIER
+//    credencial (makeHabOn pasa `license.licenseCode`, que es
+//    `AuthorityLicenseCode`) mientras que una habilitación sólo puede ser
+//    Part-66: la FAA no tiene type ratings. Colgar una habilitación de un A&P
+//    sería una fila imposible, y el cast es el sitio donde eso está escrito.
 function makeHab(licenseCode: string, extra: Partial<TechnicianHabilitation> = {}): TechnicianHabilitation {
   return {
     id: `hab-${Math.random()}`,
     technicianId: 'tech-test',
-    licenseCode: licenseCode as any,
+    licenseCode: licenseCode as LicenseCode,
     createdAt: '2026-01-01T00:00:00.000Z',
+    ...extra,
+  } as TechnicianHabilitation;
+}
+
+// Fase 10: segundo parámetro opcional. La autoridad es EASA por defecto, que
+// es lo que los 185 tests anteriores describían sin decirlo — y por eso ninguno
+// de ellos cubre el cruce entre autoridades: ver la sección de Fase 10.
+//
+// Sin casts desde el paso 4: `AuthorityLicenseCode` incluye ya los tres
+// códigos FAA, así que makeLicense('A&P', { authority: 'FAA' }) lo comprueba el
+// compilador. Un código que no exista deja de compilar, que es lo que se
+// quiere de una fixture.
+function makeLicense(
+  licenseCode: AuthorityLicenseCode,
+  extra: Partial<TechnicianLicense> & { authority?: AuthorityCode } = {},
+): TechnicianLicense {
+  return {
+    id: `lic-${Math.random()}`,
+    technicianId: 'tech-test',
+    licenseCode,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    authority: 'EASA',
     ...extra,
   };
 }
 
-function makeLicense(licenseCode: string): TechnicianLicense {
-  return { id: `lic-${Math.random()}`, technicianId: 'tech-test', licenseCode: licenseCode as any, createdAt: '2026-01-01T00:00:00.000Z' };
+// Fase 10: la habilitación cuelga de UNA licencia concreta (technicianLicenseId),
+// no de un código. Obligatorio en cuanto el técnico tiene el mismo código en
+// dos autoridades.
+function makeHabOn(license: TechnicianLicense, extra: Partial<TechnicianHabilitation> = {}): TechnicianHabilitation {
+  return {
+    ...makeHab(license.licenseCode, extra),
+    technicianId: license.technicianId,
+    technicianLicenseId: license.id,
+  };
 }
 
-function makeTechnician(overrides: Partial<TechnicianWithRelations> = {}): TechnicianWithRelations {
-  return {
+// Fase 10: cuelga de su licencia una habilitación hecha con makeHab(código).
+// Existe para que los 180 tests sigan describiendo filas posibles cuando el
+// scorer pase a leer technicianLicenseId. Sólo enlaza cuando no hay nada que
+// adivinar: con dos licencias del mismo código lanza, y el test tiene que usar
+// makeHabOn. Sin ninguna licencia de ese código la deja como está (hoy hay
+// tests que construyen ese caso a propósito).
+function linkHabilitationToLicense(hab: TechnicianHabilitation, licenses: TechnicianLicense[]): TechnicianHabilitation {
+  if (hab.technicianLicenseId) return hab;
+  const candidates = licenses.filter((l) => l.licenseCode === hab.licenseCode);
+  if (candidates.length > 1) {
+    throw new Error(
+      `makeTechnician: habilitación ${hab.licenseCode} ambigua — hay ${candidates.length} licencias con ese código. Usa makeHabOn(licencia).`,
+    );
+  }
+  if (candidates.length === 0) {
+    throw new Error(
+      `makeTechnician: la habilitación ${hab.licenseCode} no tiene licencia de la que colgar. ` +
+        'Desde la 074 eso es una fila imposible: añade makeLicense(código) al fixture.',
+    );
+  }
+  return { ...hab, technicianLicenseId: candidates[0].id };
+}
+
+// Fase 10: `engines: []` por defecto, y las habilitaciones sin licencia
+// explícita se enlazan (ver linkHabilitationToLicense).
+function makeTechnician(overrides: TechnicianOverrides = {}): TechnicianWithRelations {
+  const technician = {
     id: 'tech-test',
     userId: 'user-test',
     anonymousCode: 'AVT-0000',
@@ -188,7 +369,12 @@ function makeTechnician(overrides: Partial<TechnicianWithRelations> = {}): Techn
     licenses: [],
     habilitations: [],
     aircraftExperience: [],
+    engines: [],
     ...overrides,
+  } as TechnicianWithRelations;
+  return {
+    ...technician,
+    habilitations: technician.habilitations.map((h) => linkHabilitationToLicense(h, technician.licenses)),
   };
 }
 
@@ -322,6 +508,167 @@ const FIXTURES: AircraftTypeRatingCatalog[] = [
 
 const RATING_INDEX = buildAircraftRatingIndex(FIXTURES);
 const NOT_A_REAL_RATING = 'fx-pending-catalog-request'; // never in FIXTURES — models a rating still awaiting admin resolution
+
+// ── Fase 10: motores ──────────────────────────────────────────────────────
+
+function makeEngine(overrides: Omit<EngineCatalog, 'displayName' | 'isActive'> & Partial<EngineCatalog>): EngineCatalog {
+  return { displayName: `${overrides.manufacturer} ${overrides.id}`, isActive: true, ...overrides };
+}
+
+// Motor declarado en el perfil. Años display-only: existen para poder ASEVERAR
+// que no puntúan.
+function makeEngineDeclaration(engineId: string, years?: number): TechnicianEngineExperience {
+  return {
+    id: `engdecl-${engineId}-${years ?? 'na'}`,
+    technicianId: 'tech-test',
+    engineId,
+    years,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+// Un rating con su motor. `engineId` ausente (no undefined) cuando la fila no
+// lo tiene: así es como llega una fila sucia que nadie ha curado, y la
+// diferencia importa porque el test del catálogo comprueba la AUSENCIA de la
+// clave. Sin cast desde el paso 4: `engineId` es campo del catálogo.
+function makeEngineRating(
+  overrides: Partial<AircraftTypeRatingCatalog> & Pick<AircraftTypeRatingCatalog, 'id'>,
+): AircraftTypeRatingCatalog {
+  const { engineId, ...rest } = overrides;
+  const rating = makeRating(rest);
+  return engineId === undefined ? rating : { ...rating, engineId };
+}
+
+// Escalera de la oferta de referencia (pide CFM56-7B, turbofán):
+//   CFM56-7B  -> exacto
+//   CFM56-5B  -> misma familia
+//   V2500-A5  -> mismo tipo (turbofán), otra familia
+//   PT6C-67C  -> tipo distinto (turboeje)
+const ENGINE_FIXTURES: EngineCatalog[] = [
+  makeEngine({ id: 'eng-cfm56-7b', manufacturer: 'CFM International', family: 'CFM56', engineType: 'turbofan', displayName: 'CFM56-7B' }),
+  makeEngine({ id: 'eng-cfm56-5b', manufacturer: 'CFM International', family: 'CFM56', engineType: 'turbofan', displayName: 'CFM56-5B' }),
+  makeEngine({ id: 'eng-v2500-a5', manufacturer: 'International Aero Engines', family: 'V2500', engineType: 'turbofan', displayName: 'V2500-A5' }),
+  makeEngine({ id: 'eng-pt6c-67c', manufacturer: 'Pratt & Whitney Canada', family: 'PT6C', engineType: 'turboshaft', displayName: 'PT6C-67C' }),
+  makeEngine({ id: 'eng-rr-m250', manufacturer: 'Rolls-Royce', family: 'M250', engineType: 'turboshaft', displayName: 'Rolls-Royce M250' }),
+  makeEngine({ id: 'eng-pw307', manufacturer: 'Pratt & Whitney Canada', family: 'PW300', engineType: 'turbofan', displayName: 'PW307' }),
+  // Pistones con la forma del seed (migración 071): la familia es la línea del
+  // fabricante, y la genérica "model not specified" va INACTIVA. Existe para
+  // que los 140 ratings Lycoming sin modelo den crédito de familia sin que
+  // nadie pueda declararla ni pedirla.
+  makeEngine({ id: 'eng-lycoming-o360', manufacturer: 'Lycoming', family: 'Lycoming', engineType: 'piston', displayName: 'O-360 series' }),
+  makeEngine({ id: 'eng-lycoming-o320', manufacturer: 'Lycoming', family: 'Lycoming', engineType: 'piston', displayName: 'O-320 series' }),
+  makeEngine({
+    id: 'eng-lycoming-generica',
+    manufacturer: 'Lycoming',
+    family: 'Lycoming',
+    engineType: 'piston',
+    displayName: 'Lycoming (model not specified)',
+    isActive: false,
+  }),
+  makeEngine({ id: 'eng-continental-io550', manufacturer: 'Continental', family: 'Continental', engineType: 'piston', displayName: 'IO-550 series' }),
+];
+
+const ENGINE_INDEX: EngineIndex = buildEngineIndex(ENGINE_FIXTURES);
+
+// Aparte de FIXTURES a propósito: los tests de Sort, Views y getByProductType
+// cuentan las filas de FIXTURES, y meter éstas ahí los rompería.
+const ENGINE_RATING_FIXTURES: AircraftTypeRatingCatalog[] = [
+  // LIMPIAS — con engineId. Son las únicas que alimentan el escalón "motor
+  // implícito en un type rating".
+  makeEngineRating({
+    id: 'fx-b737ng-cfm56-7b',
+    manufacturer: 'Boeing',
+    aircraftFamily: '737-600/737-700/737-800/737-900',
+    engineManufacturer: 'CFM International',
+    engineFamily: 'CFM56',
+    easaEndorsement: 'Boeing 737-600/700/800/900 (CFM56)',
+    displayName: 'Boeing 737NG — CFM56-7B',
+    commercialAliases: ['737NG', 'CFM56-7B'],
+    aircraftCategory: 'commercial_airplane',
+    productType: 'Aeroplane',
+    engineId: 'eng-cfm56-7b',
+  }),
+  // Paso 5b: la escalera y la elegibilidad por FAMILIA desde un type rating B1.
+  makeEngineRating({
+    id: 'fx-a320-cfm56-5b-limpia',
+    manufacturer: 'Airbus',
+    aircraftFamily: 'A318/A319/A320/A321',
+    engineManufacturer: 'CFM International',
+    engineFamily: 'CFM56',
+    easaEndorsement: 'Airbus A318/A319/A320/A321 (CFM56-5B) — test',
+    displayName: 'Airbus A320 family — CFM56-5B',
+    aircraftCategory: 'commercial_airplane',
+    productType: 'Aeroplane',
+    engineId: 'eng-cfm56-5b',
+  }),
+  makeEngineRating({
+    id: 'fx-bell407-rr250',
+    manufacturer: 'Bell',
+    aircraftFamily: 'Bell 407',
+    engineManufacturer: 'Rolls-Royce',
+    engineFamily: '250',
+    easaEndorsement: 'Bell 407 (RR 250)',
+    displayName: 'Bell 407 — Rolls-Royce 250',
+    aircraftCategory: 'helicopter',
+    productType: 'Helicopter',
+    engineId: 'eng-rr-m250',
+  }),
+  // SUCIAS — copian la FORMA de filas reales de rotoaxismatch-dev, verificadas
+  // el 2026-09-15, sin engineId:
+  //  - `Rolls-Royce | Corp 250`: el Model 250 mal partido, 22 ratings detrás.
+  //    El mismo motor aparece además como `250` (3) y `M250` (1).
+  //  - modelo escrito en engine_manufacturer con engine_family NULL (`PW307`,
+  //    `HF120`, `TPE331`…).
+  // Un escalón que las lea por texto da un falso positivo.
+  makeEngineRating({
+    id: 'fx-sucia-a109-corp250',
+    manufacturer: 'LEONARDO S.p.A.',
+    aircraftFamily: 'Agusta A109 Series',
+    engineManufacturer: 'Rolls-Royce',
+    engineFamily: 'Corp 250',
+    easaEndorsement: 'Agusta A109 (Corp 250) — test',
+    displayName: 'Agusta A109 — Corp 250 (fila sucia)',
+    aircraftCategory: 'helicopter',
+    productType: 'Helicopter',
+  }),
+  makeEngineRating({
+    id: 'fx-sucia-falcon7x-pw307',
+    manufacturer: 'Dassault Aviation',
+    aircraftFamily: 'Falcon 7X',
+    engineManufacturer: 'PW307',
+    easaEndorsement: 'Falcon 7X (PW307) — test',
+    displayName: 'Falcon 7X — PW307 (fila sucia)',
+    aircraftCategory: 'business_jet',
+    productType: 'Aeroplane',
+  }),
+  // Enlazada a la genérica inactiva: así llegan los ratings de pistón cuyo
+  // texto sólo dice el fabricante ("Piper PA-28 (Lycoming)").
+  makeEngineRating({
+    id: 'fx-pa28-lycoming-generica',
+    manufacturer: 'PIPER AIRCRAFT',
+    aircraftFamily: 'Piper PA-28',
+    engineManufacturer: 'Lycoming',
+    easaEndorsement: 'Piper PA-28 (Lycoming) — test',
+    displayName: 'Piper PA-28 — Lycoming (sin modelo)',
+    aircraftCategory: 'general_aviation',
+    productType: 'Aeroplane',
+    engineId: 'eng-lycoming-generica',
+  }),
+  // Control: el mismo avión con el motor concreto y activo.
+  makeEngineRating({
+    id: 'fx-pa28-o360-limpia',
+    manufacturer: 'PIPER AIRCRAFT',
+    aircraftFamily: 'Piper PA-28-180',
+    engineManufacturer: 'Lycoming',
+    easaEndorsement: 'Piper PA-28-180 (O-360) — test',
+    displayName: 'Piper PA-28-180 — O-360',
+    aircraftCategory: 'general_aviation',
+    productType: 'Aeroplane',
+    engineId: 'eng-lycoming-o360',
+  }),
+];
+
+const RATING_INDEX_MOTORES = buildAircraftRatingIndex([...FIXTURES, ...ENGINE_RATING_FIXTURES]);
 
 async function main() {
   // ── Matching ─────────────────────────────────────────────────────────
@@ -2816,6 +3163,1210 @@ async function main() {
   // TechnicianWithRelations al quedarse sin lectores, así que el compilador
   // impide ahora lo que ese test comprobaba en ejecución — una garantía más
   // fuerte, no una menos.
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FASE 10 — AUTORIDADES DE LICENCIA Y EJE DE MOTORES
+  // Red escrita ANTES de tocar el scorer (2026-09-15); en verde desde el
+  // paso 4 (2026-09-16).
+  //
+  // Los 185 tests de arriba usan sólo fixtures EASA y seguirían en verde con
+  // cualquier implementación de las autoridades o de los motores. Ésta es la
+  // sección que los cubre.
+  //
+  // Reglas de esta sección, para quien la toque:
+  //
+  //  1. Todo entra por import con nombre. `pendiente(módulo, 'nombre')` —el
+  //     lector por string que permitía escribir la red antes que el código—
+  //     se retiró al implementarse la fase: con las firmas reales, el
+  //     compilador comprueba además CÓMO se llaman, no sólo que existan.
+  //
+  //  2. Ningún test puede estar en verde por casualidad. Varios pasarían con
+  //     un scorer que ignorase la autoridad y los motores ("los años no mueven
+  //     el score" es trivialmente cierto si el motor no puntúa). Esos llevan
+  //     DELANTE una comparación de contraste. No la quites porque "sobra": es
+  //     lo que impide que el test mienta.
+  //
+  //  3. Si un técnico tiene el mismo código en dos autoridades, sus
+  //     habilitaciones van con makeHabOn(licencia). makeTechnician lanza si
+  //     tiene que adivinar.
+  // ══════════════════════════════════════════════════════════════════════
+
+  const puntuar = (
+    offer: OfferWithRequirements,
+    technician: TechnicianWithRelations,
+    opts: { ratingIndex?: AircraftRatingIndex; engineIndex?: EngineIndex; now?: Date } = {},
+  ): MatchScore =>
+    calculateOfferTechnicianMatch(
+      offer,
+      technician,
+      opts.ratingIndex ?? RATING_INDEX_MOTORES,
+      opts.now ?? NOW,
+      opts.engineIndex ?? ENGINE_INDEX,
+    );
+
+  // El filtro de elegibilidad con los mismos catálogos que `puntuar`. Desde el
+  // paso 5b los necesita: la vía (b) resuelve el motor de un type rating y su
+  // familia.
+  const elegible = (
+    offer: OfferWithRequirements,
+    technician: TechnicianWithRelations,
+    opts: { ratingIndex?: AircraftRatingIndex; engineIndex?: EngineIndex } = {},
+  ): boolean =>
+    isTechnicianEligibleForOffer(offer, technician, opts.ratingIndex ?? RATING_INDEX_MOTORES, opts.engineIndex ?? ENGINE_INDEX);
+
+  // Todo a favor salvo la cualificación: verificado, contrato y mismo país que
+  // makeOffer(). Sin esto un 100 no sale de ninguna rama.
+  const PERFIL_A_FAVOR: TechnicianOverrides = {
+    verificationStatus: 'verified',
+    availability: { immediately: true, contractTypes: ['permanent'] },
+    locationCountryCode: 'XX',
+  };
+  const PERFIL_MOTOR: TechnicianOverrides = { ...PERFIL_A_FAVOR, technicianTypes: ['engine_technician'] };
+  const PART66_AUTHORITIES = ['EASA', 'UK_CAA', 'CASA', 'GCAA'] as const;
+  const sumaPesos = (w: ReturnType<typeof getMatchScoreWeights>) => Object.values(w).reduce((a, b) => a + b, 0);
+  const sumaDesglose = (s: MatchScore) => Object.values(s.breakdown).reduce((a, b) => a + b, 0);
+
+  // Técnico con UNA licencia y el A320 colgando de ella.
+  const conA320Bajo = (authority: AuthorityCode, extra: Partial<TechnicianLicense> = {}, id?: string) => {
+    const lic = makeLicense('B1.1', { authority, ...extra });
+    return makeTechnician({
+      ...PERFIL_A_FAVOR,
+      ...(id ? { id } : {}),
+      licenses: [lic],
+      habilitations: [makeHabOn(lic, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    });
+  };
+  const ofertaA320 = (licenseAuthority: AuthorityCode, extra: OfferOverrides = {}) =>
+    makeOffer({ licenseAuthority, requiredHabilitations: [makeHabReq('fx-a320-cfm56')], ...extra });
+
+  // ── Identidad de licencia ─────────────────────────────────────────────
+
+  await test('Fase 10 · Identidad — dos B1.1 (EASA y UK CAA) no mezclan habilitaciones ni caducidades', () => {
+    // Habilitaciones: el A320 cuelga de la UK. Una oferta EASA sin
+    // equivalencias no puede verlo, aunque el código sea el mismo.
+    const easa = makeLicense('B1.1', { id: 'lic-easa-b11', authority: 'EASA' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk-b11', authority: 'UK_CAA' });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa, uk],
+      habilitations: [
+        makeHabOn(easa, { aircraftTypeRatingId: 'fx-b777-ge90' }),
+        makeHabOn(uk, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+      ],
+    });
+    const enEasa = puntuar(ofertaA320('EASA'), tecnico);
+    assert.notEqual(enEasa.level, 'exact', 'el A320 cuelga de la B1.1 UK CAA, no de la EASA que pide la oferta');
+    assert.equal(enEasa.breakdown.habilitation, 0);
+    assert.equal(puntuar(ofertaA320('UK_CAA'), tecnico).level, 'exact', 'la misma fila sí vale para su autoridad');
+
+    // Caducidades: la UK caducada va PRIMERO en la lista, que es la que
+    // encontraría una búsqueda por código. La EASA vigente no se entera.
+    const ukCaducada = makeLicense('B1.1', { id: 'lic-uk-b11-cad', authority: 'UK_CAA', expiresAt: '2026-01-01' });
+    const easaVigente = makeLicense('B1.1', { id: 'lic-easa-b11-vig', authority: 'EASA' });
+    const tecnico2 = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [ukCaducada, easaVigente],
+      habilitations: [
+        makeHabOn(ukCaducada, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+        makeHabOn(easaVigente, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+      ],
+    });
+    const r = puntuar(ofertaA320('EASA'), tecnico2);
+    assert.equal(r.level, 'exact', 'la caducidad de la UK CAA no toca a la EASA');
+    assert.deepEqual(r.vigenciaNotices, [], 'ni aviso de vigencia: la licencia caducada no es la que pide la oferta');
+    assert.equal(r.total, 100);
+  });
+
+  await test('Fase 10 · Identidad — borrar una licencia no afecta a la del mismo código en otra autoridad', () => {
+    const planPorId = planLicenseRemovalById;
+    const easa = makeLicense('B1.1', { id: 'lic-easa-b11', authority: 'EASA' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk-b11', authority: 'UK_CAA' });
+    const habs = [makeHabOn(uk, { aircraftTypeRatingId: 'fx-a320-cfm56' })];
+
+    assert.deepEqual(planPorId([easa.id], habs), { deletes: [easa.id], blocked: [] }, 'la EASA no tiene nada colgando: se borra');
+    assert.deepEqual(planPorId([uk.id], habs), { deletes: [], blocked: [uk.id] }, 'la UK sí: se bloquea');
+
+    // Por qué hace falta la versión por id: la de código no distingue las dos
+    // y bloquea la EASA por una habilitación que es de la UK.
+    assert.deepEqual(planLicenseRemoval(['B1.1'], habs.map((h) => h.licenseCode)), { deletes: [], blocked: ['B1.1'] });
+  });
+
+  await test('Fase 10 · Identidad — una EASA caducada no arrastra a una UK CAA vigente', () => {
+    const easaCaducada = makeLicense('B1.1', { id: 'lic-easa-cad', authority: 'EASA', expiresAt: '2026-01-01' });
+    const ukVigente = makeLicense('B1.1', { id: 'lic-uk-vig', authority: 'UK_CAA' });
+    const habs = [
+      makeHabOn(easaCaducada, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+      makeHabOn(ukVigente, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+    ];
+    const oferta = ofertaA320('UK_CAA');
+
+    // La caducada PRIMERO: es la que encontraría `licenses.find(código)`.
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [easaCaducada, ukVigente], habilitations: habs }));
+    assert.equal(r.level, 'exact', 'la EASA caducada no puede tumbar la oferta UK CAA');
+    assert.deepEqual(r.missingRequirements, []);
+    assert.deepEqual(r.vigenciaNotices, []);
+    assert.equal(r.total, 100);
+
+    // Y no depende del orden en que lleguen las licencias.
+    const alReves = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [ukVigente, easaCaducada], habilitations: [...habs].reverse() }));
+    assert.equal(alReves.total, r.total);
+  });
+
+  await test('Fase 10 · Identidad — varias licencias dan UN solo resultado por oferta y no suman dos veces', () => {
+
+    // Tres B1.1 con el A320 y la casilla de equivalencias marcada: las tres
+    // son elegibles a la vez, que es el caso con más tentación de sumar.
+    const licencias = PART66_AUTHORITIES.filter((a) => a !== 'GCAA').map((authority) => makeLicense('B1.1', { authority }));
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'tech-tres-licencias',
+      licenses: licencias,
+      habilitations: licencias.map((l) => makeHabOn(l, { aircraftTypeRatingId: 'fx-a320-cfm56' })),
+    });
+    const oferta = ofertaA320('EASA', { id: 'offer-a320-equiv', acceptsEquivalent: true });
+    const pesos = getMatchScoreWeights(oferta);
+
+    const porOferta = rankTechniciansForOffer(oferta, [tecnico], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.equal(porOferta.length, 1, 'un técnico, un resultado');
+    const r = porOferta[0];
+    assert.equal(r.breakdown.habilitation, pesos.habilitation, 'la habilitación no se cobra una vez por licencia');
+    assert.equal(r.breakdown.license, pesos.license, 'ni la licencia');
+    assert.equal(r.total, 100);
+    assert.equal(new Set(r.matches).size, r.matches.length, 'ninguna línea de match repetida');
+
+    // Una consulta que haga join con las licencias devuelve el técnico una vez
+    // por fila. Eso no puede convertirse en tres resultados.
+    assert.equal(rankTechniciansForOffer(oferta, [tecnico, tecnico, tecnico], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).length, 1);
+    assert.equal(rankOffersForTechnician(tecnico, [oferta], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).length, 1);
+  });
+
+  await test('Fase 10 · Identidad — requiresAllAircraft no combina habilitaciones de dos licencias distintas', () => {
+    // Con equivalencias marcadas, a propósito: es cuando la EASA (A320) y la
+    // UK (B777) parecerían sumar juntas las dos aeronaves. Ninguna de las dos
+    // licencias las tiene todas.
+    const oferta = makeOffer({
+      licenseAuthority: 'EASA',
+      acceptsEquivalent: true,
+      requiresAllAircraft: true,
+      requiredHabilitations: [makeHabReq('fx-a320-cfm56'), makeHabReq('fx-b777-ge90')],
+    });
+    const easa = makeLicense('B1.1', { authority: 'EASA' });
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA' });
+    const repartido = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa, uk],
+      habilitations: [
+        makeHabOn(easa, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+        makeHabOn(uk, { aircraftTypeRatingId: 'fx-b777-ge90' }),
+      ],
+    });
+    const r = puntuar(oferta, repartido);
+    assert.notEqual(r.level, 'exact', 'A320 bajo EASA + B777 bajo UK no es "tiene las dos"');
+    assert.ok(r.missingRequirements.length > 0, 'la aeronave que falta en cada licencia se nombra');
+    assert.ok(r.total <= 59, `esperaba INCOMPLETE_AIRCRAFT_SET_CAP, got ${r.total}`);
+
+    // Control: las dos bajo la MISMA licencia sí cumplen.
+    const juntas = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa],
+      habilitations: [makeHabOn(easa, { aircraftTypeRatingId: 'fx-a320-cfm56' }), makeHabOn(easa, { aircraftTypeRatingId: 'fx-b777-ge90' })],
+    });
+    assert.equal(puntuar(oferta, juntas).level, 'exact');
+  });
+
+  // ── Equivalencias ─────────────────────────────────────────────────────
+
+  await test('Fase 10 · Equivalencias — apagada: sólo cruza la autoridad exacta', () => {
+    const oferta = ofertaA320('EASA', { acceptsEquivalent: false });
+    assert.equal(puntuar(oferta, conA320Bajo('EASA')).total, 100, 'control: la autoridad exacta cumple');
+
+    for (const authority of ['UK_CAA', 'CASA', 'GCAA'] as const) {
+      const r = puntuar(oferta, conA320Bajo(authority));
+      assert.notEqual(r.level, 'exact', `${authority} B1.1 no cumple una oferta EASA sin equivalencias`);
+      assert.equal(r.breakdown.habilitation, 0, authority);
+      assert.equal(r.breakdown.license, 0, authority);
+      assert.ok(r.total <= ZERO_QUALIFICATION_CAP, `${authority}: esperaba el tope de 39, got ${r.total}`);
+    }
+  });
+
+  await test('Fase 10 · Equivalencias — encendida: cruza el mismo código en otras autoridades Part-66', () => {
+    for (const authority of ['UK_CAA', 'CASA', 'GCAA'] as const) {
+      const tecnico = conA320Bajo(authority);
+      const apagada = puntuar(ofertaA320('EASA', { acceptsEquivalent: false }), tecnico);
+      const encendida = puntuar(ofertaA320('EASA', { acceptsEquivalent: true }), tecnico);
+      // Contraste primero: hoy las dos puntúan igual porque la autoridad no
+      // existe para el scorer.
+      assert.ok(encendida.total > apagada.total, `${authority}: la casilla tiene que notarse (${encendida.total} vs ${apagada.total})`);
+      assert.ok(encendida.total > ZERO_QUALIFICATION_CAP, `${authority}: el equivalente cuenta como cualificación, got ${encendida.total}`);
+      assert.deepEqual(encendida.missingRequirements, [], authority);
+    }
+
+    // Ensancha la AUTORIDAD, no el código: una B2 UK con el A320 no cumple una
+    // B1.1 EASA por tener la casilla marcada.
+    const ukB2 = makeLicense('B2', { authority: 'UK_CAA' });
+    const r = puntuar(
+      ofertaA320('EASA', { acceptsEquivalent: true }),
+      makeTechnician({ ...PERFIL_A_FAVOR, licenses: [ukB2], habilitations: [makeHabOn(ukB2, { aircraftTypeRatingId: 'fx-a320-cfm56' })] }),
+    );
+    assert.equal(r.breakdown.habilitation, 0);
+    assert.equal(r.breakdown.license, 0);
+  });
+
+  await test('Fase 10 · Equivalencias — el exacto puntúa por encima del equivalente, a igualdad de todo lo demás', () => {
+    const conCasilla = ofertaA320('EASA', { acceptsEquivalent: true });
+    const exacto = puntuar(conCasilla, conA320Bajo('EASA'));
+    const equivalente = puntuar(conCasilla, conA320Bajo('UK_CAA'));
+    const noAceptado = puntuar(ofertaA320('EASA', { acceptsEquivalent: false }), conA320Bajo('UK_CAA'));
+
+    assert.ok(exacto.total > equivalente.total, `exacto (${exacto.total}) > equivalente (${equivalente.total})`);
+    assert.ok(equivalente.total > noAceptado.total, `equivalente (${equivalente.total}) > no aceptado (${noAceptado.total})`);
+    assert.equal(exacto.total, 100, 'marcar la casilla no le quita nada al exacto');
+  });
+
+  await test('Fase 10 · Equivalencias — una exacta caducada no bloquea una equivalente vigente', () => {
+    const oferta = ofertaA320('EASA', { acceptsEquivalent: true });
+    const easaCaducada = makeLicense('B1.1', { authority: 'EASA', expiresAt: '2026-01-01' });
+    const ukVigente = makeLicense('B1.1', { authority: 'UK_CAA' });
+    const mixto = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easaCaducada, ukVigente],
+      habilitations: [
+        makeHabOn(easaCaducada, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+        makeHabOn(ukVigente, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+      ],
+    });
+    const soloUk = conA320Bajo('UK_CAA');
+
+    const r = puntuar(oferta, mixto);
+    const referencia = puntuar(oferta, soloUk);
+    assert.ok(r.total > ZERO_QUALIFICATION_CAP, `la UK vigente tiene que valer, got ${r.total}`);
+    assert.equal(r.total, referencia.total, 'puntúa exactamente como si sólo tuviera la UK vigente');
+    assert.deepEqual(r.breakdown, referencia.breakdown);
+    assert.ok(!r.missingRequirements.some((m) => m.includes('expired')), 'el requisito está cumplido: no se lista como caducado');
+  });
+
+  await test('Fase 10 · Equivalencias — FAA nunca cruza por equivalencia con ningún código Part-66', () => {
+    assert.deepEqual(equivalentAuthorities('FAA'), [], 'FAA no tiene equivalentes');
+    for (const authority of PART66_AUTHORITIES) {
+      assert.ok(!equivalentAuthorities(authority).includes('FAA'), `${authority} no lista a FAA`);
+      assert.ok(!equivalentAuthorities(authority).includes(authority), `${authority} no se lista a sí misma: son las OTRAS`);
+    }
+    assert.deepEqual([...equivalentAuthorities('EASA')].sort(), ['CASA', 'GCAA', 'UK_CAA']);
+
+    // Y en el scorer, en las dos direcciones, con la casilla marcada.
+    const faaAyP = makeLicense('A&P', { authority: 'FAA' });
+    const enPart66 = puntuar(makeOffer({ licenseAuthority: 'EASA', acceptsEquivalent: true }), makeTechnician({ ...PERFIL_A_FAVOR, licenses: [faaAyP] }));
+    assert.equal(enPart66.breakdown.license, 0, 'un A&P no cumple una B1.1 EASA');
+
+    const easaA1 = makeLicense('A1', { authority: 'EASA' });
+    const enFaa = puntuar(
+      makeOffer({ licenseCode: 'A', licenseAuthority: 'FAA', acceptsEquivalent: true }),
+      makeTechnician({ ...PERFIL_A_FAVOR, licenses: [easaA1] }),
+    );
+    assert.equal(enFaa.breakdown.license, 0, 'una A1 EASA no cumple una A FAA');
+  });
+
+  // ── FAA ───────────────────────────────────────────────────────────────
+
+  await test('Fase 10 · FAA — A&P satisface una oferta que pide A, una que pide P y una que pide A&P', () => {
+    const tecnico = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A&P', { authority: 'FAA' })] });
+    for (const code of ['A', 'P', 'A&P']) {
+      const oferta = makeOffer({ licenseCode: code, licenseAuthority: 'FAA' });
+      const r = puntuar(oferta, tecnico);
+      assert.equal(r.breakdown.license, getMatchScoreWeights(oferta).license, `A&P frente a ${code}`);
+      assert.deepEqual(r.missingRequirements, [], `A&P frente a ${code}`);
+      assert.equal(r.total, 100, `A&P frente a ${code}`);
+    }
+  });
+
+  await test('Fase 10 · FAA — un A no satisface una oferta que pide A&P', () => {
+    // Precondición, y no adorno: sin el catálogo FAA la negativa de abajo pasa
+    // por casualidad ('A' !== 'A&P' como texto) y el test no probaría nada.
+    assert.equal(isValidAuthorityLicense('FAA', 'A'), true);
+    assert.equal(isValidAuthorityLicense('FAA', 'A&P'), true);
+
+    const r = puntuar(
+      makeOffer({ licenseCode: 'A&P', licenseAuthority: 'FAA' }),
+      makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A', { authority: 'FAA' })] }),
+    );
+    assert.equal(r.breakdown.license, 0);
+    assert.ok(r.missingRequirements.some((m) => m.includes('A&P')), `falta A&P, got ${JSON.stringify(r.missingRequirements)}`);
+    assert.ok(r.total <= ZERO_QUALIFICATION_CAP, `got ${r.total}`);
+  });
+
+  await test('Fase 10 · FAA — una licencia FAA sin fecha de caducidad NO se trata como caducada', () => {
+    assert.equal(authorityLicenseCanExpire('FAA'), false, '14 CFR 65: el certificado no expira');
+    for (const authority of PART66_AUTHORITIES) assert.equal(authorityLicenseCanExpire(authority), true, authority);
+
+    // Por la rama FAA de verdad (A&P frente a A) y con el reloj muy adelante:
+    // nada puede leerse como caducado.
+    const oferta = makeOffer({ licenseCode: 'A', licenseAuthority: 'FAA' });
+    const tecnico = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A&P', { authority: 'FAA' })] });
+    const r = puntuar(oferta, tecnico, { now: new Date(2040, 0, 1) });
+    assert.deepEqual(r.vigenciaNotices, []);
+    assert.deepEqual(r.missingRequirements, []);
+    assert.equal(r.total, 100);
+  });
+
+  await test('Fase 10 · FAA — una oferta FAA no depende de que el catálogo de type ratings esté cargado', () => {
+    const tecnico = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A&P', { authority: 'FAA' })] });
+    const sinCatalogo = { ratingIndex: new Map() as AircraftRatingIndex, engineIndex: new Map() as EngineIndex };
+    for (const code of ['A&P', 'P']) {
+      const r = puntuar(makeOffer({ licenseCode: code, licenseAuthority: 'FAA' }), tecnico, sinCatalogo);
+      assert.equal(r.total, 100, `A&P frente a ${code} con el catálogo vacío`);
+    }
+  });
+
+  // ── Recortes por autoridad ────────────────────────────────────────────
+
+  await test('Fase 10 · Recortes — CASA no admite B2L, B3 ni L; GCAA no admite B2L', () => {
+    for (const code of ['B2L', 'B3', 'L']) assert.equal(isValidAuthorityLicense('CASA', code), false, `CASA ${code}`);
+    assert.equal(isValidAuthorityLicense('GCAA', 'B2L'), false, 'GCAA B2L');
+
+    // Y el recorte no se lleva nada más por delante.
+    for (const code of ['B1.1', 'B2', 'C', 'A1']) assert.equal(isValidAuthorityLicense('CASA', code), true, `CASA ${code}`);
+    for (const code of ['B3', 'L', 'B2', 'C']) assert.equal(isValidAuthorityLicense('GCAA', code), true, `GCAA ${code}`);
+    for (const code of LICENSE_CODES) {
+      assert.equal(isValidAuthorityLicense('EASA', code), true, `EASA ${code}`);
+      assert.equal(isValidAuthorityLicense('UK_CAA', code), true, `UK_CAA ${code}`);
+    }
+  });
+
+  await test('Fase 10 · Recortes — una combinación autoridad+código que no existe es inválida', () => {
+
+    assert.equal(isValidAuthorityLicense('FAA', 'B1.1'), false);
+    assert.equal(isValidAuthorityLicense('FAA', 'B2'), false, 'FAA sin B2');
+    assert.equal(isValidAuthorityLicense('FAA', 'C'), false, 'FAA sin C');
+    assert.equal(isValidAuthorityLicense('EASA', 'A&P'), false);
+    assert.equal(isValidAuthorityLicense('UK_CAA', 'P'), false);
+    assert.equal(isValidAuthorityLicense('EASA', 'B9'), false);
+    assert.equal(isValidAuthorityLicense('NOPE', 'B1.1'), false);
+
+    // El predicado y la tabla no pueden divergir: cada par posible se contesta
+    // igual en los dos sitios.
+    const enTabla = new Set(AUTHORITY_LICENSES.map((r) => `${r.authority}|${r.code}`));
+    for (const authority of [...PART66_AUTHORITIES, 'FAA']) {
+      for (const code of [...LICENSE_CODES, 'A', 'P', 'A&P']) {
+        assert.equal(isValidAuthorityLicense(authority, code), enTabla.has(`${authority}|${code}`), `${authority} ${code}`);
+      }
+    }
+  });
+
+  // ── Ofertas de motores ────────────────────────────────────────────────
+
+  await test('Fase 10 · Motores — el motor exacto NO cae en el tope de "no pide nada" (75)', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_MOTOR, engines: [makeEngineDeclaration('eng-cfm56-7b', 8)] }));
+    assert.equal(sumaPesos(getMatchScoreWeights(oferta)), 100, 'una oferta de motor PIDE algo: su escala es 100, no la de 75');
+    assert.ok(r.total > 75, `el candidato exacto no puede quedarse en el techo de "no pide nada", got ${r.total}`);
+    assert.equal(r.total, 100);
+    assert.equal(r.label, 'Excellent match');
+  });
+
+  await test('Fase 10 · Motores — el motor exacto NO cae en el tope de cero cualificación (39)', () => {
+    // Todo lo demás en contra: sin verificar, otro contrato, otro país. Lo
+    // único que tiene es el motor, y con eso tiene que pasar de 39.
+    const r = puntuar(
+      makeEngineOffer('eng-cfm56-7b'),
+      makeTechnician({
+        technicianTypes: ['engine_technician'],
+        verificationStatus: 'pending',
+        availability: { immediately: false, contractTypes: ['short_term'] },
+        locationCountryCode: 'ZZ',
+        engines: [makeEngineDeclaration('eng-cfm56-7b')],
+      }),
+    );
+    assert.ok(r.total > ZERO_QUALIFICATION_CAP, `tener el motor pedido es cualificación, got ${r.total}`);
+    assert.equal(r.total, sumaDesglose(r), 'ningún tope recorta');
+    assert.deepEqual(r.missingRequirements, []);
+  });
+
+  await test('Fase 10 · Motores — orden: declarado > implícito en type rating > familia > tipo > tipo distinto > sin motores', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const b11 = makeLicense('B1.1');
+    // Mismos tipos para los seis (un mecánico sin licencia es un perfil
+    // válido), así ni el oficio ni la licencia pueden explicar el orden.
+    const escalones: { nombre: string; extra: TechnicianOverrides }[] = [
+      { nombre: 'motor declarado (CFM56-7B)', extra: { engines: [makeEngineDeclaration('eng-cfm56-7b')] } },
+      {
+        nombre: 'motor implícito en un type rating (737NG → CFM56-7B)',
+        extra: { licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })] },
+      },
+      { nombre: 'misma familia (CFM56-5B)', extra: { engines: [makeEngineDeclaration('eng-cfm56-5b')] } },
+      { nombre: 'mismo tipo de motor (turbofán V2500)', extra: { engines: [makeEngineDeclaration('eng-v2500-a5')] } },
+      { nombre: 'tipo distinto (turboeje PT6C)', extra: { engines: [makeEngineDeclaration('eng-pt6c-67c')] } },
+      { nombre: 'sin motores', extra: {} },
+    ];
+
+    const totales = escalones.map(({ extra }) =>
+      puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic', 'engine_technician'], ...extra })).total,
+    );
+    for (let i = 1; i < escalones.length; i += 1) {
+      assert.ok(
+        totales[i] < totales[i - 1],
+        `"${escalones[i - 1].nombre}" (${totales[i - 1]}) debe quedar por encima de "${escalones[i].nombre}" (${totales[i]}). Medido: ${totales.join(' / ')}`,
+      );
+    }
+    assert.ok(totales[totales.length - 1] > 0, 'el último escalón puntúa bajo, pero no cero');
+  });
+
+  // Paso 5a: "sigue en la lista" porque es engine_technician (PERFIL_MOTOR). Un
+  // perfil sin motores y SIN ese oficio no es elegible — ver los tests de
+  // elegibilidad de motor al final del fichero.
+  await test('Fase 10 · Motores — un engine_technician sin motores puntúa bajo pero NO cero, y sigue en la lista', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const sinMotores = makeTechnician({ ...PERFIL_MOTOR, id: 'tech-sin-motores' });
+    const tipoDistinto = makeTechnician({ ...PERFIL_MOTOR, engines: [makeEngineDeclaration('eng-pt6c-67c')] });
+
+    const r = puntuar(oferta, sinMotores);
+    assert.equal(r.label, 'Weak match', `sin motores no puede leerse mejor que Weak, got ${r.total} (${r.label})`);
+    assert.ok(r.total > 0);
+    assert.deepEqual(r.blockers, [], 'bajo, no descalificado');
+    assert.ok(r.total < puntuar(oferta, tipoDistinto).total, 'por debajo de quien tiene un motor de otro tipo');
+
+    assert.equal(rankTechniciansForOffer(oferta, [sinMotores], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).length, 1, 'no se filtra fuera');
+  });
+
+  await test('Fase 10 · Motores — los años de motor no cambian el score (1 año = 20 años = sin declarar)', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const conAnos = (years?: number) => puntuar(oferta, makeTechnician({ ...PERFIL_MOTOR, engines: [makeEngineDeclaration('eng-cfm56-7b', years)] }));
+    const sinMotores = puntuar(oferta, makeTechnician(PERFIL_MOTOR));
+
+    // Contraste primero: si el motor no puntúa, la igualdad de abajo es vacía.
+    assert.ok(conAnos(1).total > sinMotores.total, `el motor tiene que puntuar para que esto signifique algo (${conAnos(1).total} vs ${sinMotores.total})`);
+
+    for (const [a, b] of [[conAnos(1), conAnos(20)], [conAnos(1), conAnos(undefined)]]) {
+      assert.equal(a.total, b.total);
+      assert.deepEqual(a.breakdown, b.breakdown);
+      assert.equal(a.label, b.label);
+    }
+  });
+
+  await test('Fase 10 · Motores — el oficio no cambia el score: un B1.1 y un engine_technician con el mismo motor empatan', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const motor = [makeEngineDeclaration('eng-cfm56-7b')];
+    const mecanicoB11 = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], licenses: [makeLicense('B1.1')], engines: motor }));
+    const tecnicoMotor = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['engine_technician'], engines: motor }));
+    // Sin licencia de por medio, para aislar el oficio del todo.
+    const pintor = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: motor }));
+
+    assert.equal(mecanicoB11.total, tecnicoMotor.total, `B1.1 mecánico ${mecanicoB11.total} vs engine_technician ${tecnicoMotor.total}`);
+    assert.deepEqual(mecanicoB11.breakdown, tecnicoMotor.breakdown);
+    assert.equal(pintor.total, tecnicoMotor.total, `pintor ${pintor.total} vs engine_technician ${tecnicoMotor.total}`);
+    assert.deepEqual(mecanicoB11.blockers, []);
+  });
+
+  await test('Fase 10 · Motores — la licencia no suma: un B2 con el motor no supera a uno sin licencia con el mismo motor', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const tipos: TechnicianTypeCode[] = ['avionic', 'engine_technician'];
+    const conB2 = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: tipos, licenses: [makeLicense('B2')], engines: [makeEngineDeclaration('eng-cfm56-7b')] }));
+    const sinLicencia = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: tipos, engines: [makeEngineDeclaration('eng-cfm56-7b')] }));
+    const sinMotores = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: tipos }));
+
+    // Contraste primero: hoy los dos empatan porque NADA puntúa.
+    assert.ok(sinLicencia.total > sinMotores.total, `el motor tiene que puntuar (${sinLicencia.total} vs ${sinMotores.total})`);
+    assert.ok(!(conB2.total > sinLicencia.total), `la B2 no suma: ${conB2.total} > ${sinLicencia.total}`);
+    assert.equal(conB2.total, sinLicencia.total);
+    assert.deepEqual(conB2.breakdown, sinLicencia.breakdown);
+  });
+
+  // Fixtures compartidos por los dos tests del filtro "sólo sin licencia".
+  const motorExacto = [makeEngineDeclaration('eng-cfm56-7b')];
+  const ofertaSoloSinLicencia = makeEngineOffer('eng-cfm56-7b', { id: 'offer-motor-solo-sin-licencia', onlyUnlicensed: true });
+  const ofertaMotorAbierta = makeEngineOffer('eng-cfm56-7b', { id: 'offer-motor-abierta' });
+  const tecnicoConLicencia = makeTechnician({
+    ...PERFIL_A_FAVOR,
+    id: 'tech-con-licencia',
+    technicianTypes: ['avionic', 'engine_technician'],
+    licenses: [makeLicense('B2')],
+    engines: motorExacto,
+  });
+  const tecnicoSinLicencia = makeTechnician({ ...PERFIL_MOTOR, id: 'tech-sin-licencia', engines: motorExacto });
+
+  await test('Fase 10 · Motores — con "sólo técnicos sin licencia" marcada, los licenciados quedan fuera', () => {
+    const tecnicos = [tecnicoConLicencia, tecnicoSinLicencia];
+
+    assert.equal(elegible(ofertaSoloSinLicencia, tecnicoConLicencia), false);
+    assert.equal(elegible(ofertaSoloSinLicencia, tecnicoSinLicencia), true);
+    assert.deepEqual(
+      rankTechniciansForOffer(ofertaSoloSinLicencia, tecnicos, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.technicianId),
+      ['tech-sin-licencia'],
+      'fuera = no aparece, no "aparece abajo"',
+    );
+
+    // Desmarcada no filtra a nadie.
+    assert.equal(elegible(ofertaMotorAbierta, tecnicoConLicencia), true);
+    assert.deepEqual(
+      rankTechniciansForOffer(ofertaMotorAbierta, tecnicos, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.technicianId).sort(),
+      ['tech-con-licencia', 'tech-sin-licencia'],
+    );
+  });
+
+  await test('Fase 10 · Motores — el filtro "sólo sin licencia" se aplica igual en oferta→técnicos y en técnico→ofertas', () => {
+    const ofertas = [ofertaSoloSinLicencia, ofertaMotorAbierta];
+    const tecnicos = [tecnicoConLicencia, tecnicoSinLicencia];
+
+    for (const oferta of ofertas) {
+      for (const tecnico of tecnicos) {
+        const desdeOferta = rankTechniciansForOffer(oferta, tecnicos, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).find((s) => s.technicianId === tecnico.id);
+        const desdeTecnico = rankOffersForTechnician(tecnico, ofertas, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).find((s) => s.offerId === oferta.id);
+        const esperado = elegible(oferta, tecnico);
+        assert.equal(Boolean(desdeOferta), esperado, `oferta→técnicos: ${oferta.id} / ${tecnico.id}`);
+        assert.equal(Boolean(desdeTecnico), esperado, `técnico→ofertas: ${tecnico.id} / ${oferta.id}`);
+        if (desdeOferta && desdeTecnico) assert.equal(desdeOferta.total, desdeTecnico.total, `mismo score en las dos direcciones: ${oferta.id} / ${tecnico.id}`);
+      }
+    }
+
+    assert.deepEqual(
+      rankOffersForTechnician(tecnicoConLicencia, ofertas, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.offerId),
+      ['offer-motor-abierta'],
+      'el licenciado ni siquiera ve la oferta "sólo sin licencia"',
+    );
+  });
+
+  // ── Seeds y catálogo ──────────────────────────────────────────────────
+
+  await test('Fase 10 · Seeds — authority_licenses: 51 filas (13 EASA, 13 UK CAA, 10 CASA, 12 GCAA, 3 FAA)', () => {
+    // Espejo en TS de la tabla. Que la tabla de Postgres coincida con esto lo
+    // comprueba `npm run validate:authority-licenses`, contra la base viva.
+    assert.equal(AUTHORITY_LICENSES.length, 51);
+
+    const porAutoridad: Record<string, number> = {};
+    for (const r of AUTHORITY_LICENSES) porAutoridad[r.authority] = (porAutoridad[r.authority] ?? 0) + 1;
+    assert.deepEqual(porAutoridad, { EASA: 13, UK_CAA: 13, CASA: 10, GCAA: 12, FAA: 3 });
+    assert.equal(new Set(AUTHORITY_LICENSES.map((r) => `${r.authority}|${r.code}`)).size, 51, 'ningún par repetido');
+
+    const codigos = (authority: string) => AUTHORITY_LICENSES.filter((r) => r.authority === authority).map((r) => r.code).sort();
+    const part66 = [...LICENSE_CODES].sort();
+    assert.deepEqual(codigos('EASA'), part66);
+    assert.deepEqual(codigos('UK_CAA'), part66);
+    assert.deepEqual(codigos('CASA'), part66.filter((c) => !['B2L', 'B3', 'L'].includes(c)));
+    assert.deepEqual(codigos('GCAA'), part66.filter((c) => c !== 'B2L'));
+    assert.deepEqual(codigos('FAA'), ['A', 'A&P', 'P']);
+  });
+
+  await test('Fase 10 · Catálogo — el escalón "motor implícito en un type rating" no se apoya en filas sucias', () => {
+    // Guarda de los propios fixtures: la escalera usa filas limpias, y las
+    // sucias llegan como llegan de verdad, sin engineId.
+    const porId = new Map(ENGINE_RATING_FIXTURES.map((r) => [r.id, r]));
+    assert.ok(porId.get('fx-b737ng-cfm56-7b')?.engineId, 'fila limpia con engineId');
+    assert.ok(porId.get('fx-bell407-rr250')?.engineId, 'fila limpia con engineId');
+    assert.equal(porId.get('fx-sucia-a109-corp250')?.engineId, undefined);
+    assert.equal(porId.get('fx-sucia-falcon7x-pw307')?.engineId, undefined);
+
+    // Los tres técnicos llevan la MISMA licencia; sólo cambia de qué rating
+    // cuelga la habilitación.
+    const conHabEn = (code: AuthorityLicenseCode, ratingId?: string) => {
+      const lic = makeLicense(code);
+      return makeTechnician({
+        ...PERFIL_A_FAVOR,
+        technicianTypes: ['mechanic', 'engine_technician'],
+        licenses: [lic],
+        habilitations: ratingId ? [makeHabOn(lic, { aircraftTypeRatingId: ratingId })] : [],
+      });
+    };
+
+    // `Corp 250`: el Model 250 mal partido. Leerlo como M250 por texto sería
+    // el falso positivo.
+    const ofertaM250 = makeEngineOffer('eng-rr-m250');
+    const limpia = puntuar(ofertaM250, conHabEn('B1.3', 'fx-bell407-rr250'));
+    const corp250 = puntuar(ofertaM250, conHabEn('B1.3', 'fx-sucia-a109-corp250'));
+    const nada = puntuar(ofertaM250, conHabEn('B1.3'));
+    assert.ok(limpia.total > corp250.total, `la fila limpia (${limpia.total}) aporta el motor; la sucia (${corp250.total}) no`);
+    assert.equal(corp250.total, nada.total, 'la fila Corp 250 puntúa como no tener motores');
+
+    // Modelo escrito en engine_manufacturer.
+    const ofertaPw307 = makeEngineOffer('eng-pw307');
+    const declarado = puntuar(ofertaPw307, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic', 'engine_technician'], licenses: [makeLicense('B1.1')], engines: [makeEngineDeclaration('eng-pw307')] }));
+    const pw307Sucia = puntuar(ofertaPw307, conHabEn('B1.1', 'fx-sucia-falcon7x-pw307'));
+    const nadaPw = puntuar(ofertaPw307, conHabEn('B1.1'));
+    assert.ok(declarado.total > pw307Sucia.total, `declarado (${declarado.total}) > fila sucia (${pw307Sucia.total})`);
+    assert.equal(pw307Sucia.total, nadaPw.total, 'la fila con el modelo en el fabricante puntúa como no tener motores');
+  });
+
+  await test('Fase 10 · Catálogo — un rating enlazado a un motor genérico INACTIVO da crédito de familia, nunca de motor exacto', () => {
+    // Decisión del 2026-09-15 (opción B del seed): los ratings de pistón cuyo
+    // texto sólo nombra el fabricante se enlazan a "Lycoming (model not
+    // specified)", inactiva. El escalón "motor implícito" mira is_active: una
+    // genérica no dice QUÉ motor es, así que sólo puede decir de qué familia.
+    const generica = ENGINE_INDEX.get('eng-lycoming-generica');
+    assert.equal(generica?.isActive, false, 'guarda del fixture: la genérica llega inactiva');
+
+    const oferta = makeEngineOffer('eng-lycoming-o360');
+    // Los cinco con la MISMA licencia y los mismos tipos; sólo cambia de dónde
+    // sale el motor.
+    const conPerfil = ({ engines = [], habOn }: { engines?: TechnicianEngineExperience[]; habOn?: string }) => {
+      const lic = makeLicense('B1.2');
+      return puntuar(
+        oferta,
+        makeTechnician({
+          ...PERFIL_A_FAVOR,
+          technicianTypes: ['mechanic', 'engine_technician'],
+          licenses: [lic],
+          habilitations: habOn ? [makeHabOn(lic, { aircraftTypeRatingId: habOn })] : [],
+          engines,
+        }),
+      );
+    };
+
+    const declarado = conPerfil({ engines: [makeEngineDeclaration('eng-lycoming-o360')] });
+    const implicitoActivo = conPerfil({ habOn: 'fx-pa28-o360-limpia' });
+    const implicitoGenerico = conPerfil({ habOn: 'fx-pa28-lycoming-generica' });
+    const familiaDeclarada = conPerfil({ engines: [makeEngineDeclaration('eng-lycoming-o320')] });
+    const mismoTipo = conPerfil({ engines: [makeEngineDeclaration('eng-continental-io550')] });
+
+    // Contraste primero: hoy los cinco empatan porque el motor no puntúa.
+    assert.ok(
+      implicitoActivo.total > implicitoGenerico.total,
+      `implícito con motor activo (${implicitoActivo.total}) > implícito con genérica (${implicitoGenerico.total})`,
+    );
+    assert.equal(
+      implicitoGenerico.total,
+      familiaDeclarada.total,
+      `la genérica vale EXACTAMENTE lo que la misma familia (${implicitoGenerico.total} vs ${familiaDeclarada.total})`,
+    );
+    assert.deepEqual(implicitoGenerico.breakdown, familiaDeclarada.breakdown);
+    assert.ok(implicitoGenerico.total < declarado.total, 'nunca llega al motor exacto');
+    assert.ok(implicitoGenerico.total > mismoTipo.total, 'pero sí por encima de otro fabricante del mismo tipo');
+  });
+
+  // ── Hueco preexistente: caducidad en la rama de sólo licencia ─────────
+  //
+  // `evaluateLicenseCategoryMatch` no mira expiresAt: una B1.1 caducada saca
+  // el 100 en una oferta que sólo pide la B1.1. En la rama con aeronave la
+  // misma caducidad cae al tope de 39 desde la tanda E. Este test pide la
+  // misma regla aquí.
+  await test('Fase 10 · Vigencia — una licencia caducada en oferta de sólo licencia NO puntúa completo', () => {
+    const oferta = makeOffer(); // EASA B1.1, sin aeronave, exige certificar
+    const vigente = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1')] }));
+    const caducada = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1', { expiresAt: '2026-01-01' })] }));
+
+    assert.equal(vigente.total, 100, 'control');
+    assert.equal(caducada.breakdown.license, 0, 'caducada cuenta como no tenerla, igual que un rating caducado');
+    assert.ok(caducada.total <= ZERO_QUALIFICATION_CAP, `got ${caducada.total}`);
+    assert.ok(caducada.missingRequirements.some((m) => m.includes('expired')), 'el motivo dice "caducada", no "te falta"');
+    assert.equal(caducada.vigenciaNotices.length, 1);
+    assert.equal(caducada.vigenciaNotices[0].label, 'Expired');
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FASE 10, PASO 5a — el motor conectado al matching real
+  //
+  // Tres cosas: la elegibilidad de las ofertas de motor (filtro, no puntos),
+  // que los envoltorios de matchingV2 den EXACTAMENTE lo mismo que las
+  // funciones directas, y la caché del catálogo de motores.
+  // ══════════════════════════════════════════════════════════════════════
+
+  await test('Paso 5a · Elegibilidad de motor — B1 con motor declarado aparece; engine_technician sin motores aparece con 3 puntos; B1 sin motores no aparece', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b', { id: 'offer-motor-elegibilidad' });
+    const ofertaAeronave = makeOffer({ id: 'offer-aeronave-elegibilidad' });
+
+    const b1ConMotor = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'tech-b1-con-motor',
+      technicianTypes: ['mechanic'],
+      licenses: [makeLicense('B1.1')],
+      engines: [makeEngineDeclaration('eng-cfm56-7b')],
+    });
+    const motorSinMotores = makeTechnician({ ...PERFIL_A_FAVOR, id: 'tech-motor-sin-motores', technicianTypes: ['engine_technician'] });
+    const b1SinMotores = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'tech-b1-sin-motores',
+      technicianTypes: ['mechanic'],
+      licenses: [makeLicense('B1.1')],
+    });
+
+    // Contraste primero: el B1 sin motores NO queda fuera por nota. Puntuado a
+    // mano saca lo mismo que el engine_technician sin motores; lo que lo saca
+    // de la lista es el filtro, y eso es lo que este test tiene que probar.
+    const b1SinMotoresPuntuado = puntuar(oferta, b1SinMotores);
+    assert.ok(b1SinMotoresPuntuado.total > 0, 'el scorer sí lo puntúa');
+    assert.equal(b1SinMotoresPuntuado.total, puntuar(oferta, motorSinMotores).total, 'misma nota que el que sí aparece');
+
+    assert.equal(elegible(oferta, b1ConMotor), true);
+    assert.equal(elegible(oferta, motorSinMotores), true);
+    assert.equal(elegible(oferta, b1SinMotores), false);
+
+    const tecnicos = [b1SinMotores, motorSinMotores, b1ConMotor];
+    const ranking = rankTechniciansForOffer(oferta, tecnicos, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.deepEqual(ranking.map((s) => s.technicianId), ['tech-b1-con-motor', 'tech-motor-sin-motores']);
+
+    const sinMotoresEnLista = ranking.find((s) => s.technicianId === 'tech-motor-sin-motores')!;
+    assert.equal(sinMotoresEnLista.breakdown.engine, 3, 'engine_technician sin motores: el escalón "none", 3 puntos');
+    assert.equal(sinMotoresEnLista.total, puntuar(oferta, motorSinMotores).total, 'el filtro no toca la nota');
+
+    // Técnico→ofertas: el B1 sin motores no ve la de motor, y el filtro no se
+    // extiende a las de aeronave.
+    const ofertas = [oferta, ofertaAeronave];
+    assert.deepEqual(
+      rankOffersForTechnician(b1SinMotores, ofertas, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.offerId),
+      ['offer-aeronave-elegibilidad'],
+    );
+    for (const tecnico of [b1ConMotor, motorSinMotores]) {
+      assert.ok(
+        rankOffersForTechnician(tecnico, ofertas, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).some((s) => s.offerId === oferta.id),
+        `${tecnico.id} ve la oferta de motor`,
+      );
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FASE 10, PASO 5b — el type rating B1 da entrada y puntúa; los demás no
+  //
+  // Sustituye al test del 5a que fijaba "el motor implícito no hace elegible a
+  // nadie". La regla nueva: (a) motor declarado, (b) type rating colgado de
+  // una B1 con el motor de la oferta o de su familia, (c) engine_technician.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Un técnico SIN motores declarados y SIN el oficio de motor: todo lo que
+  // pueda hacerlo entrar tiene que venir de sus habilitaciones.
+  const conRatingsBajo = (id: string, porLicencia: [AuthorityLicenseCode, string][], extra: TechnicianOverrides = {}) => {
+    const licencias = new Map<string, TechnicianLicense>();
+    for (const [code] of porLicencia) if (!licencias.has(code)) licencias.set(code, makeLicense(code, { id: `lic-${id}-${code}` }));
+    return makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id,
+      technicianTypes: ['mechanic'],
+      licenses: [...licencias.values()],
+      habilitations: porLicencia.map(([code, ratingId]) => makeHabOn(licencias.get(code)!, { aircraftTypeRatingId: ratingId })),
+      ...extra,
+    });
+  };
+
+  await test('Paso 5b · Elegibilidad de motor — B1 con 737NG entra en una oferta de CFM56-7B; B2 con 737NG no entra', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const b1Con737 = conRatingsBajo('tech-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']]);
+    const b2Con737 = conRatingsBajo('tech-b2-737', [['B2', 'fx-b737ng-cfm56-7b']], { technicianTypes: ['avionic'] });
+
+    assert.equal(elegible(oferta, b1Con737), true, 'B1 + 737NG (→ CFM56-7B): vía (b)');
+    assert.equal(elegible(oferta, b2Con737), false, 'B2 + 737NG: la aviónica no certifica el motor');
+
+    assert.deepEqual(
+      rankTechniciansForOffer(oferta, [b2Con737, b1Con737], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.technicianId),
+      ['tech-b1-737'],
+    );
+    // Y la otra dirección dice lo mismo.
+    assert.equal(rankOffersForTechnician(b1Con737, [oferta], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).length, 1);
+    assert.equal(rankOffersForTechnician(b2Con737, [oferta], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).length, 0);
+  });
+
+  await test('Paso 5b · Elegibilidad de motor — B1 y B2 en el mismo type rating entra (lo decide la fila B1)', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const b1yB2 = conRatingsBajo('tech-b1-b2-737', [['B2', 'fx-b737ng-cfm56-7b'], ['B1.1', 'fx-b737ng-cfm56-7b']], {
+      technicianTypes: ['mechanic', 'avionic'],
+    });
+    assert.equal(elegible(oferta, b1yB2), true);
+    assert.equal(puntuar(oferta, b1yB2).breakdown.engine, puntuar(oferta, conRatingsBajo('tech-solo-b1', [['B1.1', 'fx-b737ng-cfm56-7b']])).breakdown.engine, 'la fila B2 no suma ni resta');
+  });
+
+  await test('Paso 5b · Elegibilidad de motor — la familia vale por type rating B1; un motor sin relación, no; B2 y C nunca', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+
+    // Familia: A320 con CFM56-5B bajo una B1.1 frente a una oferta de CFM56-7B.
+    assert.equal(elegible(oferta, conRatingsBajo('tech-b1-familia', [['B1.1', 'fx-a320-cfm56-5b-limpia']])), true, 'B1 + familia CFM56');
+    // Familia por la genérica inactiva: el PA-28 "Lycoming" bajo B1.2 frente a una O-360.
+    assert.equal(elegible(makeEngineOffer('eng-lycoming-o360'), conRatingsBajo('tech-b1-generica', [['B1.2', 'fx-pa28-lycoming-generica']])), true, 'B1 + genérica de la misma familia');
+    // La familia necesita el catálogo de motores; sin él, sólo el exacto.
+    assert.equal(elegible(oferta, conRatingsBajo('tech-b1-familia-sin-cat', [['B1.1', 'fx-a320-cfm56-5b-limpia']]), { engineIndex: new Map() }), false, 'sin engineIndex la familia no se resuelve');
+    assert.equal(elegible(oferta, conRatingsBajo('tech-b1-737-sin-cat', [['B1.1', 'fx-b737ng-cfm56-7b']]), { engineIndex: new Map() }), true, 'el exacto sí, por id');
+
+    // Sin relación: Bell 407 (RR M250) bajo una B1.3.
+    assert.equal(elegible(oferta, conRatingsBajo('tech-b1-sin-relacion', [['B1.3', 'fx-bell407-rr250']])), false, 'B1 con un motor sin relación no entra por (b)');
+    // Ramas que no certifican el motor, con el motor EXACTO.
+    assert.equal(elegible(oferta, conRatingsBajo('tech-c-737', [['C', 'fx-b737ng-cfm56-7b']])), false, 'C + 737NG');
+    // Ni oficio de motor ni motor declarado ni rating: fuera.
+    assert.equal(elegible(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'] })), false);
+  });
+
+  await test('Paso 5b · Elegibilidad de motor — (a) cualquier motor declarado y (c) engine_technician siguen valiendo; el filtro no toca ofertas de aeronave', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const pintorConTurboeje = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-pt6c-67c')] });
+    assert.equal(elegible(oferta, pintorConTurboeje), true, '(a) aunque el motor no se parezca y el oficio no sea de motor');
+    assert.equal(elegible(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['avionic', 'engine_technician'] })), true, '(c) combinado con otros oficios');
+    // (c) con un rating B2: entra por el oficio, pero la B2 no puntúa motor.
+    const motorConB2 = conRatingsBajo('tech-motor-b2', [['B2', 'fx-b737ng-cfm56-7b']], { technicianTypes: ['engine_technician'] });
+    assert.equal(elegible(oferta, motorConB2), true);
+    assert.equal(puntuar(oferta, motorConB2).breakdown.engine, 3, 'el motor de un rating B2 no cuenta para puntuar: sigue en "none"');
+    assert.equal(elegible(makeOffer(), makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'] })), true);
+  });
+
+  await test('Paso 5b · Escalera — declarado > type rating B1 > familia (declarado o B1) > sin relación > engine_technician sin motores (3)', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const escalones: { nombre: string; tecnico: TechnicianWithRelations }[] = [
+      { nombre: 'motor exacto declarado', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e1', engines: [makeEngineDeclaration('eng-cfm56-7b')] }) },
+      { nombre: 'motor exacto por type rating B1', tecnico: conRatingsBajo('e2', [['B1.1', 'fx-b737ng-cfm56-7b']]) },
+      { nombre: 'familia declarada', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e3', engines: [makeEngineDeclaration('eng-cfm56-5b')] }) },
+      { nombre: 'familia por type rating B1', tecnico: conRatingsBajo('e4', [['B1.1', 'fx-a320-cfm56-5b-limpia']]) },
+      { nombre: 'motor sin relación declarado (turboeje)', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e5', engines: [makeEngineDeclaration('eng-pt6c-67c')] }) },
+      { nombre: 'engine_technician sin motores', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e6', technicianTypes: ['engine_technician'] }) },
+    ];
+    const motor = escalones.map(({ tecnico }) => puntuar(oferta, tecnico).breakdown.engine);
+    const medido = escalones.map((e, i) => `${e.nombre}=${motor[i]}`).join(' / ');
+
+    assert.ok(motor[0] > motor[1], medido);
+    assert.ok(motor[1] > motor[2], medido);
+    assert.equal(motor[2], motor[3], `la familia vale lo mismo declarada que por B1: ${medido}`);
+    assert.ok(motor[3] > motor[4], medido);
+    assert.ok(motor[4] > motor[5], medido);
+    assert.equal(motor[5], 3, medido);
+
+    // Y todos entran, así que el ranking sigue exactamente ese orden.
+    const ranking = rankTechniciansForOffer(oferta, escalones.map((e) => e.tecnico), RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.equal(ranking.length, escalones.length, 'los seis son elegibles');
+    assert.deepEqual(ranking.map((s) => s.technicianId).filter((id) => id !== 'e4'), ['e1', 'e2', 'e3', 'e5', 'e6'], 'e3 y e4 empatan y se desempatan por id');
+  });
+
+  // ── Forma de la oferta: los CHECK de la 076 y la 077 ──────────────────
+  //
+  // Esto prueba el ESPEJO en TypeScript. Que Postgres rechace lo mismo lo
+  // prueba la propia migración 077 al aplicarse: intenta las filas prohibidas y
+  // falla si no las rechazan ESOS constraints (ver su autocomprobación).
+  const formaBase = {
+    offerKind: 'aircraft' as const,
+    requiresCertification: false,
+    licenseCode: undefined,
+    licenseAuthority: undefined,
+    requiredEngineId: undefined,
+    onlyUnlicensed: false,
+    requiredHabilitations: [] as unknown[],
+  };
+
+  await test('Paso 5b · CHECK 077 — oferta de aeronave con motor: rechazada (y el motor sí vale en una de motor)', () => {
+    const violaciones = offerShapeViolations({ ...formaBase, requiredEngineId: 'eng-cfm56-7b' });
+    assert.ok(violaciones.some((v) => v.includes('Only an engine offer can name an engine')), JSON.stringify(violaciones));
+    assert.deepEqual(offerShapeViolations({ ...formaBase, offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b' }), [], 'control: la de motor es válida');
+    assert.deepEqual(offerShapeViolations(formaBase), [], 'control: la de aeronave sin motor es válida');
+  });
+
+  await test('Paso 5b · CHECK 077 — "sólo sin licencia" con licencia: rechazada, en aeronave y en motor', () => {
+    const conLicencia = { ...formaBase, requiresCertification: true, licenseCode: 'B1.1' as const, licenseAuthority: 'EASA' as const };
+    assert.deepEqual(offerShapeViolations(conLicencia), [], 'control: licencia sin el filtro es válida');
+    assert.ok(offerShapeViolations({ ...conLicencia, onlyUnlicensed: true }).some((v) => v.includes('Only technicians without a licence')));
+
+    // Sin licencia, el filtro vale en las dos clases.
+    assert.deepEqual(offerShapeViolations({ ...formaBase, onlyUnlicensed: true }), [], 'aeronave sin licencia + filtro');
+    assert.deepEqual(offerShapeViolations({ ...formaBase, offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b', onlyUnlicensed: true }), [], 'motor + filtro');
+  });
+
+  await test('Paso 5b · Forma — motor con licencia o con aeronaves, y autoridad que no emite el código: rechazadas', () => {
+    const motor = { ...formaBase, offerKind: 'engine' as const, requiredEngineId: 'eng-cfm56-7b' };
+    assert.ok(offerShapeViolations({ ...motor, requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA' }).length > 0, '076: motor con licencia');
+    assert.ok(offerShapeViolations({ ...motor, requiredHabilitations: [{}] }).length > 0, '076: motor con aeronaves');
+    assert.ok(offerShapeViolations({ ...motor, requiredEngineId: undefined }).length > 0, '076: motor sin motor');
+    const faa = { ...formaBase, requiresCertification: true, licenseCode: 'A&P' as const, licenseAuthority: 'FAA' as const };
+    assert.deepEqual(offerShapeViolations(faa), [], 'FAA A&P existe');
+    assert.ok(offerShapeViolations({ ...faa, licenseCode: 'B1.1' }).some((v) => v.includes('FAA does not issue a B1.1')));
+    assert.ok(offerShapeViolations({ ...faa, licenseAuthority: undefined }).length > 0, '075: licencia sin autoridad');
+  });
+
+  // ── Perfil: licencias como credenciales ───────────────────────────────
+
+  await test('Paso 5b · Perfil — quitar la B1.1 EASA no toca la B1.1 UK CAA, ni los códigos, ni el oficio implicado', () => {
+    let held = toggleHeldLicense([], 'EASA', 'B1.1');
+    held = toggleHeldLicense(held, 'UK_CAA', 'B1.1');
+    assert.equal(held.length, 2, 'la misma categoría bajo dos autoridades son dos credenciales');
+    assert.deepEqual(heldLicenseCodes(held), ['B1.1'], 'pero un solo código para la implicación de oficio');
+
+    const sinEasa = toggleHeldLicense(held, 'EASA', 'B1.1');
+    assert.deepEqual(sinEasa.map((l) => l.authority), ['UK_CAA']);
+    assert.ok(holdsLicense(sinEasa, 'UK_CAA', 'B1.1'));
+    assert.ok(!holdsLicense(sinEasa, 'EASA', 'B1.1'));
+    assert.deepEqual(
+      typesAfterLicenseChange(['mechanic'], heldLicenseCodes(held), heldLicenseCodes(sinEasa)),
+      ['mechanic'],
+      'el oficio sigue implicado por la UK CAA',
+    );
+
+    // Las fechas son de cada credencial.
+    const conFecha = updateHeldLicenseDates(held, 'UK_CAA', 'B1.1', { expiresAt: '2030-01-01' });
+    assert.equal(conFecha.find((l) => l.authority === 'UK_CAA')?.expiresAt, '2030-01-01');
+    assert.equal(conFecha.find((l) => l.authority === 'EASA')?.expiresAt, undefined);
+  });
+
+  await test('Paso 5b · Perfil — un A&P de la FAA implica mecánico y no admite type ratings', () => {
+    assert.deepEqual(typesImpliedByLicenses(['A&P']), ['mechanic']);
+    assert.deepEqual(typesImpliedByLicenses(['A']), ['mechanic']);
+    assert.deepEqual(typesImpliedByLicenses(['A&P', 'B2']), ['mechanic', 'avionic']);
+
+    const held = sortHeldLicenses([{ authority: 'FAA', code: 'A&P' }, { authority: 'EASA', code: 'B2' }]);
+    assert.deepEqual(held.map((l) => l.authority), ['EASA', 'FAA'], 'orden del catálogo de autoridades');
+    assert.deepEqual(licensesForHabilitations(held).map((l) => `${l.authority} ${l.code}`), ['EASA B2']);
+    assert.deepEqual(licensesForHabilitations([{ authority: 'FAA', code: 'A&P' }]), []);
+    assert.equal(heldCountByAuthority(held).FAA, 1);
+    assert.equal(heldCountByAuthority(held).UK_CAA, 0);
+  });
+
+  await test('Paso 5b · Escalera — B1 con 737NG queda por encima de quien declara un motor sin relación', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const b1Con737 = conRatingsBajo('tech-z-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']]);
+    // Id que ordena ANTES, para que el orden no pueda salir del desempate.
+    const sinRelacion = makeTechnician({ ...PERFIL_A_FAVOR, id: 'tech-a-sin-relacion', engines: [makeEngineDeclaration('eng-pt6c-67c')] });
+    const mismoTipo = makeTechnician({ ...PERFIL_A_FAVOR, id: 'tech-a-mismo-tipo', engines: [makeEngineDeclaration('eng-v2500-a5')] });
+
+    const ranking = rankTechniciansForOffer(oferta, [sinRelacion, mismoTipo, b1Con737], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.equal(ranking[0].technicianId, 'tech-z-b1-737', `ranking: ${ranking.map((s) => `${s.technicianId}=${s.total}`).join(', ')}`);
+    assert.ok(ranking[0].total > ranking[1].total);
+  });
+
+  await test('Paso 5a · Elegibilidad de motor — los dos filtros se suman: "sólo sin licencia" no rescata a quien no tiene motores', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b', { onlyUnlicensed: true });
+    const sinLicenciaNiMotores = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'] });
+    const sinLicenciaConMotor = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    const conLicenciaYMotor = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1')], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+
+    assert.equal(elegible(oferta, sinLicenciaNiMotores), false, 'cumple "sin licencia" pero no tiene nada de motor');
+    assert.equal(elegible(oferta, sinLicenciaConMotor), true);
+    assert.equal(elegible(oferta, conLicenciaYMotor), false, 'tiene motor pero tiene licencia');
+  });
+
+  // ── Envoltorios (matchingService) ─────────────────────────────────────
+  //
+  // Un servicio montado con cargadores falsos. La pregunta de estos tests es
+  // una sola: ¿pasar por getTechnicianMatchesForOffer / getOfferMatchesForTechnician
+  // da lo mismo que llamar a rankTechniciansForOffer / rankOffersForTechnician
+  // con los catálogos cargados? Cualquier diferencia es lógica duplicada.
+
+  const b11Servicio = makeLicense('B1.1', { id: 'lic-servicio-b11' });
+  const b12Servicio = makeLicense('B1.2', { id: 'lic-servicio-b12' });
+  const tecnicosServicio: TechnicianWithRelations[] = [
+    // Aeronave: A320 exacto.
+    makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'svc-b11-a320',
+      licenses: [b11Servicio],
+      habilitations: [makeHabOn(b11Servicio, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    }),
+    // Motor exacto declarado, CON licencia: el que "sólo sin licencia" saca.
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-b2-cfm567b', technicianTypes: ['avionic'], licenses: [makeLicense('B2')], engines: [makeEngineDeclaration('eng-cfm56-7b')] }),
+    // Misma familia, sin licencia. Sin engineIndex caería a "tipo distinto":
+    // es la prueba de que el envoltorio pasa el catálogo de motores.
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-familia-cfm565b', technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-cfm56-5b')] }),
+    // engine_technician sin motores: elegible, 3 puntos.
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-motor-sin-motores', technicianTypes: ['engine_technician'] }),
+    // B1 sin motores: no elegible en ofertas de motor.
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-b1-sin-motores', licenses: [makeLicense('B1.1')] }),
+    // Rating colgado de un motor GENÉRICO inactivo: su crédito de familia sólo
+    // existe si el envoltorio carga también los inactivos.
+    makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'svc-pa28-generica',
+      technicianTypes: ['mechanic', 'engine_technician'],
+      licenses: [b12Servicio],
+      habilitations: [makeHabOn(b12Servicio, { aircraftTypeRatingId: 'fx-pa28-lycoming-generica' })],
+    }),
+  ];
+  const ofertasServicio: OfferWithRequirements[] = [
+    makeOffer({ id: 'svc-offer-a320', minYearsExperience: 3, requiredHabilitations: [makeHabReq('fx-a320-cfm56')] }),
+    makeEngineOffer('eng-cfm56-7b', { id: 'svc-offer-cfm567b' }),
+    makeEngineOffer('eng-cfm56-7b', { id: 'svc-offer-cfm567b-sin-licencia', onlyUnlicensed: true }),
+    makeEngineOffer('eng-lycoming-o360', { id: 'svc-offer-o360' }),
+  ];
+
+  // La vista anonimizada, marcada para poder comprobar que cada score vuelve
+  // pegado a SU técnico y no al de al lado.
+  const previewDe = (t: TechnicianWithRelations) =>
+    ({ id: t.id, anonymousCode: `ANON-${t.id}` }) as unknown as SafeTechnicianPreview;
+
+  const montarServicio = () => {
+    const minYearsPedidos: number[] = [];
+    const service = createMatchingService({
+      getOfferWithRequirements: async (id) => ofertasServicio.find((o) => o.id === id) ?? null,
+      getPublishedOffersWithRequirements: async () => ofertasServicio,
+      getMatchCandidates: async (minYears) => {
+        minYearsPedidos.push(minYears);
+        return tecnicosServicio.map((t) => ({ technician: t, preview: previewDe(t) }));
+      },
+      getTechnicianWithRelations: async (id) => tecnicosServicio.find((t) => t.id === id) ?? null,
+      getAircraftTypeRatings: async () => [...FIXTURES, ...ENGINE_RATING_FIXTURES],
+      // El catálogo ENTERO, con la genérica inactiva: es lo que devuelve
+      // catalogRepository.getEngines().
+      getEngines: async () => ENGINE_FIXTURES,
+      now: () => NOW,
+    });
+    return { service, minYearsPedidos };
+  };
+
+  await test('Paso 5a · Envoltorios — oferta→técnicos da exactamente lo mismo que rankTechniciansForOffer (aeronave, motor y "sólo sin licencia")', async () => {
+    const { service, minYearsPedidos } = montarServicio();
+
+    for (const oferta of ofertasServicio) {
+      const resultados = await service.getTechnicianMatchesForOffer(oferta.id);
+      const directo = rankTechniciansForOffer(oferta, tecnicosServicio, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+
+      assert.deepEqual(resultados.map((r) => r.score), directo, `${oferta.id}: mismos scores, mismo orden`);
+      for (const { technician, score } of resultados) {
+        assert.equal(technician.id, score.technicianId, `${oferta.id}: la vista vuelve pegada a su score`);
+        assert.equal(technician.anonymousCode, `ANON-${score.technicianId}`);
+        const tecnico = tecnicosServicio.find((t) => t.id === score.technicianId)!;
+        assert.deepEqual(score, calculateOfferTechnicianMatch(oferta, tecnico, RATING_INDEX_MOTORES, NOW, ENGINE_INDEX), `${oferta.id} / ${tecnico.id}`);
+      }
+      assert.deepEqual(
+        resultados.map((r) => r.score.technicianId).sort(),
+        tecnicosServicio.filter((t) => elegible(oferta, t)).map((t) => t.id).sort(),
+        `${oferta.id}: aparecen exactamente los elegibles`,
+      );
+    }
+
+    // Contrastes: sin ellos, un envoltorio que no pasara el catálogo de motores
+    // o que no filtrara podría seguir en verde.
+    const motor = await service.getTechnicianMatchesForOffer('svc-offer-cfm567b');
+    const familia = motor.find((r) => r.score.technicianId === 'svc-familia-cfm565b')!;
+    const tecnicoFamilia = tecnicosServicio.find((t) => t.id === 'svc-familia-cfm565b')!;
+    const sinCatalogo = calculateOfferTechnicianMatch(ofertasServicio[1], tecnicoFamilia, RATING_INDEX_MOTORES, NOW);
+    assert.ok(familia.score.breakdown.engine > sinCatalogo.breakdown.engine, `con engineIndex la familia puntúa (${familia.score.breakdown.engine} vs ${sinCatalogo.breakdown.engine} sin él)`);
+    assert.ok(!motor.some((r) => r.score.technicianId === 'svc-b1-sin-motores'), 'el B1 sin motores no aparece');
+    assert.equal(motor.find((r) => r.score.technicianId === 'svc-motor-sin-motores')?.score.breakdown.engine, 3);
+
+    const soloSinLicencia = await service.getTechnicianMatchesForOffer('svc-offer-cfm567b-sin-licencia');
+    assert.ok(!soloSinLicencia.some((r) => r.score.technicianId === 'svc-b2-cfm567b'), 'el licenciado con el motor exacto queda fuera');
+    assert.ok(motor.some((r) => r.score.technicianId === 'svc-b2-cfm567b'), 'y en la oferta abierta sí está');
+
+    const o360 = await service.getTechnicianMatchesForOffer('svc-offer-o360');
+    const generica = o360.find((r) => r.score.technicianId === 'svc-pa28-generica')!;
+    const tecnicoGenerica = tecnicosServicio.find((t) => t.id === 'svc-pa28-generica')!;
+    const soloActivos = calculateOfferTechnicianMatch(
+      ofertasServicio[3],
+      tecnicoGenerica,
+      RATING_INDEX_MOTORES,
+      NOW,
+      buildEngineIndex(ENGINE_FIXTURES.filter((e) => e.isActive)),
+    );
+    assert.ok(generica.score.breakdown.engine > soloActivos.breakdown.engine, `la genérica inactiva da crédito de familia (${generica.score.breakdown.engine} vs ${soloActivos.breakdown.engine} con sólo activos)`);
+
+    // El filtro duro de años viaja a la consulta con el valor de la oferta.
+    assert.ok(minYearsPedidos.includes(3), `minYearsExperience de la oferta llega al cargador, pidió ${JSON.stringify(minYearsPedidos)}`);
+  });
+
+  await test('Paso 5a · Envoltorios — técnico→ofertas da exactamente lo mismo que rankOffersForTechnician, y coincide con la otra dirección', async () => {
+    const { service } = montarServicio();
+
+    for (const tecnico of tecnicosServicio) {
+      const resultados = await service.getOfferMatchesForTechnician(tecnico.id);
+      const directo = rankOffersForTechnician(tecnico, ofertasServicio, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+      assert.deepEqual(resultados.map((r) => r.score), directo, `${tecnico.id}: mismos scores, mismo orden`);
+      for (const { offer, score } of resultados) assert.equal(offer.id, score.offerId, `${tecnico.id}: la oferta vuelve pegada a su score`);
+
+      // Las dos direcciones, a través de los envoltorios: mismo par, misma
+      // visibilidad, mismo score.
+      for (const oferta of ofertasServicio) {
+        const desdeTecnico = resultados.find((r) => r.offer.id === oferta.id);
+        const desdeOferta = (await service.getTechnicianMatchesForOffer(oferta.id)).find((r) => r.technician.id === tecnico.id);
+        assert.equal(Boolean(desdeTecnico), Boolean(desdeOferta), `visibilidad ${tecnico.id} / ${oferta.id}`);
+        if (desdeTecnico && desdeOferta) assert.deepEqual(desdeTecnico.score, desdeOferta.score, `score ${tecnico.id} / ${oferta.id}`);
+      }
+    }
+
+    // Contrastes con el filtro activo.
+    const b2 = (await service.getOfferMatchesForTechnician('svc-b2-cfm567b')).map((r) => r.offer.id);
+    assert.ok(!b2.includes('svc-offer-cfm567b-sin-licencia'), 'el licenciado no ve la oferta "sólo sin licencia"');
+    assert.ok(b2.includes('svc-offer-cfm567b'));
+    const b1 = (await service.getOfferMatchesForTechnician('svc-b1-sin-motores')).map((r) => r.offer.id);
+    assert.deepEqual(b1, ['svc-offer-a320'], 'el B1 sin motores sólo ve la de aeronave');
+  });
+
+  await test('Paso 5b · Envoltorios — matchPairs (las pantallas de un par) dice lo mismo que las dos listas, par a par', async () => {
+    const { service } = montarServicio();
+    const pares = ofertasServicio.flatMap((offer) => tecnicosServicio.map((technician) => ({ offer, technician })));
+    const resultados = await service.matchPairs(pares);
+    assert.equal(resultados.length, pares.length, 'un resultado por par, en orden');
+
+    for (let i = 0; i < pares.length; i += 1) {
+      const { offer, technician } = pares[i];
+      const r = resultados[i];
+      const enLista = (await service.getTechnicianMatchesForOffer(offer.id)).find((m) => m.technician.id === technician.id);
+      assert.equal(r.eligible, Boolean(enLista), `visibilidad ${offer.id} / ${technician.id}`);
+      if (r.eligible) {
+        assert.deepEqual(r.score, enLista!.score, `score ${offer.id} / ${technician.id}`);
+      } else {
+        assert.equal('score' in r, false, 'la variante no elegible no lleva score');
+      }
+    }
+
+    // Los motivos: el B1 sin motores en la de motor, el licenciado en la de sólo sin licencia.
+    const motivo = (offerId: string, techId: string) => {
+      const i = pares.findIndex((p) => p.offer.id === offerId && p.technician.id === techId);
+      const r = resultados[i];
+      return r.eligible ? null : r.reason;
+    };
+    assert.equal(motivo('svc-offer-cfm567b', 'svc-b1-sin-motores'), 'no_engine_experience');
+    assert.equal(motivo('svc-offer-cfm567b-sin-licencia', 'svc-b2-cfm567b'), 'licensed_technician');
+    assert.equal(motivo('svc-offer-a320', 'svc-b1-sin-motores'), null, 'la de aeronave no filtra');
+    assert.deepEqual(await service.matchPairs([]), []);
+  });
+
+  await test('Paso 5a · Envoltorios — oferta o técnico inexistentes devuelven lista vacía', async () => {
+    const { service } = montarServicio();
+    assert.deepEqual(await service.getTechnicianMatchesForOffer('no-existe'), []);
+    assert.deepEqual(await service.getOfferMatchesForTechnician('no-existe'), []);
+  });
+
+  // ── Caché del catálogo de motores ─────────────────────────────────────
+
+  await test('Paso 5a · Caché de motores — guarda también las inactivas y sirve dentro del TTL sin volver a pedir', async () => {
+    let calls = 0;
+    let clock = 0;
+    const cache = createEnginesCache({
+      fetchAll: async () => {
+        calls += 1;
+        return ENGINE_FIXTURES;
+      },
+      ttlMs: 1000,
+      now: () => clock,
+    });
+    const primera = await cache.getEngines();
+    assert.ok(primera.some((e) => !e.isActive), 'la genérica inactiva viaja con el catálogo');
+    assert.equal(primera.length, ENGINE_FIXTURES.length);
+    await cache.getEngines();
+    assert.equal(calls, 1, 'dentro del TTL no se vuelve a pedir');
+    clock = 1001;
+    await cache.getEngines();
+    assert.equal(calls, 2, 'pasado el TTL, sí');
+    cache.invalidate();
+    await cache.getEngines();
+    assert.equal(calls, 3, 'invalidate() fuerza la siguiente');
+  });
+
+  await test('Paso 5a · Caché de motores — un refresco fallido sigue sirviendo el último catálogo; sin catálogo previo, error y reintento', async () => {
+    let clock = 0;
+    let falla = false;
+    const cache = createEnginesCache({
+      fetchAll: async () => {
+        if (falla) throw new Error('red caída');
+        return ENGINE_FIXTURES;
+      },
+      ttlMs: 1000,
+      now: () => clock,
+    });
+    await cache.getEngines();
+    falla = true;
+    clock = 5000;
+    assert.equal((await cache.getEngines()).length, ENGINE_FIXTURES.length, 'se sigue sirviendo el catálogo bueno');
+    assert.equal(cache.getState().status, 'success');
+    assert.equal(cache.getState().error?.message, 'red caída', 'con el error anotado');
+
+    const vacia = createEnginesCache({
+      fetchAll: async () => {
+        if (falla) throw new Error('red caída');
+        return ENGINE_FIXTURES;
+      },
+    });
+    await assert.rejects(() => vacia.getEngines(), /red caída/);
+    assert.equal(vacia.getState().status, 'error');
+    falla = false;
+    assert.equal((await vacia.getEngines()).length, ENGINE_FIXTURES.length, 'el siguiente intento se recupera');
+  });
+
+  await test('Paso 5a · Caché de motores — las llamadas concurrentes comparten una sola petición', async () => {
+    let calls = 0;
+    const cache = createEnginesCache({
+      fetchAll: async () => {
+        calls += 1;
+        return ENGINE_FIXTURES;
+      },
+    });
+    await Promise.all([cache.getEngines(), cache.getEngines(), cache.getEngines()]);
+    assert.equal(calls, 1);
+  });
 
 }
 

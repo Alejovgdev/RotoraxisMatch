@@ -39,13 +39,13 @@ import { isOfferOpenForTechnicians, offerRepository } from '../../src/repositori
 import { offerRequestRepository } from '../../src/repositories/v2/offerRequestRepository';
 import { offerApplicationRepository } from '../../src/repositories/v2/offerApplicationRepository';
 import { technicianRepositoryV2 } from '../../src/repositories/v2/technicianRepositoryV2';
-import { calculateOfferTechnicianMatch } from '../../src/utils/matchingV2';
+import { matchPairs } from '../../src/utils/matchingV2';
 import { useAircraftTypeRatingsCatalog } from '../../src/state/useAircraftTypeRatingsCatalog';
 import { AircraftRatingIndex } from '../../src/constants/aircraftTypeRatings';
 import { CollapsibleAircraftFilter } from '../../src/components/CollapsibleAircraftFilter';
 import { CountryCityPicker } from '../../src/components/CountryCityPicker';
 import { resolveTypeRatingLabels, resolveTechnicianProductTypes } from '../../src/utils/v2CompatAdapters';
-import { LICENSE_CATEGORIES } from '../../src/constants/licenses';
+import { LICENSE_CATEGORIES, credentialLabel } from '../../src/constants/licenses';
 import { TECHNICIAN_TYPES, technicianTypeLabels } from '../../src/constants/technicianTypes';
 import { OfferWithRequirements } from '../../src/types/offer';
 import { SafeTechnicianView } from '../../src/types';
@@ -111,12 +111,10 @@ export default function TechnicianSearchScreen() {
   const isWide = width >= 960;
   const { results, filters, loading, hasSearched, updateFilter, clearFilters, search } =
     useTechnicianSearch();
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
-  const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
+  // Aquí el catálogo de ratings ya sólo pinta etiquetas de las tarjetas. La
+  // puntuación la hace matchPairs, que espera a sus catálogos (ratings y
+  // motores) por su cuenta, así que ya no hay índice vacío que vigilar.
+  const { ratingIndex } = useAircraftTypeRatingsCatalog();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const companyMemberRole = companySession?.companyMemberRole;
@@ -127,6 +125,9 @@ export default function TechnicianSearchScreen() {
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(preselectedOfferId ?? null);
   const [previews, setPreviews] = useState<PreviewMap>({});
   const [scores, setScores] = useState<ScoreMap>({});
+  // Paso 5b: los que el filtro de la oferta elegida saca. No se pintan con nota
+  // baja: no aparecen, igual que en la lista de la oferta.
+  const [ineligibleIds, setIneligibleIds] = useState<Set<string>>(new Set());
   const [scoredOfferId, setScoredOfferId] = useState<string | null>(null);
   const [offerRequests, setOfferRequests] = useState<OfferRequest[]>([]);
   const [offerApplications, setOfferApplications] = useState<OfferApplication[]>([]);
@@ -185,6 +186,7 @@ export default function TechnicianSearchScreen() {
     // A score only belongs to one offer. Clear the previous map immediately
     // so changing the selected offer never shows or sorts by stale scores.
     setScores({});
+    setIneligibleIds(new Set());
     setScoredOfferId(null);
 
     async function loadPreviewData() {
@@ -206,30 +208,37 @@ export default function TechnicianSearchScreen() {
       });
 
       const nextScores: ScoreMap = {};
-      if (selectedOffer && catalogState === 'success') {
-        const scoreEntries = await Promise.all(
-          results.map(async (tech) => {
-            const full = await technicianRepositoryV2.getWithRelations(tech.id);
-            if (!full) return [tech.id, null] as const;
-            return [tech.id, calculateOfferTechnicianMatch(selectedOffer, full, ratingIndex)] as const;
-          }),
-        );
-        scoreEntries.forEach(([id, score]) => {
-          if (score) nextScores[id] = score;
-        });
+      const nextIneligible = new Set<string>();
+      let scored = false;
+      if (selectedOffer) {
+        const loaded = (await Promise.all(results.map((tech) => technicianRepositoryV2.getWithRelations(tech.id))))
+          .filter((full): full is NonNullable<typeof full> => Boolean(full));
+        // Filtro + scorer con los dos catálogos, en el servicio. Si los
+        // catálogos no cargan, la lista queda sin puntuar en el orden del
+        // repositorio: mejor que ordenar por un score erróneo.
+        const pairs = await matchPairs(loaded.map((technician) => ({ offer: selectedOffer, technician }))).catch(() => null);
+        if (pairs) {
+          scored = true;
+          loaded.forEach((technician, i) => {
+            const pair = pairs[i];
+            if (pair.eligible) nextScores[technician.id] = pair.score;
+            else nextIneligible.add(technician.id);
+          });
+        }
       }
 
       if (!active) return;
       setPreviews(nextPreviews);
       setScores(nextScores);
-      setScoredOfferId(selectedOffer && catalogState === 'success' ? selectedOffer.id : null);
+      setIneligibleIds(nextIneligible);
+      setScoredOfferId(selectedOffer && scored ? selectedOffer.id : null);
     }
 
     loadPreviewData();
     return () => {
       active = false;
     };
-  }, [results, selectedOffer, ratingIndex, catalogState]);
+  }, [results, selectedOffer]);
 
   const orderedResults = useMemo(() => {
     // Preserve the repository order until every score for the currently
@@ -238,6 +247,7 @@ export default function TechnicianSearchScreen() {
     if (!selectedOffer || scoredOfferId !== selectedOffer.id) return results;
 
     return results
+      .filter((technician) => !ineligibleIds.has(technician.id))
       .map((technician, originalIndex) => ({ technician, originalIndex }))
       .sort((a, b) => {
         const aScore = scores[a.technician.id];
@@ -257,7 +267,7 @@ export default function TechnicianSearchScreen() {
         return a.originalIndex - b.originalIndex;
       })
       .map(({ technician }) => technician);
-  }, [results, scores, selectedOffer, scoredOfferId]);
+  }, [results, scores, ineligibleIds, selectedOffer, scoredOfferId]);
 
   async function handleSearch() {
     await search();
@@ -589,7 +599,10 @@ function TechnicianResultCard({
   // Fase 6 tanda A: varios tipos por técnico, en una línea y en el orden del
   // catálogo. 'Technician' como último recurso, igual que antes.
   const technicianTypesText = technicianTypeLabels(preview?.technicianTypes ?? [], 'Technician');
-  const licenseChips = preview?.licenses?.length ? preview.licenses : technician.licenseCategories;
+  // Paso 5b: con autoridad ("EASA B1.1", "FAA A&P") cuando hay preview.
+  const licenseChips = preview?.licenses?.length
+    ? preview.licenses.map((license) => credentialLabel(license.authority, license.licenseCode))
+    : technician.licenseCategories;
   const typeRatingChips = preview?.habilitations?.length ? resolveTypeRatingLabels(preview.habilitations, ratingIndex) : [];
   const productTypes = preview?.habilitations?.length ? resolveTechnicianProductTypes(preview.habilitations, ratingIndex) : new Set<NonNullable<AircraftTypeRatingCatalog['productType']>>();
   const aircraftCat = productTypes.size > 1 ? 'mixed' : productTypes.size === 1 ? [...productTypes][0] : null;

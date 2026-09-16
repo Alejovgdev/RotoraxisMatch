@@ -59,6 +59,9 @@ import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTyp
 import { AircraftRatingIndex, getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
 import { technicianTypeLabel, technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
+import { credentialLabel } from '../../../src/constants/licenses';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
 
@@ -168,6 +171,8 @@ export default function OfferDetailScreen() {
   // fallback y pintan el UUID crudo con el indice a medio cargar — de ahi el
   // gate de abajo.
   const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
+  // Paso 5b: sólo para el nombre del motor de una oferta de motor.
+  const { engineIndex } = useEnginesCatalog();
 
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [matches, setMatches] = useState<TechnicianMatchResult[]>([]);
@@ -498,14 +503,21 @@ export default function OfferDetailScreen() {
 
         <CompanyCard style={styles.sectionCard}>
           <SectionTitle title="Requirements" />
-          <RequirementRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
+          {/* Paso 5b: en una oferta de motor el oficio no puntúa ni filtra;
+              lo que pide es el motor. */}
+          {offer.offerKind === 'engine' ? (
+            <RequirementRow label="Engine" items={[offerEngineText(offer, engineIndex) ?? 'Not specified']} />
+          ) : (
+            <RequirementRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
+          )}
           {/* Fase 6 tanda C: se dice SIEMPRE, no solo cuando exige licencia.
               "No licence needed" es información, no ausencia de requisito. */}
           <RequirementRow
             label="Certified work"
             items={[offer.requiresCertification ? 'Licence required' : 'No licence needed']}
           />
-          {offer.licenseCode ? <RequirementRow label="Licence" items={[offer.licenseCode]} /> : null}
+          {offer.licenseCode ? <RequirementRow label="Licence" items={[offerLicenseDetailText(offer)!]} /> : null}
+          {offer.onlyUnlicensed ? <RequirementRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} /> : null}
           {offer.requiredHabilitations.length > 0 ? (
             <TypeRatingRequirementsRow
               habilitations={offer.requiredHabilitations}
@@ -514,7 +526,7 @@ export default function OfferDetailScreen() {
               ratingIndex={ratingIndex}
             />
           ) : null}
-          {!offer.licenseCode && offer.requiredHabilitations.length === 0 ? (
+          {offer.offerKind === 'aircraft' && !offer.licenseCode && offer.requiredHabilitations.length === 0 ? (
             <Text style={styles.noRequirementsText}>
               {offer.requiresCertification
                 ? 'No licence or type rating required beyond the profile type.'
@@ -647,7 +659,7 @@ export default function OfferDetailScreen() {
               {licenses.length > 0 ? (
                 <View style={styles.chipBlock}>
                   <Text style={styles.chipBlockLabel}>Licenses</Text>
-                  <View style={styles.chipRow}>{licenses.map((l) => <CompanyChip key={l} label={l} />)}</View>
+                  <View style={styles.chipRow}>{licenses.map((l) => <CompanyChip key={`${l.authority}-${l.licenseCode}`} label={credentialLabel(l.authority, l.licenseCode)} />)}</View>
                 </View>
               ) : null}
 
@@ -662,6 +674,9 @@ export default function OfferDetailScreen() {
                 <BreakdownItem label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} />
                 <BreakdownItem label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} />
                 <BreakdownItem label="License" value={score.breakdown.license} max={weights?.license ?? 0} />
+                {weights && weights.engine > 0 ? (
+                  <BreakdownItem label="Engine" value={score.breakdown.engine} max={weights.engine} />
+                ) : null}
                 <BreakdownItem label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} />
                 <BreakdownItem label="Location" value={score.breakdown.location} max={weights?.location ?? 0} />
               </View>

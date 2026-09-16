@@ -1,8 +1,13 @@
 import { supabase } from '../../lib/supabase';
-import { Offer, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
-import { TechnicianTypeCode, LicenseCode, ContractTypeCode } from '../../types/catalog';
+import { Offer, OfferKind, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
+import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCode } from '../../types/catalog';
+// Fase 10, paso 5b: aquí vivía DEFAULT_OFFER_AUTHORITY = 'EASA', el relleno de
+// la autoridad mientras el formulario no la pedía. Se retira con el selector:
+// una licencia sin autoridad ya no se completa en silencio, falla a la vista
+// (offerShapeViolations, y detrás el CHECK de emparejamiento de la 075).
 import { OfferStatus } from '../../types/enums';
-import { licensesSelectableForOfferType } from '../../constants/licenses';
+import { authorityHasTypeRatings, credentialLabel, licensesSelectableForOffer } from '../../constants/licenses';
+import { assertOfferShape } from '../../utils/offerShape';
 import { isLicensedTechnicianType, technicianTypeLabel } from '../../constants/technicianTypes';
 import { LocationValue, PersistedLocation } from '../../types/location';
 import { locationColumns, persistedLocationFromValue } from '../../utils/locationBridge';
@@ -41,7 +46,7 @@ import {
 // verificado). En cuanto hubiera una oferta, el scorer estaría puntuando su
 // licencia como si no existiera.
 const OFFER_COLUMNS =
-  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, requires_all_aircraft, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
+  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepts_equivalent, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
 
 /**
  * La localización de una oferta, tal y como la produce el selector.
@@ -70,7 +75,65 @@ export function offerLocationFromValue(value: LocationValue): OfferLocationWrite
   };
 }
 
-function offerPatchToDb(patch: Partial<Omit<Offer, 'id' | 'createdAt'>>): Record<string, unknown> {
+export type OfferPatch = Partial<Omit<Offer, 'id' | 'createdAt'>>;
+
+const CERTIFICATION_KEYS = ['requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptsEquivalent', 'onlyUnlicensed'] as const;
+const KIND_KEYS = ['offerKind', 'requiredEngineId'] as const;
+
+function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolean {
+  return keys.some((key) => patch[key] !== undefined);
+}
+
+/**
+ * El estado de la oferta DESPUÉS de aplicar el patch (Fase 10, paso 5b). Una
+ * sola implementación de los acoplamientos entre columnas, que sirve a las dos
+ * cosas que los necesitan: las guardas (se comprueba lo que va a quedar, no el
+ * patch) y la escritura (offerPatchToDb escribe los grupos acoplados desde
+ * aquí). Si vivieran en dos sitios, la guarda aprobaría una fila distinta de la
+ * que se escribe.
+ *
+ * Los acoplamientos son SÓLO los que tienen un único valor admisible:
+ *   - no certificar -> sin licencia, sin autoridad, sin equivalencias (053/075);
+ *   - certificar -> sin "sólo sin licencia" (077), salvo que el patch lo pida
+ *     explícitamente, que entonces es una contradicción y la guarda lanza;
+ *   - oferta de aeronave -> sin motor (077), con la misma salvedad;
+ *   - motor, o licencia de una autoridad sin type ratings (FAA) -> sin
+ *     aeronaves (076 y authorities.has_type_ratings). Esas filas se borran
+ *     antes del UPDATE (ver update()); la pantalla de edición confirma antes.
+ * Lo demás no se corrige: lanza.
+ */
+export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferPatch): OfferWithRequirements {
+  const next: OfferWithRequirements = { ...existing };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
+  }
+  if (!next.requiresCertification) {
+    next.licenseCode = undefined;
+    next.licenseAuthority = undefined;
+    next.acceptsEquivalent = false;
+  } else if (patch.onlyUnlicensed === undefined) {
+    next.onlyUnlicensed = false;
+  }
+  if (next.offerKind !== 'engine' && patch.requiredEngineId === undefined) {
+    next.requiredEngineId = undefined;
+  }
+  if (!offerCanRequireAircraft(next)) {
+    next.requiredHabilitations = [];
+    next.requiresAllAircraft = false;
+  }
+  return next;
+}
+
+/** ¿Puede esta oferta nombrar aeronaves? No si es de motor, ni si certifica bajo una autoridad sin type ratings. */
+export function offerCanRequireAircraft(
+  offer: Pick<Offer, 'offerKind' | 'requiresCertification' | 'licenseAuthority'>,
+): boolean {
+  if (offer.offerKind === 'engine') return false;
+  if (offer.requiresCertification && offer.licenseAuthority && !authorityHasTypeRatings(offer.licenseAuthority)) return false;
+  return true;
+}
+
+function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown> {
   return {
     ...salaryColumns(patch.salary),
     ...(patch.companyId !== undefined ? { company_id: patch.companyId } : {}),
@@ -79,7 +142,6 @@ function offerPatchToDb(patch: Partial<Omit<Offer, 'id' | 'createdAt'>>): Record
     ...(patch.contractType !== undefined ? { contract_type: patch.contractType } : {}),
     ...(patch.productType !== undefined ? { product_type: patch.productType } : {}),
     ...(patch.technicianType !== undefined ? { technician_type: patch.technicianType } : {}),
-    ...(patch.requiresCertification !== undefined ? { requires_certification: patch.requiresCertification } : {}),
     // `license_code` y `requires_certification` están ATADAS por
     // chk_offers_license_matches_certification (migración 053). Escribir una
     // sin la otra deja la fila en un estado que Postgres rechaza y tumba el
@@ -94,11 +156,24 @@ function offerPatchToDb(patch: Partial<Omit<Offer, 'id' | 'createdAt'>>): Record
     // `requiresAllAircraft` se añadieron a create() y NUNCA aquí, así que
     // editar una oferta para cambiar su licencia o su "hacen falta todas" no
     // guardaba nada — sin error, sin aviso.
-    ...(patch.requiresCertification === false
-      ? { license_code: null }
-      : patch.licenseCode !== undefined
-        ? { license_code: patch.licenseCode }
-        : {}),
+    //
+    // Paso 5b: el grupo entero se escribe desde el estado RESULTANTE
+    // (resolveOfferPatch) en cuanto el patch toca cualquiera de sus campos. Son
+    // cinco columnas atadas por tres CHECK (053, 075, 077): escribir sólo una
+    // es la forma de dejar la fila en un estado que Postgres rechaza.
+    ...(touches(patch, CERTIFICATION_KEYS)
+      ? {
+          requires_certification: next.requiresCertification,
+          license_code: next.licenseCode ?? null,
+          license_authority: next.licenseAuthority ?? null,
+          accepts_equivalent: next.acceptsEquivalent,
+          only_unlicensed: next.onlyUnlicensed,
+        }
+      : {}),
+    // Paso 5b: clase de oferta y motor, también juntos (076/077).
+    ...(touches(patch, KIND_KEYS)
+      ? { offer_kind: next.offerKind, required_engine_id: next.requiredEngineId ?? null }
+      : {}),
     ...(patch.requiresAllAircraft !== undefined ? { requires_all_aircraft: patch.requiresAllAircraft } : {}),
     ...(patch.locationCountry !== undefined ? { location_country: patch.locationCountry } : {}),
     // Fase 7 F2c — la localización se escribe DIRECTA, y las cinco columnas
@@ -190,20 +265,47 @@ export function isOfferOpenForTechnicians(offer: Pick<Offer, 'status' | 'visible
 function assertLicenseMatchesTechnicianType(
   technicianType: TechnicianTypeCode,
   requiresCertification: boolean,
-  licenseCode: LicenseCode | undefined,
+  licenseAuthority: AuthorityCode | undefined,
+  licenseCode: AuthorityLicenseCode | undefined,
 ): void {
   if (!isLicensedTechnicianType(technicianType)) {
     if (requiresCertification || licenseCode) {
       throw new Error(
-        `A ${technicianTypeLabel(technicianType).toLowerCase()} role holds no EASA licence, so this offer cannot require certified work. Switch off the licence requirement, or change the profile type.`,
+        `A ${technicianTypeLabel(technicianType).toLowerCase()} role holds no licence, so this offer cannot require certified work. Switch off the licence requirement, or change the profile type.`,
       );
     }
     return;
   }
 
-  if (licenseCode && !licensesSelectableForOfferType(technicianType).includes(licenseCode)) {
+  // Fase 10, paso 5b — LA GUARDA YA NO ES SÓLO PART-66. Mientras el formulario
+  // no sabía elegir autoridad rechazaba todo código FAA; con el selector se
+  // parte por autoridad y pregunta a `licensesSelectableForOffer`, la MISMA
+  // función que decide qué chips ofrece el formulario. Se abrió después de
+  // comprobar que el selector escribe ofertas FAA bien (scripts/testOfferForm.ts
+  // contra este repositorio, y ese INSERT contra la base).
+  //
+  // Sin autoridad no hay nada que cruzar aquí: la ausencia la rechaza antes
+  // assertOfferShape (licencia sin autoridad, CHECK de la 075).
+  if (licenseCode && licenseAuthority && !licensesSelectableForOffer(technicianType, licenseAuthority).includes(licenseCode)) {
     throw new Error(
-      `${licenseCode} is not a licence of ${technicianTypeLabel(technicianType).toLowerCase()} work, so this offer cannot require it. Pick a licence of that trade, or change the profile type.`,
+      `${credentialLabel(licenseAuthority, licenseCode)} is not a licence ${technicianTypeLabel(technicianType).toLowerCase()} work can require, so this offer cannot ask for it. Pick another licence or authority, or change the profile type.`,
+    );
+  }
+}
+
+/**
+ * Todas las guardas de escritura de una oferta, sobre el estado que va a
+ * quedar. `create` y `update` pasan por aquí, y ninguna lanza después de haber
+ * escrito nada.
+ */
+function assertOfferWritable(offer: OfferWithRequirements): void {
+  assertOfferShape(offer);
+  assertLicenseMatchesTechnicianType(offer.technicianType, offer.requiresCertification, offer.licenseAuthority, offer.licenseCode);
+  if (!offerCanRequireAircraft(offer) && offer.requiredHabilitations.length > 0) {
+    throw new Error(
+      offer.offerKind === 'engine'
+        ? 'An engine offer cannot require aircraft type ratings.'
+        : `${credentialLabel(offer.licenseAuthority, offer.licenseCode ?? '')} carries no aircraft type ratings, so this offer cannot require aircraft. Remove them, or pick another authority.`,
     );
   }
 }
@@ -290,21 +392,16 @@ export const offerRepository = {
   async update(id: string, patch: Partial<Omit<Offer, 'id' | 'createdAt'>>): Promise<Offer | null> {
     // Validate before any mutation, including replacing aircraft requirements.
     salaryColumns(patch.salary);
-    const existing = await this.getById(id);
+    const existing = await this.getWithRequirements(id);
     if (!existing) return null;
 
     // Sobre el estado RESULTANTE, no sobre el patch: un patch que sólo trae el
     // tipo de perfil puede contradecir la licencia que ya está en la fila, y
-    // sería justo la contradicción que esto existe para impedir. El valor
-    // efectivo de la licencia se calcula igual que lo escribe offerPatchToDb
-    // — apagar el interruptor la pone a NULL sin mirar el patch, y un
-    // `licenseCode` ausente deja la de la fila.
-    const nextRequiresCertification = patch.requiresCertification ?? existing.requiresCertification;
-    assertLicenseMatchesTechnicianType(
-      patch.technicianType ?? existing.technicianType,
-      nextRequiresCertification,
-      nextRequiresCertification === false ? undefined : (patch.licenseCode ?? existing.licenseCode),
-    );
+    // sería justo la contradicción que esto existe para impedir. Paso 5b: el
+    // estado resultante lo calcula resolveOfferPatch, la misma función de la
+    // que offerPatchToDb escribe los grupos acoplados.
+    const next = resolveOfferPatch(existing, patch);
+    assertOfferWritable(next);
 
     // Cambiar el producto de la oferta con requisitos exactos dentro es
     // IMPOSIBLE en Postgres: `orh_matches_offer` (migración 047) ata cada fila
@@ -318,7 +415,15 @@ export const offerRepository = {
     // confirmar el cambio antes de llegar a este punto (app/company/offers/
     // edit.tsx). Acotado a un cambio REAL de producto: guardar sin tocar el
     // selector no borra nada.
-    if (patch.productType !== undefined && patch.productType !== existing.productType) {
+    //
+    // Paso 5b: la misma retirada, antes del UPDATE y por el mismo motivo de
+    // orden, cuando la oferta deja de poder nombrar aeronaves — pasa a ser de
+    // motor (lo impiden los triggers de la 076) o a certificar bajo la FAA, que
+    // no emite type ratings. resolveOfferPatch ya las dejó fuera del estado
+    // resultante; aquí se borran de verdad.
+    const productChanges = patch.productType !== undefined && patch.productType !== existing.productType;
+    const losesAircraft = existing.requiredHabilitations.length > 0 && !offerCanRequireAircraft(next);
+    if (productChanges || losesAircraft) {
       await this.replaceRequiredHabilitations(id, []);
     }
 
@@ -338,7 +443,7 @@ export const offerRepository = {
     // `offerPatchToDb` escribe las cinco columnas juntas o ninguna.
     const { data, error } = await supabase
       .from('offers')
-      .update(offerPatchToDb(patch))
+      .update(offerPatchToDb(patch, next))
       .eq('id', id)
       .select(OFFER_COLUMNS)
       .maybeSingle();
@@ -364,12 +469,33 @@ export const offerRepository = {
     location: LocationValue;
     minYearsExperience: number;
     status?: OfferStatus;
-    licenseCode?: LicenseCode;
+    licenseCode?: AuthorityLicenseCode;
+    /** Paso 5b: obligatoria si hay licencia, y sin valor por defecto. */
+    licenseAuthority?: AuthorityCode;
+    acceptsEquivalent?: boolean;
     requiresAllAircraft?: boolean;
     requiredHabilitations?: { aircraftTypeRatingId: string; notes?: string }[];
+    /** Fase 10: 'aircraft' si no se dice. */
+    offerKind?: OfferKind;
+    requiredEngineId?: string;
+    onlyUnlicensed?: boolean;
   }): Promise<OfferWithRequirements> {
     const status = data.status ?? 'draft';
-    assertLicenseMatchesTechnicianType(data.technicianType, data.requiresCertification, data.licenseCode);
+    const habilitationRows = data.requiredHabilitations ?? [];
+    // Las mismas guardas que update(), sobre lo que se va a insertar. Aquí no
+    // se acopla nada en silencio: una oferta nueva que se contradice es un
+    // fallo de la pantalla, no un estado anterior que haya que arrastrar.
+    assertOfferWritable({
+      offerKind: data.offerKind ?? 'aircraft',
+      technicianType: data.technicianType,
+      requiresCertification: data.requiresCertification,
+      licenseCode: data.licenseCode,
+      licenseAuthority: data.licenseAuthority,
+      acceptsEquivalent: data.acceptsEquivalent ?? false,
+      requiredEngineId: data.requiredEngineId,
+      onlyUnlicensed: data.onlyUnlicensed ?? false,
+      requiredHabilitations: habilitationRows,
+    } as OfferWithRequirements);
     const location = offerLocationFromValue(data.location);
     const { data: inserted, error } = await supabase
       .from('offers')
@@ -385,7 +511,15 @@ export const offerRepository = {
         // `?? null`: sin licencia elegida la columna va a NULL, que es lo que
         // el CHECK exige cuando no se certifica — y lo que rechaza cuando sí.
         license_code: data.licenseCode ?? null,
+        // Fase 10 (075): chk_offers_license_authority_pairing exige que las dos
+        // columnas estén o falten JUNTAS. Paso 5b: la autoridad la manda el
+        // formulario; sin ella assertOfferWritable ya ha lanzado.
+        license_authority: data.licenseAuthority ?? null,
+        accepts_equivalent: data.acceptsEquivalent ?? false,
         requires_all_aircraft: data.requiresAllAircraft ?? false,
+        offer_kind: data.offerKind ?? 'aircraft',
+        required_engine_id: data.requiredEngineId ?? null,
+        only_unlicensed: data.onlyUnlicensed ?? false,
         location_country: location.locationCountry,
         // Fase 7 F2c: las cinco juntas, y sin `location_city_id` — la oferta
         // ya no nace de un aeropuerto. La 060 hizo esa columna opcional.
@@ -399,10 +533,9 @@ export const offerRepository = {
     throwIfError(error);
 
     const offer = mapOfferRow(inserted as any);
-    const habilitations = data.requiredHabilitations ?? [];
-    await this.replaceRequiredHabilitations(offer.id, habilitations);
+    await this.replaceRequiredHabilitations(offer.id, habilitationRows);
     return withRequirements(offer, {
-      requiredHabilitations: habilitations.map((h) => ({ ...h, offerId: offer.id, createdAt: offer.createdAt })),
+      requiredHabilitations: habilitationRows.map((h) => ({ ...h, offerId: offer.id, createdAt: offer.createdAt })),
     });
   },
 

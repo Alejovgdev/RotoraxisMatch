@@ -31,7 +31,26 @@ import { Technician, AvailabilityStatus } from '../../src/types';
 import { SocialLinks } from '../../src/types/technician';
 import { isValidUrl, normalizeUrl } from '../../src/utils/urlValidation';
 import { CONTRACT_TYPES } from '../../src/constants/contractTypes';
-import { LICENSE_CATEGORIES, typesAfterLicenseChange, typesImpliedByLicenses } from '../../src/constants/licenses';
+import {
+  AUTHORITIES,
+  AUTHORITY_LICENSES,
+  LICENSE_CATEGORIES,
+  authorityLabel,
+  credentialLabel,
+  typesAfterLicenseChange,
+  typesImpliedByLicenses,
+} from '../../src/constants/licenses';
+import {
+  HeldLicense,
+  heldCountByAuthority,
+  heldLicenseCodes,
+  holdsLicense,
+  sortHeldLicenses,
+  toggleHeldLicense,
+  updateHeldLicenseDates,
+} from '../../src/utils/profileLicenses';
+import { EngineExperienceEditor, EngineExperienceRow } from '../../src/components/technician/EngineExperienceEditor';
+import { AuthorityCode, AuthorityLicenseCode } from '../../src/types/catalog';
 import { TechnicianTypeSelector } from '../../src/components/TechnicianTypeSelector';
 import { useTechnicianTypes } from '../../src/auth/useCatalogOptions';
 import { AircraftRatingIndex, buildAircraftRatingIndex, getAircraftTypeRatingLabel } from '../../src/constants/aircraftTypeRatings';
@@ -45,12 +64,9 @@ import { catalogRepository } from '../../src/repositories/v2/catalogRepository';
 import { catalogRequestRepository } from '../../src/repositories/v2/catalogRequestRepository';
 import { colors, spacing } from '../../src/theme';
 
-// Per-license vigencia (technician_licenses has no is_current column — only
-// habilitations do; a license's validity is date-driven only).
-interface LicenseDetail {
-  issuedAt?: string;
-  expiresAt?: string;
-}
+// Paso 5b: aquí vivía `LicenseDetail`, las fechas de cada licencia indexadas
+// por CÓDIGO. Ahora viajan dentro de cada credencial (HeldLicense), porque una
+// B1.1 EASA y una B1.1 UK CAA tienen fechas distintas.
 
 const DATE_FIELD_PALETTE = {
   text: techUi.text,
@@ -234,10 +250,18 @@ export default function TechnicianProfileScreen() {
   // Claves que ya venian en la BD y para las que esta pantalla no tiene campo.
   // Se reescriben tal cual al guardar; nunca se pierden por no ser visibles.
   const [unknownSocialKeys, setUnknownSocialKeys] = useState<SocialLinks>({});
-  // Keyed by license code, only for codes currently in form.licenseCategories
-  // — kept in sync by toggleLicense() so a removed license never leaves a
-  // stale entry behind.
-  const [licenseDetails, setLicenseDetails] = useState<Record<string, LicenseDetail>>({});
+  // Paso 5b: las licencias como CREDENCIALES (autoridad + código), con sus
+  // fechas dentro. `form.licenseCategories` sigue existiendo —lo exige el tipo
+  // V1 y lo lee la implicación de oficio— y se mantiene como los códigos de
+  // éstas (heldLicenseCodes) desde toggleLicense.
+  const [heldLicenses, setHeldLicenses] = useState<HeldLicense[]>([]);
+  // Qué autoridad enseñan los chips de licencia. Es una VISTA, no un dato: no
+  // se guarda y no rellena nada. Sin licencias arranca sin elegir.
+  const [licenseAuthorityView, setLicenseAuthorityView] = useState<AuthorityCode | null>(null);
+  // Motores declarados (paso 5b). Mismo patrón de "sucio" que la experiencia
+  // en aeronaves: sin tocarlos, guardar no los reescribe.
+  const [engines, setEngines] = useState<EngineExperienceRow[]>([]);
+  const [enginesDirty, setEnginesDirty] = useState(false);
   // Resolves BOTH active and inactive rating ids referenced by this
   // technician's own habilitations (loaded ones + newly picked ones) — not
   // the same as the picker's own active-only search list. Needed so a
@@ -292,14 +316,14 @@ export default function TechnicianProfileScreen() {
 
       setTechId(techRow.id);
 
-      const [licResult, habResult, typeResult, expResult] = await Promise.all([
+      const [licResult, habResult, typeResult, expResult, engResult] = await Promise.all([
         supabase
           .from('technician_licenses')
-          .select('license_code, issued_at, expires_at')
+          .select('id, authority, license_code, issued_at, expires_at')
           .eq('technician_id', techRow.id),
         supabase
           .from('technician_habilitations')
-          .select('id, license_code, aircraft_type_rating_id, experience_years, issued_at, expires_at, is_current')
+          .select('id, technician_license_id, license_code, aircraft_type_rating_id, experience_years, issued_at, expires_at, is_current')
           .eq('technician_id', techRow.id),
         supabase
           .from('technician_profile_types')
@@ -311,15 +335,35 @@ export default function TechnicianProfileScreen() {
           .select('id, aircraft_type_rating_id, years')
           .eq('technician_id', techRow.id)
           .order('created_at'),
+        supabase
+          .from('technician_engine_experience')
+          .select('id, engine_id, years')
+          .eq('technician_id', techRow.id)
+          .order('created_at'),
       ]);
 
-      const licRows = (licResult.data ?? []) as { license_code: string; issued_at: string | null; expires_at: string | null }[];
-      const licenses = licRows.map((r) => r.license_code);
-      const licenseDetailsMap: Record<string, LicenseDetail> = {};
-      licRows.forEach((r) => {
-        licenseDetailsMap[r.license_code] = { issuedAt: r.issued_at ?? undefined, expiresAt: r.expires_at ?? undefined };
-      });
-      setLicenseDetails(licenseDetailsMap);
+      // Un fallo cargando licencias NO se traga, por lo mismo que los tipos:
+      // guardar con la lista vacía mandaría a borrar las que el técnico tiene.
+      if (licResult.error) throw licResult.error;
+      const licRows = (licResult.data ?? []) as {
+        id: string;
+        authority: AuthorityCode;
+        license_code: AuthorityLicenseCode;
+        issued_at: string | null;
+        expires_at: string | null;
+      }[];
+      const loadedLicenses: HeldLicense[] = sortHeldLicenses(
+        licRows.map((r) => ({
+          authority: r.authority,
+          code: r.license_code,
+          issuedAt: r.issued_at ?? undefined,
+          expiresAt: r.expires_at ?? undefined,
+        })),
+      );
+      const licenses = heldLicenseCodes(loadedLicenses);
+      const authorityByLicenseId = new Map(licRows.map((r) => [r.id, r.authority]));
+      setHeldLicenses(loadedLicenses);
+      setLicenseAuthorityView((prev) => prev ?? loadedLicenses[0]?.authority ?? null);
 
       // Un fallo aqui NO se traga: sin tipos cargados, guardar mandaria [] a
       // replaceProfileTypes (que lo rechaza) o, peor, el selector enseñaria
@@ -343,8 +387,10 @@ export default function TechnicianProfileScreen() {
       setTechnicianTypes([...new Set([...loadedTypes, ...typesImpliedByLicenses(licenses)])]);
       setTypesLoaded(true);
 
+      if (habResult.error) throw habResult.error;
       const habRows = (habResult.data ?? []) as {
         id: string;
+        technician_license_id: string;
         license_code: string;
         aircraft_type_rating_id: string | null;
         experience_years: number | null;
@@ -358,8 +404,19 @@ export default function TechnicianProfileScreen() {
       // render.
       const normalizedHabs: HabRow[] = habRows
         .filter((r) => r.aircraft_type_rating_id)
-        .map((r) => ({
+        .map((r) => {
+          // La autoridad sale de la licencia a la que APUNTA la fila
+          // (technician_license_id, NOT NULL con FK desde la 074), nunca del
+          // código: con dos B1.1 el código no dice de cuál es.
+          const authority = authorityByLicenseId.get(r.technician_license_id);
+          if (!authority) {
+            throw new Error('A type rating on your profile points at a licence that could not be loaded. Reload and try again.');
+          }
+          return { r, authority };
+        })
+        .map(({ r, authority }) => ({
           id: r.id,
+          authority,
           licenseCode: r.license_code,
           aircraftTypeRatingId: r.aircraft_type_rating_id as string,
           experienceYears: r.experience_years ?? undefined,
@@ -387,6 +444,18 @@ export default function TechnicianProfileScreen() {
       }));
       setAircraftExperience(normalizedExperience);
       setExperienceDirty(false);
+
+      // Motores declarados (paso 5b). Mismo motivo para no tragarse el fallo:
+      // guardar con [] borraría los que el técnico tenía.
+      if (engResult.error) throw engResult.error;
+      setEngines(
+        ((engResult.data ?? []) as { id: string; engine_id: string; years: number | null }[]).map((r) => ({
+          id: r.id,
+          engineId: r.engine_id,
+          years: r.years ?? undefined,
+        })),
+      );
+      setEnginesDirty(false);
 
       // Resolve every referenced rating id in one batched call — includes
       // inactive ratings, since an existing habilitation may point at one.
@@ -530,24 +599,27 @@ export default function TechnicianProfileScreen() {
   // La reasignacion vive en `typesAfterLicenseChange`, pura y con tests: los
   // tipos manuales sobreviven, y ninguna licencia deja colgado el tipo de
   // otra.
-  function toggleLicense(code: string) {
+  //
+  // Paso 5b: se añade o quita una CREDENCIAL (autoridad + código). La
+  // implicación de oficio sigue mirando CÓDIGOS: quitar la B1.1 EASA cuando
+  // queda la UK CAA no cambia ningún código, y por tanto no toca los tipos.
+  function toggleLicense(authority: AuthorityCode, code: AuthorityLicenseCode) {
     if (!form) return;
-    const held = form.licenseCategories.includes(code);
-    const next = held ? form.licenseCategories.filter((c) => c !== code) : [...form.licenseCategories, code];
-    updateField('licenseCategories', next);
-    setTechnicianTypes((prev) => typesAfterLicenseChange(prev, form.licenseCategories, next));
-
-    setLicenseDetails((prev) => {
-      if (held) {
-        const { [code]: _removed, ...rest } = prev;
-        return rest;
-      }
-      return prev[code] ? prev : { ...prev, [code]: {} };
-    });
+    const next = sortHeldLicenses(toggleHeldLicense(heldLicenses, authority, code));
+    const nextCodes = heldLicenseCodes(next);
+    setHeldLicenses(next);
+    updateField('licenseCategories', nextCodes);
+    setTechnicianTypes((prev) => typesAfterLicenseChange(prev, form.licenseCategories, nextCodes));
   }
 
-  function updateLicenseDetail(code: string, patch: Partial<LicenseDetail>) {
-    setLicenseDetails((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
+  function updateLicenseDetail(authority: string, code: string, patch: Pick<HeldLicense, 'issuedAt' | 'expiresAt'>) {
+    setHeldLicenses((prev) => updateHeldLicenseDates(prev, authority, code, patch));
+    setIsDirty(true);
+  }
+
+  function onChangeEngines(next: EngineExperienceRow[]) {
+    setEngines(next);
+    setEnginesDirty(true);
     setIsDirty(true);
   }
 
@@ -634,16 +706,15 @@ export default function TechnicianProfileScreen() {
     // isValidDateOrder); only an explicit expiresAt on/before issuedAt is
     // flagged.
     const dateErrors: string[] = [];
-    form.licenseCategories.forEach((code) => {
-      const d = licenseDetails[code];
-      if (!isValidDateOrder(d?.issuedAt, d?.expiresAt)) {
-        dateErrors.push(`${code}: expiry date must be after the issue date.`);
+    heldLicenses.forEach((license) => {
+      if (!isValidDateOrder(license.issuedAt, license.expiresAt)) {
+        dateErrors.push(`${credentialLabel(license.authority, license.code)}: expiry date must be after the issue date.`);
       }
     });
     habilitations.forEach((h) => {
       if (!isValidDateOrder(h.issuedAt, h.expiresAt)) {
         dateErrors.push(
-          `${h.licenseCode} + ${getAircraftTypeRatingLabel(h.aircraftTypeRatingId, ratingsById)}: expiry date must be after the issue date.`,
+          `${credentialLabel(h.authority, h.licenseCode)} + ${getAircraftTypeRatingLabel(h.aircraftTypeRatingId, ratingsById)}: expiry date must be after the issue date.`,
         );
       }
     });
@@ -760,12 +831,15 @@ export default function TechnicianProfileScreen() {
       // technicianRepositoryV2.upsertLicenses). Ensures any brand-new
       // license code already has a row before a habilitation below can
       // reference it.
+      // Paso 5b: cada credencial con SU autoridad; el repositorio ya no rellena
+      // EASA.
       await technicianRepositoryV2.upsertLicenses(
         techId,
-        form.licenseCategories.map((code) => ({
-          code,
-          issuedAt: licenseDetails[code]?.issuedAt,
-          expiresAt: licenseDetails[code]?.expiresAt,
+        heldLicenses.map((license) => ({
+          authority: license.authority,
+          code: license.code,
+          issuedAt: license.issuedAt,
+          expiresAt: license.expiresAt,
         })),
       );
 
@@ -777,6 +851,7 @@ export default function TechnicianProfileScreen() {
         await technicianRepositoryV2.replaceHabilitations(
           techId,
           habilitations.map((h) => ({
+            authority: h.authority,
             licenseCode: h.licenseCode,
             aircraftTypeRatingId: h.aircraftTypeRatingId,
             experienceYears: h.experienceYears,
@@ -805,10 +880,24 @@ export default function TechnicianProfileScreen() {
         setExperienceDirty(false);
       }
 
+      // 4b) Motores declarados (paso 5b). Tampoco tienen FK hacia licencias:
+      // su orden no importa.
+      if (enginesDirty) {
+        await technicianRepositoryV2.replaceEngineExperience(
+          techId,
+          engines.map((e) => ({ engineId: e.engineId, years: e.years })),
+        );
+        setEnginesDirty(false);
+      }
+
       // 5) Only now remove deselected licenses — AFTER habilitations are
       // saved, so the dependency check reflects the technician's actual
-      // final state rather than a stale pre-save snapshot.
-      const { blocked } = await technicianRepositoryV2.removeUnreferencedLicenses(techId, form.licenseCategories);
+      // final state rather than a stale pre-save snapshot. Paso 5b: por
+      // credencial, así que quitar la B1.1 EASA no se lleva la UK CAA.
+      const { blocked } = await technicianRepositoryV2.removeUnreferencedLicenses(
+        techId,
+        heldLicenses.map((license) => ({ authority: license.authority, code: license.code })),
+      );
 
       setForm((prev) => (prev ? {
         ...prev,
@@ -1146,46 +1235,76 @@ export default function TechnicianProfileScreen() {
               un pintor con una B1.1 real. */}
           <SectionTitle
             title="Licenses"
-            subtitle="Select all licence categories you hold. Leave empty if you hold none. Each one ticks the profile type it certifies — mechanical or avionics — and unticks it again if you remove it."
+            subtitle="Pick the issuing authority, then every licence you hold from it. Leave empty if you hold none. Each one ticks the profile type it certifies — mechanical or avionics — and unticks it again if you remove it."
           />
           <TechnicianCard style={styles.sectionCard}>
+            {/* Paso 5b: primero la autoridad. Con cinco autoridades "B1.1" no
+                dice cuál es, y los códigos que existen dependen de quién los
+                emite (CASA sin B2L/B3/L, GCAA sin B2L, FAA sólo A, P y A&P). */}
+            <FieldLabel>Issuing authority</FieldLabel>
             <View style={styles.chipRow}>
-              {LICENSE_CATEGORIES.map((lic) => (
-                <TechnicianChip
-                  key={lic.code}
-                  label={lic.code}
-                  selected={form.licenseCategories.includes(lic.code)}
-                  onPress={() => toggleLicense(lic.code)}
-                />
-              ))}
+              {AUTHORITIES.map((authority) => {
+                const count = heldCountByAuthority(heldLicenses)[authority.code];
+                return (
+                  <TechnicianChip
+                    key={authority.code}
+                    label={count > 0 ? `${authority.label} (${count})` : authority.label}
+                    selected={licenseAuthorityView === authority.code}
+                    onPress={() => setLicenseAuthorityView(authority.code)}
+                  />
+                );
+              })}
             </View>
 
-            {form.licenseCategories.length > 0 ? (
+            {licenseAuthorityView ? (
               <>
                 <View style={styles.fieldGap} />
-                <Text style={styles.subSectionLabel}>Validity dates (optional)</Text>
-                {form.licenseCategories.map((code) => (
-                  <View key={code} style={styles.licenseDetailRow}>
-                    <Text style={styles.licenseDetailCode}>{code}</Text>
+                <FieldLabel>{`${authorityLabel(licenseAuthorityView)} licences`}</FieldLabel>
+                <View style={styles.chipRow}>
+                  {AUTHORITY_LICENSES.filter((row) => row.authority === licenseAuthorityView).map((row) => (
+                    <TechnicianChip
+                      key={row.code}
+                      label={row.code}
+                      selected={holdsLicense(heldLicenses, row.authority, row.code)}
+                      onPress={() => toggleLicense(row.authority, row.code)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.privacyNote}>Pick an authority to see the licences it issues.</Text>
+            )}
+
+            {heldLicenses.length > 0 ? (
+              <>
+                <View style={styles.fieldGap} />
+                <Text style={styles.subSectionLabel}>Your licences — validity dates (optional)</Text>
+                {heldLicenses.map((license) => (
+                  <View key={`${license.authority}-${license.code}`} style={styles.licenseDetailRow}>
+                    <Text style={styles.licenseDetailCode}>{credentialLabel(license.authority, license.code)}</Text>
                     <View style={styles.licenseDetailFields}>
                       <View style={styles.licenseDetailField}>
                         <Text style={styles.fieldLabelXs}>Issued</Text>
                         <DateField
-                          value={licenseDetails[code]?.issuedAt}
-                          onChange={(v) => updateLicenseDetail(code, { issuedAt: v })}
+                          value={license.issuedAt}
+                          onChange={(v) => updateLicenseDetail(license.authority, license.code, { issuedAt: v })}
                           placeholder="Not set"
                           palette={DATE_FIELD_PALETTE}
                         />
                       </View>
-                      <View style={styles.licenseDetailField}>
-                        <Text style={styles.fieldLabelXs}>Expires</Text>
-                        <DateField
-                          value={licenseDetails[code]?.expiresAt}
-                          onChange={(v) => updateLicenseDetail(code, { expiresAt: v })}
-                          placeholder="Not set"
-                          palette={DATE_FIELD_PALETTE}
-                        />
-                      </View>
+                      {/* La FAA no caduca (14 CFR 65.19): no se pide fecha de
+                          caducidad que nadie tiene. */}
+                      {license.authority !== 'FAA' ? (
+                        <View style={styles.licenseDetailField}>
+                          <Text style={styles.fieldLabelXs}>Expires</Text>
+                          <DateField
+                            value={license.expiresAt}
+                            onChange={(v) => updateLicenseDetail(license.authority, license.code, { expiresAt: v })}
+                            placeholder="Not set"
+                            palette={DATE_FIELD_PALETTE}
+                          />
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 ))}
@@ -1196,7 +1315,7 @@ export default function TechnicianProfileScreen() {
           <HabilitationsEditor
             value={habilitations}
             onChange={onChangeHabilitations}
-            licenseCategories={form.licenseCategories}
+            heldLicenses={heldLicenses}
             ratingsById={ratingsById}
             onRatingResolved={(r) => setRatingsById((prev) => new Map(prev).set(r.id, r))}
             onRequestCatalog={() => setRequestPanelOpen((v) => !v)}
@@ -1214,6 +1333,11 @@ export default function TechnicianProfileScreen() {
             onRatingResolved={(r) => setRatingsById((prev) => new Map(prev).set(r.id, r))}
             onRequestCatalog={() => setRequestPanelOpen((v) => !v)}
           />
+
+          {/* Paso 5b: motores, como sección propia bajo la experiencia en
+              aeronaves. Es lo que hace a un técnico elegible y bien
+              puntuado en una oferta de motor. */}
+          <EngineExperienceEditor value={engines} onChange={onChangeEngines} />
 
           {requestPanelOpen && (
             <TechnicianCard style={styles.sectionCard}>

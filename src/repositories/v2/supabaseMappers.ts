@@ -4,17 +4,18 @@ import { salaryFromRow } from '../../utils/offerSalary';
 import { CompanyMember, CompanyProfileView } from '../../types/company';
 import { Document, DocumentType } from '../../types/document';
 import { CompanyMemberRole, DocumentStatus, OfferRequestStatus, OfferStatus, VerificationStatus } from '../../types/enums';
-import { ContractTypeCode, LicenseCode, TechnicianTypeCode } from '../../types/catalog';
+import { AuthorityCode, AuthorityLicenseCode, ContractTypeCode, LicenseCode, TechnicianTypeCode } from '../../types/catalog';
 import {
   Availability,
   TechnicianAircraftExperience,
   TechnicianHabilitation,
   TechnicianLicense,
   TechnicianProfile,
+  TechnicianEngineExperience,
   TechnicianWithRelations,
 } from '../../types/technician';
 import { SafeTechnicianPreview, TechnicianView, UnlockedTechnicianView } from '../../types/privacy';
-import { Offer, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
+import { Offer, OfferKind, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
 import { OfferApplication, OfferRequest } from '../../types/offerRequest';
 import { ChatMessage, ChatRoom } from '../../types/chat';
 import { SenderRole } from '../../types/enums';
@@ -145,8 +146,20 @@ export function mapOfferRow(row: DbRow): Offer {
     // `?? undefined` y no `?? null`: NULL en la columna significa "esta oferta
     // no exige certificar", y el CHECK de la 053 garantiza que sólo pasa en
     // ese caso. Nunca es un dato que falte.
-    licenseCode: (row.license_code as LicenseCode | null) ?? undefined,
+    licenseCode: (row.license_code as AuthorityLicenseCode | null) ?? undefined,
+    // Fase 10 (075): va con el código o no va. La base lo ata con
+    // chk_offers_license_authority_pairing, así que aquí no hay que decidir
+    // nada: se refleja lo que hay.
+    licenseAuthority: (row.license_authority as AuthorityCode | null) ?? undefined,
     requiresAllAircraft: Boolean(row.requires_all_aircraft),
+    // Fase 10 (migración 070). `?? 'aircraft'` y `Boolean(...)` reproducen los
+    // DEFAULT de la columna para las filas escritas antes de que existiera, no
+    // para tapar un SELECT incompleto: las cuatro están en OFFER_COLUMNS, y si
+    // alguna saliera de ahí la oferta se puntuaría como de aeronave sin avisar.
+    offerKind: (row.offer_kind as OfferKind | null) ?? 'aircraft',
+    acceptsEquivalent: Boolean(row.accepts_equivalent),
+    requiredEngineId: row.required_engine_id ?? undefined,
+    onlyUnlicensed: Boolean(row.only_unlicensed),
     locationCountry: row.location_country,
     // Fase 7 F2b — `locationCity` y `locationBaseAirport` YA NO SON COLUMNAS:
     // la migración 059 retira `offers.location_city` y
@@ -314,6 +327,7 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
   habilitations: TechnicianHabilitation[];
   technicianTypes: TechnicianTypeCode[];
   aircraftExperience: TechnicianAircraftExperience[];
+  engines: TechnicianEngineExperience[];
 }>> {
   const uniqueIds = [...new Set(technicianIds)].filter(Boolean);
   const map: Record<string, {
@@ -321,22 +335,28 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
     habilitations: TechnicianHabilitation[];
     technicianTypes: TechnicianTypeCode[];
     aircraftExperience: TechnicianAircraftExperience[];
+    engines: TechnicianEngineExperience[];
   }> = {};
-  for (const id of uniqueIds) map[id] = { licenses: [], habilitations: [], technicianTypes: [], aircraftExperience: [] };
+  for (const id of uniqueIds) {
+    map[id] = { licenses: [], habilitations: [], technicianTypes: [], aircraftExperience: [], engines: [] };
+  }
   if (uniqueIds.length === 0) return map;
 
-  // Cuarta relación desde la Fase 6 tanda B. Sigue siendo UN lote por tabla,
-  // no una consulta por técnico: es lo que hace que la búsqueda de empresa no
-  // se convierta en N+1 al crecer el número de resultados.
-  const [licensesRes, habsRes, types, experienceRes] = await Promise.all([
-    supabase.from('technician_licenses').select('id, technician_id, license_code, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
-    supabase.from('technician_habilitations').select('id, technician_id, license_code, aircraft_type_rating_id, experience_years, is_current, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
+  // QUINTA relación desde la Fase 10 (motores declarados, migración 068).
+  // Sigue siendo UN lote por tabla, no una consulta por técnico: es lo que
+  // hace que la búsqueda de empresa no se convierta en N+1 al crecer el
+  // número de resultados.
+  const [licensesRes, habsRes, types, experienceRes, enginesRes] = await Promise.all([
+    supabase.from('technician_licenses').select('id, technician_id, authority, license_code, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
+    supabase.from('technician_habilitations').select('id, technician_id, technician_license_id, license_code, aircraft_type_rating_id, experience_years, is_current, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
     loadTechnicianProfileTypes(uniqueIds),
     supabase.from('technician_aircraft_experience').select('id, technician_id, aircraft_type_rating_id, years, created_at').in('technician_id', uniqueIds),
+    supabase.from('technician_engine_experience').select('id, technician_id, engine_id, years, created_at').in('technician_id', uniqueIds),
   ]);
   throwIfError(licensesRes.error);
   throwIfError(habsRes.error);
   throwIfError(experienceRes.error);
+  throwIfError(enginesRes.error);
   for (const id of uniqueIds) map[id].technicianTypes = types[id] ?? [];
 
   for (const row of (experienceRes.data ?? []) as DbRow[]) {
@@ -351,10 +371,26 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
     });
   }
 
+  for (const row of (enginesRes.data ?? []) as DbRow[]) {
+    map[row.technician_id]?.engines.push({
+      id: row.id,
+      technicianId: row.technician_id,
+      engineId: row.engine_id,
+      // Misma regla que en aeronaves: NULL es "no declarado", 0 es
+      // "declarado sin años". Los años no puntúan en ningún caso.
+      years: row.years ?? undefined,
+      createdAt: row.created_at,
+    });
+  }
+
   for (const row of (licensesRes.data ?? []) as DbRow[]) {
     map[row.technician_id]?.licenses.push({
       id: row.id,
       technicianId: row.technician_id,
+      // Fase 10: la autoridad viaja SIEMPRE con el código. Es NOT NULL en la
+      // base, así que un undefined aquí sólo puede venir de un select que se
+      // olvidó de pedirla — y eso hay que verlo, no rellenarlo con 'EASA'.
+      authority: row.authority,
       licenseCode: row.license_code,
       issuedAt: row.issued_at ?? undefined,
       expiresAt: row.expires_at ?? undefined,
@@ -365,6 +401,9 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
     map[row.technician_id]?.habilitations.push({
       id: row.id,
       technicianId: row.technician_id,
+      // De qué CREDENCIAL cuelga. El scorer cruza por esto, no por el código:
+      // con dos B1.1 de autoridades distintas el código no distingue.
+      technicianLicenseId: row.technician_license_id,
       licenseCode: row.license_code,
       aircraftTypeRatingId: row.aircraft_type_rating_id ?? undefined,
       experienceYears: row.experience_years ?? undefined,
@@ -398,6 +437,7 @@ export function mapPrivateTechnicianRow(row: DbRow, relations?: Awaited<ReturnTy
     licenses: relations?.licenses ?? [],
     habilitations: relations?.habilitations ?? [],
     aircraftExperience: relations?.aircraftExperience ?? [],
+    engines: relations?.engines ?? [],
   };
 }
 
@@ -411,9 +451,10 @@ export function mapPublicTechnicianRow(row: DbRow, relations?: Awaited<ReturnTyp
     latitude: row.latitude ?? undefined,
     longitude: row.longitude ?? undefined,
     ...persistedLocationFromRow(row),
-    licenses: (relations?.licenses ?? []).map((license) => license.licenseCode),
+    licenses: (relations?.licenses ?? []).map((license) => ({ authority: license.authority, licenseCode: license.licenseCode })),
     habilitations: relations?.habilitations ?? [],
     aircraftExperience: relations?.aircraftExperience ?? [],
+    engines: relations?.engines ?? [],
     yearsExperience: row.years_experience ?? undefined,
     availability: mapAvailability(row.availability),
     verificationStatus: row.verification_status as VerificationStatus,
@@ -483,5 +524,6 @@ export function publicRowToPrivateCompat(row: DbRow, relations?: Awaited<ReturnT
     licenses: relations?.licenses ?? [],
     habilitations: relations?.habilitations ?? [],
     aircraftExperience: relations?.aircraftExperience ?? [],
+    engines: relations?.engines ?? [],
   };
 }

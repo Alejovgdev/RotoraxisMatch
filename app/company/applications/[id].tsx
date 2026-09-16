@@ -47,8 +47,7 @@ import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch, getMatchScoreWeights, getMatchDisplayLabel } from '../../../src/utils/matchingV2';
-import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { canReviewApplications } from '../../../src/utils/companyPermissionsV2';
@@ -58,6 +57,7 @@ import { MatchScore } from '../../../src/types/matching';
 import { Document } from '../../../src/types/document';
 import { ChatRoom } from '../../../src/types/chat';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
+import { credentialLabel } from '../../../src/constants/licenses';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
 
@@ -102,7 +102,10 @@ export default function ApplicationDetailScreen() {
   const [app, setApp] = useState<OfferApplication | null>(null);
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [techView, setTechView] = useState<TechnicianView | null>(null);
-  const [score, setScore] = useState<MatchScore | null>(null);
+  // Paso 5b: el par entero, no sólo el score. Un par que el filtro saca llega
+  // como { eligible: false } y se pinta como tal, con su motivo.
+  const [match, setMatch] = useState<PairMatch | null>(null);
+  const score: MatchScore | null = match?.eligible ? match.score : null;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actioning, setActioning] = useState(false);
@@ -110,13 +113,6 @@ export default function ApplicationDetailScreen() {
   const [confirmAction, setConfirmAction] = useState<'accept' | 'reject' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [viewingDocId, setViewingDocId] = useState<string | null>(null);
-
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
-  const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
 
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -139,9 +135,11 @@ export default function ApplicationDetailScreen() {
     if (!signal.active) return;
     setOffer(o);
     setTechView(view);
-    if (catalogState === 'success' && o && rel) {
-      setScore(calculateOfferTechnicianMatch(o, rel, ratingIndex));
-    }
+    // El servicio espera a los dos catálogos y aplica el filtro. Si no cargan,
+    // no hay bloque de match: un score erróneo es peor que ningún score.
+    const pair = o && rel ? await matchPair(o, rel).catch(() => null) : null;
+    if (!signal.active) return;
+    setMatch(pair);
 
     if (application.status === 'accepted') {
       const rooms = await chatRepository.getRoomsForCompany(companyId);
@@ -152,13 +150,12 @@ export default function ApplicationDetailScreen() {
     }
 
     await activityRepository.markRead('company', companyId, id);
-  }, [companyId, id, ratingIndex, catalogState]);
+  }, [companyId, id]);
 
-  // Señal de cancelacion compartida por el efecto de foco y el pull-to-refresh.
-  // load() la comprueba ANTES de cada setState, no solo en el .finally: cuando
-  // llega el catalogo, `load` cambia de identidad y el efecto relanza; sin esta
-  // señal habria dos load() en vuelo (uno con el indice vacio, otro lleno) y
-  // ganaria el que terminase el ultimo, de forma no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -230,10 +227,7 @@ export default function ApplicationDetailScreen() {
     }
   }
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar el bloque Match con un score
-  // calculado sobre un indice vacio ni un UUID crudo como nombre de rating.
-  if (loading || catalogState === 'loading') {
+  if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -332,6 +326,15 @@ export default function ApplicationDetailScreen() {
               notEligible={score.blockers.length > 0}
             />
           ) : null}
+          {match && !match.eligible ? (
+            <InlineScore
+              score={0}
+              quality=""
+              context=""
+              notEligible
+              notEligibleReason={ineligibilityReasonText(match.reason)}
+            />
+          ) : null}
           {app.coverNote ? (
             <View style={styles.coverNote}>
               <Text style={styles.coverNoteLabel}>Cover note</Text>
@@ -411,7 +414,7 @@ export default function ApplicationDetailScreen() {
             {techView.licenses.length > 0 ? (
               <View style={styles.chipBlock}>
                 <Text style={styles.chipBlockLabel}>Licenses</Text>
-                <View style={styles.chipRow}>{techView.licenses.map((l) => <CompanyChip key={l} label={l} />)}</View>
+                <View style={styles.chipRow}>{techView.licenses.map((l) => <CompanyChip key={`${l.authority}-${l.licenseCode}`} label={credentialLabel(l.authority, l.licenseCode)} />)}</View>
               </View>
             ) : null}
           </CompanyCard>
@@ -423,6 +426,9 @@ export default function ApplicationDetailScreen() {
             <BreakdownRow label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} />
             <BreakdownRow label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} />
             <BreakdownRow label="License" value={score.breakdown.license} max={weights?.license ?? 0} />
+            {weights && weights.engine > 0 ? (
+              <BreakdownRow label="Engine" value={score.breakdown.engine} max={weights.engine} />
+            ) : null}
             <BreakdownRow label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} />
             <BreakdownRow label="Location" value={score.breakdown.location} max={weights?.location ?? 0} />
             <MatchExplanation score={score} hideBreakdown displayLabel={offer ? getMatchDisplayLabel(offer, score) : undefined} />

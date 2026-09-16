@@ -34,9 +34,11 @@ import { companyRepositoryV2 } from '../../../src/repositories/v2/companyReposit
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch, getMatchScoreWeights, getMatchDisplayLabel } from '../../../src/utils/matchingV2';
+import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
 import { technicianTypeLabel } from '../../../src/constants/technicianTypes';
 import { OfferRequest } from '../../../src/types/offerRequest';
@@ -101,7 +103,9 @@ export default function DirectOfferDetailScreen() {
   const [request, setRequest] = useState<OfferRequest | null>(null);
   const [company, setCompany] = useState<CompanyProfileView | null>(null);
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
-  const [score, setScore] = useState<MatchScore | null>(null);
+  // Paso 5b: el par entero (ver app/company/applications/[id].tsx).
+  const [match, setMatch] = useState<PairMatch | null>(null);
+  const score: MatchScore | null = match?.eligible ? match.score : null;
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,12 +113,12 @@ export default function DirectOfferDetailScreen() {
   const [confirmAction, setConfirmAction] = useState<'accept' | 'reject' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
+  // El catálogo de ratings aquí sólo pinta las etiquetas de las aeronaves que
+  // pide la oferta; el gate de abajo evita pintar un UUID crudo mientras carga.
+  // La puntuación la hace matchPair, que espera a sus catálogos por su cuenta.
   const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
+  // Paso 5b: sólo para el nombre del motor de una oferta de motor.
+  const { engineIndex } = useEnginesCatalog();
 
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -140,11 +144,13 @@ export default function DirectOfferDetailScreen() {
 
     // Compute score when offer is active, or when the direct offer is accepted (historical context).
     const offerActive = isOfferOpenForTechnicians(off);
-    if (catalogState === 'success' && off && (offerActive || req.status === 'accepted') && techWithRelations) {
-      setScore(calculateOfferTechnicianMatch(off, techWithRelations, ratingIndex));
-    } else {
-      setScore(null);
-    }
+    // Filtro + scorer con los dos catálogos, en el servicio. Si no cargan, no
+    // hay bloque de match.
+    const pair = off && (offerActive || req.status === 'accepted') && techWithRelations
+      ? await matchPair(off, techWithRelations).catch(() => null)
+      : null;
+    if (!signal.active) return;
+    setMatch(pair);
 
     if (req.status === 'accepted') {
       const rooms = await chatRepository.getRoomsForTechnician(technicianId);
@@ -155,13 +161,12 @@ export default function DirectOfferDetailScreen() {
     }
 
     await activityRepository.markRead('technician', technicianId, id);
-  }, [id, technicianId, ratingIndex, catalogState]);
+  }, [id, technicianId]);
 
-  // Señal de cancelacion compartida por el efecto de foco y el pull-to-refresh.
-  // load() la comprueba ANTES de cada setState, no solo en el .finally: cuando
-  // llega el catalogo, `load` cambia de identidad y el efecto relanza; sin esta
-  // señal habria dos load() en vuelo (uno con el indice vacio, otro lleno) y
-  // ganaria el que terminase el ultimo, de forma no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -223,9 +228,8 @@ export default function DirectOfferDetailScreen() {
     }
   }
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar el bloque Match con un score
-  // calculado sobre un indice vacio ni un UUID crudo como nombre de rating.
+  // Mientras el catálogo de ratings carga no se pinta nada, para no enseñar un
+  // UUID crudo como nombre de rating en los requisitos de la oferta.
   if (loading || catalogState === 'loading') {
     return (
       <>
@@ -303,6 +307,9 @@ export default function DirectOfferDetailScreen() {
                 notEligible={score.blockers.length > 0}
               />
             )}
+            {match && !match.eligible && (
+              <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
+            )}
             <Text style={styles.offerTitle}>{visibleOffer.title}</Text>
             <Text style={styles.offerLocation}>
               {visibleOffer.locationCity}, {visibleOffer.locationCountry}
@@ -319,12 +326,17 @@ export default function DirectOfferDetailScreen() {
                 ver si el puesto exige licencia antes de aceptar. */}
             {(
               <View style={styles.reqBlock}>
-                <ReqRow label="Profile type" items={[technicianTypeLabel(visibleOffer.technicianType)]} />
+                {visibleOffer.offerKind === 'engine' ? (
+                  <ReqRow label="Engine" items={[offerEngineText(visibleOffer, engineIndex) ?? 'Not specified']} />
+                ) : (
+                  <ReqRow label="Profile type" items={[technicianTypeLabel(visibleOffer.technicianType)]} />
+                )}
                 <ReqRow
                   label="Certified work"
                   items={[visibleOffer.requiresCertification ? 'Licence required' : 'No licence needed']}
                 />
-                {visibleOffer.licenseCode && <ReqRow label="Licence" items={[visibleOffer.licenseCode]} />}
+                {visibleOffer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(visibleOffer)!]} />}
+                {visibleOffer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}
                 {visibleOffer.requiredHabilitations.length > 0 && (
                   <ReqRow
                     label={visibleOffer.requiresAllAircraft ? 'Aircraft — ALL of these' : 'Aircraft — any one of these'}
@@ -340,6 +352,9 @@ export default function DirectOfferDetailScreen() {
                 <BreakdownRow label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} accent={accent} />
                 <BreakdownRow label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} accent={accent} />
                 <BreakdownRow label="License" value={score.breakdown.license} max={weights?.license ?? 0} accent={accent} />
+                {weights && weights.engine > 0 ? (
+                  <BreakdownRow label="Engine" value={score.breakdown.engine} max={weights.engine} accent={accent} />
+                ) : null}
                 <BreakdownRow label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} accent={accent} />
                 <BreakdownRow label="Location" value={score.breakdown.location} max={weights?.location ?? 0} accent={accent} />
                 <MatchExplanation

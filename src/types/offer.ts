@@ -1,4 +1,10 @@
-import { TechnicianTypeCode, LicenseCode, ContractTypeCode, AircraftTypeRatingCatalog } from './catalog';
+import {
+  TechnicianTypeCode,
+  AuthorityLicenseCode,
+  ContractTypeCode,
+  AircraftTypeRatingCatalog,
+  AuthorityCode,
+} from './catalog';
 import { OfferStatus } from './enums';
 import { PersistedLocation } from './location';
 import { OfferSalary } from './offerSalary';
@@ -16,6 +22,17 @@ export type OfferProductType = Exclude<
   NonNullable<AircraftTypeRatingCatalog['productType']>,
   'Gas Airship'
 >;
+
+/**
+ * Qué pide una oferta (`offers.offer_kind`, migración 070).
+ *
+ *   'aircraft'  licencia y/o aeronaves. Todo lo anterior a la Fase 10.
+ *   'engine'    UN motor y nada más: ni licencia ni aeronaves.
+ *
+ * No es una etiqueta decorativa: decide la tabla de pesos, qué eje mira el
+ * tope de cero cualificación y si el oficio puntúa. Ver offerMatchExplain.ts.
+ */
+export type OfferKind = 'aircraft' | 'engine';
 
 /**
  * UNA AERONAVE que la oferta pide (fila de `offer_required_habilitations`).
@@ -101,8 +118,23 @@ export interface Offer extends PersistedLocation {
    *
    * Antes eran `requiredLicenses: LicenseCode[]` más una `licenseCode` por
    * cada fila de requisito, que permitían pedir B1.3 y B2 a la vez.
+   *
+   * `AuthorityLicenseCode` desde el paso 5b, cuando el formulario de oferta
+   * aprendió a elegir autoridad: una oferta puede pedir un A&P de la FAA. Qué
+   * pares existen lo dice `isValidAuthorityLicense` (y la FK compuesta contra
+   * `authority_licenses`), no este tipo.
    */
-  licenseCode?: LicenseCode;
+  licenseCode?: AuthorityLicenseCode;
+  /**
+   * La autoridad de esa licencia (Fase 10, migración 075). Presente
+   * EXACTAMENTE cuando lo está `licenseCode`: la base lo ata con
+   * chk_offers_license_authority_pairing, y el par se valida contra
+   * `authority_licenses` con una FK compuesta.
+   *
+   * Sin ella "B1.1" no identifica nada: con cinco autoridades hay cinco B1.1
+   * distintas y el scorer no sabría contra cuál cruzar.
+   */
+  licenseAuthority?: AuthorityCode;
   /**
    * ¿Basta con UNA de las aeronaves listadas, o hacen falta TODAS?
    *
@@ -112,6 +144,35 @@ export interface Offer extends PersistedLocation {
    * que antes disparaba una fila `mandatory` incumplida.
    */
   requiresAllAircraft: boolean;
+  /**
+   * ¿Qué clase de oferta es (migración 070)? Ver `OfferKind`.
+   *
+   * NO opcional aunque la columna tenga DEFAULT: el scorer ramifica sobre
+   * este campo, y un `undefined` que cayera en 'aircraft' por omisión sería
+   * exactamente el fallo mudo de `license_code` y `requires_all_aircraft`
+   * (una oferta de motor puntuada como si no pidiera nada). Que un SELECT
+   * que se olvide de la columna reviente es la dirección segura.
+   */
+  offerKind: OfferKind;
+  /**
+   * ¿Vale la misma categoría emitida por otra autoridad Part-66?
+   *
+   * Ensancha la AUTORIDAD, nunca el código: una B2 UK no cumple una B1.1
+   * EASA por marcarla. El equivalente puntúa por debajo del exacto, y la
+   * FAA no cruza con nadie. `false` por defecto (migración 070).
+   */
+  acceptsEquivalent: boolean;
+  /** El motor que pide una oferta de motor. Presente sólo si `offerKind` es 'engine'. */
+  requiredEngineId?: string;
+  /**
+   * "Sólo técnicos sin licencia". Vale en ofertas de aeronave y de motor, y
+   * sólo en las que NO exigen licencia (chk_offers_only_unlicensed_without_license,
+   * migración 077).
+   *
+   * ⚠ Filtro EXCLUYENTE: todo lo demás ordena; esto deja fuera. Ver
+   * `isTechnicianEligibleForOffer`.
+   */
+  onlyUnlicensed: boolean;
   // Controlled snapshot copied from the canonical location catalog at create/update time.
   locationCountry: string;
   locationCity: string;

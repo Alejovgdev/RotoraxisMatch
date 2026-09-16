@@ -1,4 +1,5 @@
 import { isLicensedTechnicianType } from './technicianTypes';
+import { AuthorityCode, AuthorityLicenseCode, FaaLicenseCode } from '../types/catalog';
 
 // V2 — Full EASA Part-66 license list
 export const LICENSE_CATEGORIES = [
@@ -20,6 +21,22 @@ export const LICENSE_CATEGORIES = [
 export type LicenseCode = (typeof LICENSE_CATEGORIES)[number]['code'];
 
 export const LICENSE_CODES = LICENSE_CATEGORIES.map((l) => l.code);
+
+/**
+ * B1.1–B1.4: la rama MECÁNICA Part-66, la que certifica célula Y MOTOR.
+ *
+ * Fase 10, paso 5b: es la única rama cuyo type rating dice algo del motor. Una
+ * B2 en el 737NG autoriza la aviónica de ese avión; no dice nada del CFM56-7B
+ * que lleva colgado. Por eso el motor implícito en un type rating —para
+ * puntuar y para entrar en una oferta de motor— sólo sale de habilitaciones
+ * colgadas de una de éstas. Derivada del catálogo (`categoryGroup`), no
+ * escrita a mano.
+ */
+export const B1_LICENSE_CODES: LicenseCode[] = LICENSE_CATEGORIES.filter((l) => l.categoryGroup === 'B1').map((l) => l.code);
+
+export function isB1LicenseCode(code: string): boolean {
+  return (B1_LICENSE_CODES as string[]).includes(code);
+}
 
 // ── La licencia DECIDE el oficio: rama Part-66 de cada categoría ────────
 //
@@ -90,8 +107,14 @@ export const LICENSES_BY_TECHNICIAN_TYPE: Record<string, LicenseCode[]> = {
  */
 export function typesImpliedByLicenses(codes: readonly string[]): string[] {
   const held = new Set(codes);
-  return Object.keys(LICENSES_BY_TECHNICIAN_TYPE).filter((type) =>
-    LICENSES_BY_TECHNICIAN_TYPE[type].some((code) => held.has(code)),
+  // Paso 5b: también los certificados FAA. El A&P es un certificado de
+  // MECÁNICO (14 CFR 65 subparte D), así que implica ese oficio igual que una
+  // B1; la FAA no tiene uno de aviónica. Es el mismo mapa que acota qué pide
+  // una oferta FAA (FAA_LICENSES_BY_TECHNICIAN_TYPE, más abajo).
+  return Object.keys(LICENSES_BY_TECHNICIAN_TYPE).filter(
+    (type) =>
+      LICENSES_BY_TECHNICIAN_TYPE[type].some((code) => held.has(code)) ||
+      (FAA_LICENSES_BY_TECHNICIAN_TYPE[type] ?? []).some((code) => held.has(code)),
   );
 }
 
@@ -161,4 +184,229 @@ export function licensesSelectableForOfferType(code: string): LicenseCode[] {
   const branch = LICENSES_BY_TECHNICIAN_TYPE[code];
   if (!branch) return [...LICENSE_CODES];
   return [...branch, 'C'];
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FASE 10 — AUTORIDADES
+//
+// Hasta la 073 toda licencia era EASA sin decirlo. Desde ella, "B1.1" no
+// identifica nada por sí solo: hay cinco autoridades y cuatro de ellas emiten
+// una B1.1 distinta. Todo lo de aquí abajo es el espejo en TypeScript de tres
+// tablas que YA existen en Postgres —`authorities` (064), `license_categories`
+// con las tres FAA (065) y `authority_licenses` (066)— y NO una segunda fuente
+// de verdad: `npm run validate:authority-licenses` compara esta constante con
+// la tabla viva y falla si divergen.
+// ══════════════════════════════════════════════════════════════════════
+
+// Las tres de la FAA (migración 065). No entran en LICENSE_CATEGORIES y por
+// tanto tampoco en LICENSE_CODES: esa lista es el eje Part-66 y la usan los
+// selectores de perfil y de oferta, la implicación licencia -> oficio y las
+// tablas de propulsión/producto. Meter aquí 'A&P' habría obligado a todas
+// ellas a contestar por un certificado de otro sistema.
+export const FAA_LICENSE_CATEGORIES = [
+  { code: 'A',   label: 'A — Airframe (FAA)',                  categoryGroup: 'FAA', sortOrder: 14 },
+  { code: 'P',   label: 'P — Powerplant (FAA)',                categoryGroup: 'FAA', sortOrder: 15 },
+  { code: 'A&P', label: 'A&P — Airframe and Powerplant (FAA)', categoryGroup: 'FAA', sortOrder: 16 },
+] as const;
+
+export const FAA_LICENSE_CODES: FaaLicenseCode[] = FAA_LICENSE_CATEGORIES.map((l) => l.code);
+
+/**
+ * Las cinco autoridades, con el texto con el que se pintan (Fase 10, paso 5b).
+ *
+ * Espejo de la tabla `authorities` (migración 064) —etiquetas incluidas: el
+ * copy también vive en Postgres— y comprobado contra ella por
+ * `npm run validate:authority-licenses`. `hasTypeRatings` es
+ * `authorities.has_type_ratings`: la FAA no emite habilitaciones de tipo, así
+ * que ni una oferta FAA puede pedir aeronaves ni un técnico colgarlas de un
+ * certificado FAA.
+ */
+export const AUTHORITIES: { code: AuthorityCode; label: string; hasTypeRatings: boolean; sortOrder: number }[] = [
+  { code: 'EASA', label: 'EASA', hasTypeRatings: true, sortOrder: 1 },
+  { code: 'UK_CAA', label: 'UK CAA', hasTypeRatings: true, sortOrder: 2 },
+  { code: 'CASA', label: 'CASA (Australia)', hasTypeRatings: true, sortOrder: 3 },
+  { code: 'GCAA', label: 'UAE GCAA', hasTypeRatings: true, sortOrder: 4 },
+  { code: 'FAA', label: 'FAA', hasTypeRatings: false, sortOrder: 5 },
+];
+
+export function authorityLabel(code: string): string {
+  return AUTHORITIES.find((a) => a.code === code)?.label ?? code;
+}
+
+export function authorityHasTypeRatings(code: string): boolean {
+  return AUTHORITIES.find((a) => a.code === code)?.hasTypeRatings ?? false;
+}
+
+/** "EASA B1.1", "FAA A&P". Una credencial se nombra siempre con su autoridad. */
+export function credentialLabel(authority: string | undefined, code: string): string {
+  return authority ? `${authorityLabel(authority)} ${code}` : code;
+}
+
+// Las cuatro que comparten el sistema Part-66. La FAA queda fuera A PROPÓSITO,
+// y ésa es la razón de que esta lista exista: es lo que hace que
+// `equivalentAuthorities('FAA')` devuelva [] sin ningún caso especial escrito.
+export const PART66_AUTHORITIES: AuthorityCode[] = ['EASA', 'UK_CAA', 'CASA', 'GCAA'];
+
+// Qué códigos NO admite cada autoridad Part-66. Escrito como recorte y no como
+// lista completa por autoridad para que el día que entre una categoría Part-66
+// nueva aparezca sola en las cuatro, que es el comportamiento correcto: un
+// recorte es una excepción documentada; una lista repetida cuatro veces son
+// cuatro sitios donde olvidarse.
+//
+// Mismos recortes que la migración 066, y por lo mismo: CASA no emite B2L, B3
+// ni L; GCAA no emite B2L.
+const PART66_EXCLUSIONS: Partial<Record<AuthorityCode, LicenseCode[]>> = {
+  CASA: ['B2L', 'B3', 'L'],
+  GCAA: ['B2L'],
+};
+
+export interface AuthorityLicenseRow {
+  authority: AuthorityCode;
+  code: AuthorityLicenseCode;
+}
+
+/**
+ * Las 51 filas de `authority_licenses` (migración 066): 13 EASA, 13 UK CAA,
+ * 10 CASA, 12 GCAA, 3 FAA.
+ *
+ * Se DERIVA de LICENSE_CODES más los recortes de arriba en vez de listarse a
+ * mano, por lo mismo que el seed de la migración se escribe con un CROSS JOIN:
+ * 51 filas copiadas son 51 sitios donde equivocarse. El recuento por autoridad
+ * lo fija un test, y la paridad con la tabla viva, el validador.
+ */
+export const AUTHORITY_LICENSES: AuthorityLicenseRow[] = [
+  ...PART66_AUTHORITIES.flatMap((authority) =>
+    LICENSE_CODES.filter((code) => !(PART66_EXCLUSIONS[authority] ?? []).includes(code)).map(
+      (code): AuthorityLicenseRow => ({ authority, code }),
+    ),
+  ),
+  ...FAA_LICENSE_CODES.map((code): AuthorityLicenseRow => ({ authority: 'FAA', code })),
+];
+
+const AUTHORITY_LICENSE_PAIRS = new Set(AUTHORITY_LICENSES.map((r) => r.authority + '|' + r.code));
+
+/**
+ * ¿Existe esta combinación de autoridad y código?
+ *
+ * Toma `string` y no los tipos estrechos a propósito: contesta sobre pares que
+ * pueden venir de un formulario, de una fila vieja o de una llamada directa a
+ * la API, y un tipo estrecho obligaría a castear justo en el sitio donde hay
+ * que validar. Una autoridad inexistente ('NOPE') devuelve false, no lanza.
+ *
+ * Es el mismo predicado que la FK compuesta de `technician_licenses` y
+ * `offers` impone en la base; aquí sirve para no ofrecer ni enviar lo que
+ * Postgres rechazaría.
+ */
+export function isValidAuthorityLicense(authority: string, code: string): boolean {
+  return AUTHORITY_LICENSE_PAIRS.has(authority + '|' + code);
+}
+
+// Qué certificados FAA puede pedir un puesto de cada oficio. El A&P es un
+// certificado de MECÁNICO (14 CFR 65 subparte D): la FAA no emite uno de
+// aviónica, así que un puesto de aviónico no tiene nada FAA que pedir.
+const FAA_LICENSES_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
+  mechanic: [...FAA_LICENSE_CODES],
+  avionic: [],
+};
+
+/**
+ * Las licencias que una OFERTA de este oficio puede exigir A ESTA AUTORIDAD
+ * (Fase 10, paso 5b). La única respuesta: la usan los chips del formulario de
+ * oferta y la guarda de offerRepository, así que lo que se ofrece y lo que se
+ * acepta no pueden divergir.
+ *
+ *   Part-66: la rama del oficio (licensesSelectableForOfferType) recortada a
+ *            lo que esa autoridad emite (CASA sin B2L/B3/L, GCAA sin B2L).
+ *   FAA:     A, P y A&P para mecánico; nada para aviónico.
+ *
+ * Oficio sin licencias -> []. Oficio licenciado sin rama declarada (`pilot`)
+ * -> todo lo que emite la autoridad, misma dirección de fallo que
+ * `licensesSelectableForOfferType`.
+ */
+export function licensesSelectableForOffer(technicianType: string, authority: string): AuthorityLicenseCode[] {
+  if (!isLicensedTechnicianType(technicianType)) return [];
+  if (authority === 'FAA') {
+    return FAA_LICENSES_BY_TECHNICIAN_TYPE[technicianType] ?? [...FAA_LICENSE_CODES];
+  }
+  return licensesSelectableForOfferType(technicianType).filter((code) => isValidAuthorityLicense(authority, code));
+}
+
+/**
+ * Las OTRAS autoridades cuyo mismo código vale cuando la oferta marca "acepto
+ * equivalentes".
+ *
+ * Nunca se incluye a sí misma —son las otras, y el caso exacto se decide
+ * antes—, y la FAA no aparece en ninguna lista ni tiene la suya: un A&P no es
+ * una B1.1 emitida en otro sitio, es otro sistema. Eso no hace falta
+ * programarlo dos veces: los códigos FAA y los Part-66 son disjuntos, así que
+ * aunque se cruzaran las autoridades no habría ningún par que casara.
+ */
+export function equivalentAuthorities(authority: string): AuthorityCode[] {
+  if (!PART66_AUTHORITIES.includes(authority as AuthorityCode)) return [];
+  return PART66_AUTHORITIES.filter((a) => a !== authority);
+}
+
+/**
+ * ¿Caducan las licencias de esta autoridad?
+ *
+ * FAA: NO. El certificado de mecánico (14 CFR 65.19) se emite sin fecha de
+ * expiración y no se renueva. Lo que sí tiene plazo es la EXPERIENCIA RECIENTE
+ * del 65.83 —haber ejercido 6 meses de los últimos 24 para poder ejercer los
+ * privilegios—, que es otra cosa: no es una fecha impresa en el papel, esta
+ * plataforma no la conoce, y tratarla como caducidad marcaría como vencido a
+ * todo titular FAA. Las cuatro Part-66 sí caducan.
+ *
+ * El scorer lo consulta ANTES de comparar `expiresAt` con hoy, así que una
+ * fila FAA con fecha —dato que no debería existir, pero que un PATCH podría
+ * escribir— tampoco se lee como caducada.
+ */
+export function authorityLicenseCanExpire(authority: string): boolean {
+  return authority !== 'FAA';
+}
+
+/**
+ * ¿El código que el técnico TIENE satisface el que la oferta PIDE?
+ *
+ * ── LA ÚNICA IMPLEMENTACIÓN DE ESTA PREGUNTA ──────────────────────────
+ * Comparar códigos a mano (`held === required`) es correcto para las trece
+ * Part-66 y MENTIRA para la FAA, donde A&P es literalmente "airframe and
+ * powerplant": quien lo tiene satisface una oferta de A, una de P y una de
+ * A&P. Si esa comparación vive en dos sitios, uno de los dos se olvidará del
+ * A&P, y el que se olvide dejará fuera al candidato que sí puede hacer el
+ * trabajo. Por eso está aquí y se importa; no la repitas en línea.
+ *
+ * La dirección NO es simétrica: un A no satisface una oferta de A&P. Tener la
+ * mitad del certificado no autoriza a firmar la otra mitad.
+ */
+export function licenseCodeSatisfies(held: string, required: string): boolean {
+  if (held === required) return true;
+  return held === 'A&P' && (required === 'A' || required === 'P');
+}
+
+/** Cómo de bien responde una credencial por lo que la oferta pide. */
+export type LicenseSatisfaction = 'exact' | 'equivalent';
+
+/**
+ * ¿Responde ESTA credencial por lo que la oferta pide, y con qué exactitud?
+ *
+ *   'exact'      misma autoridad, con un código que satisface.
+ *   'equivalent' otra autoridad Part-66, y sólo si la oferta marcó la casilla.
+ *   null         no responde.
+ *
+ * `required.authority` ausente = oferta anterior a la 075: se cae al código
+ * solo, que es el comportamiento de siempre. NO se asume EASA — asumirla
+ * convertiría una oferta sin autoridad en una oferta EASA y dejaría fuera a
+ * técnicos que hoy cuentan.
+ */
+export function licenseSatisfiesRequirement(
+  held: { authority: string; licenseCode: string },
+  required: { authority?: string; licenseCode: string },
+  acceptsEquivalent: boolean,
+): LicenseSatisfaction | null {
+  if (!licenseCodeSatisfies(held.licenseCode, required.licenseCode)) return null;
+  if (required.authority === undefined || held.authority === required.authority) return 'exact';
+  if (!acceptsEquivalent) return null;
+  return equivalentAuthorities(required.authority).includes(held.authority as AuthorityCode)
+    ? 'equivalent'
+    : null;
 }

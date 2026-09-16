@@ -158,6 +158,11 @@ function getProfileImprovementHints(match: OfferMatchResult | null): string[] {
   if (match.offer.licenseCode && match.score.breakdown.license === 0) {
     hints.push('Add your current licence information');
   }
+  // Paso 5b: en una oferta de motor el eje es el motor, y lo que sube la nota
+  // es declararlo (el escalón más alto de la escalera).
+  if (match.offer.offerKind === 'engine' && match.score.level !== 'exact') {
+    hints.push('Add the engines you have worked on');
+  }
   if (match.score.breakdown.contractFit === 0) hints.push('Review your preferred contract types');
   if (match.score.breakdown.location === 0) hints.push('Update your preferred work location');
 

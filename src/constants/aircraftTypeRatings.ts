@@ -152,6 +152,9 @@ export interface AircraftTypeRatingRow {
   commercial_aliases?: string[] | null;
   aircraft_category: string;
   easa_group?: string | null;
+  // Fase 10 (migración 069). Única fuente del motor implícito: las dos
+  // columnas de texto de arriba están sucias y no se leen para eso.
+  engine_id?: string | null;
   source_revision?: string | null;
   priority: number;
   is_active: boolean;
@@ -170,6 +173,7 @@ export function mapAircraftTypeRatingRow(row: AircraftTypeRatingRow): AircraftTy
     commercialAliases: row.commercial_aliases ?? [],
     aircraftCategory: row.aircraft_category as AircraftTypeRatingCatalog['aircraftCategory'],
     easaGroup: row.easa_group ?? undefined,
+    engineId: row.engine_id ?? undefined,
     sourceRevision: row.source_revision ?? undefined,
     productType: (row.product_type ?? undefined) as AircraftTypeRatingCatalog['productType'],
     priority: row.priority,

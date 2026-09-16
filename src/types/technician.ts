@@ -1,5 +1,11 @@
 import { VerificationStatus } from './enums'; // owned by enums.ts — not re-exported here
-import { TechnicianTypeCode, LicenseCode, ContractTypeCode } from './catalog';
+import {
+  TechnicianTypeCode,
+  LicenseCode,
+  AuthorityLicenseCode,
+  ContractTypeCode,
+  AuthorityCode,
+} from './catalog';
 import { PersistedLocation } from './location';
 
 // Disponibilidad: DOS estados, 2026-07-29.
@@ -104,9 +110,22 @@ export type SafeTechnicianView = Omit<Technician, 'fullName' | 'email' | 'phone'
 // --- V2 types ---
 
 export interface TechnicianLicense {
+  /**
+   * LA CREDENCIAL CONCRETA (Fase 10, migración 073). Es lo que la identifica:
+   * (authority, licenseCode) identifica el TIPO, y un técnico puede tener el
+   * mismo código en dos autoridades. Las habilitaciones cuelgan de este id,
+   * nunca del código.
+   */
   id: string;
   technicianId: string;
-  licenseCode: LicenseCode;
+  /** Autoridad emisora. NOT NULL en la base y SIN default: se manda siempre. */
+  authority: AuthorityCode;
+  /**
+   * `AuthorityLicenseCode` y no `LicenseCode`: una credencial puede ser FAA
+   * (A, P, A&P) desde la migración 065. Las habilitaciones de aquí abajo se
+   * quedan en `LicenseCode` a secas porque la FAA no tiene type ratings.
+   */
+  licenseCode: AuthorityLicenseCode;
   issuedAt?: string;
   expiresAt?: string;
   createdAt: string;
@@ -135,6 +154,17 @@ export interface TechnicianLicense {
 export interface TechnicianHabilitation {
   id: string;
   technicianId: string;
+  /**
+   * La licencia concreta de la que cuelga (Fase 10, migración 074). Sustituye
+   * al enlace por código: con dos B1.1 de autoridades distintas, el código ya
+   * no identifica ninguna credencial.
+   */
+  technicianLicenseId: string;
+  /**
+   * Redundante con la licencia apuntada y PENDIENTE DE RETIRADA. Sigue aquí
+   * porque la columna sigue en la base; la FK compuesta
+   * (technician_license_id, license_code) impide que derive del código real.
+   */
   licenseCode: LicenseCode;
   aircraftTypeRatingId?: string;
   experienceYears?: number;
@@ -290,6 +320,32 @@ export interface TechnicianProfile extends PersistedLocation {
   updatedAt: string;
 }
 
+/**
+ * Un motor en el que el técnico ha trabajado (`technician_engine_experience`,
+ * migración 068). Abierto a cualquier técnico, tenga licencia o no.
+ *
+ * ⚠ NOMBRE PARALELO a `TechnicianAircraftExperience`, Y NO ES LO MISMO:
+ *   1. No cuelga de ningún type rating — apunta al catálogo `engines`.
+ *   2. SÍ PUNTÚA, y es el escalón más alto del eje de motores. Aquélla no
+ *      puntúa.
+ *   3. Los AÑOS siguen sin puntuar: 1 año vale lo mismo que 20. Son dato
+ *      visual, igual que en aeronaves.
+ *
+ * El "motor implícito en un type rating" NO vive aquí: se calcula en lectura
+ * desde las habilitaciones y `AircraftTypeRatingCatalog.engineId`, por lo
+ * mismo que la 050 no copia habilitaciones a su tabla — una fila copiada se
+ * queda huérfana cuando se borra aquélla de la que salió.
+ */
+export interface TechnicianEngineExperience {
+  id: string;
+  technicianId: string;
+  /** FK a `engines`. */
+  engineId: string;
+  /** `undefined`/NULL = NO DECLARADO, distinto de 0. Nunca puntúa. */
+  years?: number;
+  createdAt: string;
+}
+
 export interface TechnicianWithRelations extends TechnicianProfile {
   licenses: TechnicianLicense[];
   habilitations: TechnicianHabilitation[];
@@ -301,4 +357,14 @@ export interface TechnicianWithRelations extends TechnicianProfile {
    * una UNIÓN DE CONJUNTOS en lectura, sin duplicar ni una fila.
    */
   aircraftExperience: TechnicianAircraftExperience[];
+  /**
+   * Motores declarados (Fase 10). Lista propia y no fundida con las dos de
+   * arriba: un motor no es una aeronave, y el eje que puntúa sobre ella sólo
+   * existe en ofertas de motor.
+   *
+   * Vacía es un estado NORMAL, no un dato que falte: el eje arranca vacío
+   * para todos los perfiles y quien no declara motores puntúa bajo, nunca
+   * cero.
+   */
+  engines: TechnicianEngineExperience[];
 }

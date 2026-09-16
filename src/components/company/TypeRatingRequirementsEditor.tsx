@@ -9,7 +9,7 @@ import { AircraftRatingIndex, buildAircraftRatingIndex, getAircraftTypeRatingLab
 import { isLicenseCompatibleWithProductType } from '../../utils/licenseCategoryProductType';
 import { LICENSE_CATEGORIES } from '../../constants/licenses';
 import { getOfferProductTypeLabel } from '../../constants/offerProductTypes';
-import { LicenseCode } from '../../types/catalog';
+import { AuthorityLicenseCode, LicenseCode } from '../../types/catalog';
 import { OfferProductType } from '../../types/offer';
 
 // Fase 6 tanda D: una fila es UNA AERONAVE. Perdió `licenseCode` (la licencia
@@ -27,7 +27,7 @@ interface Props {
   productType: OfferProductType;
   // La licencia de la oferta, sólo para etiquetar las filas: cada aeronave se
   // cruza con ella. El selector de licencia vive en el formulario, no aquí.
-  licenseCode?: LicenseCode;
+  licenseCode?: AuthorityLicenseCode;
   // ¿Basta con una de las aeronaves, o hacen falta todas? La casilla vive
   // BAJO la lista (paso 6 del formulario), no como un paso propio.
   requiresAll: boolean;

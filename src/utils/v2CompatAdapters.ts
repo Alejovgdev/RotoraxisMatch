@@ -185,7 +185,7 @@ export function v2SafePreviewToSafeView(preview: SafeTechnicianPreview, ratingIn
     locationCountryCode: preview.locationCountryCode,
     latitude: location.latitude,
     longitude: location.longitude,
-    licenseCategories: preview.licenses,
+    licenseCategories: preview.licenses.map((license) => license.licenseCode),
     aircraftTypes: habilitationAircraftCodes(preview.habilitations, ratingIndex),
     specialties: [],
     availability: withAvailabilityStatus(preview.availability),

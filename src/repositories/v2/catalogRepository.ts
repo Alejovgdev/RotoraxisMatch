@@ -10,7 +10,9 @@ import {
 } from '../../constants/aircraftTypeRatings';
 import { createAircraftTypeRatingsCache } from './aircraftTypeRatingsCache';
 import { createLocationCountriesCache } from './locationCountriesCache';
-import { ContractTypeCode, TechnicianTypeCode, CompanyTypeCode, AircraftTypeRatingCatalog } from '../../types/catalog';
+import { createEnginesCache } from './enginesCache';
+import { EngineRow, mapEngineRow } from '../../constants/engines';
+import { ContractTypeCode, TechnicianTypeCode, CompanyTypeCode, AircraftTypeRatingCatalog, EngineCatalog } from '../../types/catalog';
 import { CountryCatalogEntry } from '../../types/location';
 import { throwIfError } from './supabaseMappers';
 
@@ -37,6 +39,7 @@ const AIRCRAFT_TYPE_RATINGS_SELECT = `
   commercial_aliases,
   aircraft_category,
   easa_group,
+  engine_id,
   source_revision,
   priority,
   is_active,
@@ -184,6 +187,40 @@ async function fetchActiveCountries(): Promise<CountryCatalogEntry[]> {
 
 const locationCountriesCache = createLocationCountriesCache({ fetchActive: fetchActiveCountries });
 
+// ── engines (Fase 10, paso 5a) ─────────────────────────────────────────
+//
+// TODAS las filas, activas e inactivas — ver la cabecera de enginesCache.ts:
+// de las 17 genéricas inactivas cuelgan 268 type ratings, y el matching
+// necesita su `family` para darles crédito de familia.
+//
+// Sin paginar: 164 filas contra el tope de 1000 de PostgREST, y el catálogo
+// sólo crece por migración. Aun así `count: 'exact'` y aserción dura, por el
+// mismo motivo que en ratings: un catálogo truncado degrada escalones del
+// matching sin ningún error visible.
+const ENGINES_SELECT = 'id, manufacturer, family, engine_type, display_name, is_active';
+
+async function fetchAllEngines(): Promise<EngineCatalog[]> {
+  const { data, error, count } = await supabase
+    .from('engines')
+    .select(ENGINES_SELECT, { count: 'exact' })
+    .order('manufacturer', { ascending: true })
+    .order('display_name', { ascending: true })
+    .order('id', { ascending: true });
+  throwIfError(error);
+
+  const rows = (data ?? []) as unknown as EngineRow[];
+  if (count !== null && count !== undefined && rows.length !== count) {
+    throw new Error(
+      `Engines catalog is incomplete: fetched ${rows.length} of ${count} rows. ` +
+        'Refusing to populate the catalog cache with a partial catalog — a truncated catalog silently ' +
+        'downgrades engine matching tiers.',
+    );
+  }
+  return rows.map(mapEngineRow);
+}
+
+const enginesCache = createEnginesCache({ fetchAll: fetchAllEngines });
+
 // public.aircraft_types (the legacy, coarser 33-row catalog) had a
 // getAircraftTypes()/getAircraftType() pair here that queried it directly.
 // Removed 2026-07-22 (migration 022): reading that table was never the
@@ -278,5 +315,23 @@ export const catalogRepository = {
 
   invalidateCountriesCache(): void {
     locationCountriesCache.invalidate();
+  },
+
+  // --- engines — Supabase-backed, cached (Fase 10, paso 5a) ---
+
+  /**
+   * El catálogo de motores ENTERO, inactivos incluidos: es lo que necesita
+   * `buildEngineIndex` para el matching. Un selector filtra `isActive`.
+   */
+  async getEngines(options: { forceRefresh?: boolean } = {}): Promise<EngineCatalog[]> {
+    return enginesCache.getEngines(options);
+  },
+
+  getEnginesCacheStatus() {
+    return enginesCache.getState();
+  },
+
+  invalidateEnginesCache(): void {
+    enginesCache.invalidate();
   },
 };

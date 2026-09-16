@@ -39,9 +39,11 @@ import { companyRepositoryV2 } from '../../../src/repositories/v2/companyReposit
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch, getMatchScoreWeights, getMatchDisplayLabel } from '../../../src/utils/matchingV2';
+import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { MatchScore } from '../../../src/types/matching';
@@ -107,7 +109,9 @@ export default function OfferDetailScreen() {
 
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [company, setCompany] = useState<CompanyProfileView | null>(null);
-  const [score, setScore] = useState<MatchScore | null>(null);
+  // Paso 5b: el par entero (ver app/company/applications/[id].tsx).
+  const [match, setMatch] = useState<PairMatch | null>(null);
+  const score: MatchScore | null = match?.eligible ? match.score : null;
   const [existingApp, setExistingApp] = useState<OfferApplication | null>(null);
   const [existingDirectOffer, setExistingDirectOffer] = useState<OfferRequest | null>(null);
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
@@ -117,13 +121,13 @@ export default function OfferDetailScreen() {
   const [coverNote, setCoverNote] = useState('');
   const [applying, setApplying] = useState(false);
 
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real (ademas getAircraftTypeRatingLabel() cae al fallback y pinta el
-  // UUID). Por eso no se puntua hasta state === 'success': un score erroneo
-  // es peor que ningun score.
+  // El catálogo de ratings aquí sólo pinta las etiquetas de las aeronaves que
+  // pide la oferta (getAircraftTypeRatingLabel caería al UUID con el índice
+  // vacío; de ahí el gate de carga). La puntuación la hace matchPair, que
+  // espera a sus catálogos por su cuenta.
   const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
+  // Paso 5b: sólo para el nombre del motor de una oferta de motor.
+  const { engineIndex } = useEnginesCatalog();
 
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -138,7 +142,7 @@ export default function OfferDetailScreen() {
     if (!o) {
       setOffer(null);
       setCompany(null);
-      setScore(null);
+      setMatch(null);
       setExistingApp(null);
       setExistingDirectOffer(null);
       setChatRoom(null);
@@ -156,10 +160,11 @@ export default function OfferDetailScreen() {
     if (!signal.active) return;
     setCompany(c);
 
-    if (catalogState === 'success' && techWithRelations) {
-      const matchScore = calculateOfferTechnicianMatch(o, techWithRelations, ratingIndex);
-      setScore(matchScore);
-    }
+    // Filtro + scorer con los dos catálogos, en el servicio. Si no cargan, no
+    // hay bloque de match (y no se bloquea la candidatura por eso).
+    const pair = techWithRelations ? await matchPair(o, techWithRelations).catch(() => null) : null;
+    if (!signal.active) return;
+    setMatch(pair);
 
     const app = apps.find((a) => a.offerId === id) ?? null;
     setExistingApp(app);
@@ -176,13 +181,12 @@ export default function OfferDetailScreen() {
     } else {
       setChatRoom(null);
     }
-  }, [id, technicianId, ratingIndex, catalogState]);
+  }, [id, technicianId]);
 
-  // Señal de cancelacion compartida por el efecto de foco y las acciones que
-  // recargan. load() la comprueba ANTES de cada setState, no solo en el
-  // .finally: cuando llega el catalogo, `load` cambia de identidad y el efecto
-  // relanza; sin esta señal habria dos load() en vuelo (uno con el indice
-  // vacio, otro lleno) y ganaria el que terminase el ultimo, no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -246,9 +250,8 @@ export default function OfferDetailScreen() {
     }
   }
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar el bloque Match con un score
-  // calculado sobre un indice vacio ni un UUID crudo como nombre de rating.
+  // Mientras el catálogo de ratings carga no se pinta nada, para no enseñar un
+  // UUID crudo como nombre de rating en los requisitos de la oferta.
   if (loading || catalogState === 'loading') {
     return (
       <>
@@ -276,7 +279,10 @@ export default function OfferDetailScreen() {
   // historial. rejected/expired siguen siendo definitivos.
   const wasWithdrawn = existingApp?.status === 'withdrawn';
   // One application per technician per offer. Also require offer to be open for discovery (history viewing is allowed).
-  const canApply = !activeDirectOffer && (!existingApp || wasWithdrawn) && isOfferOpenForTechnicians(offer);
+  // Paso 5b: y que el filtro de la oferta no lo saque. La lista de ofertas ya
+  // no se la enseña, pero a esta pantalla se llega también por enlace.
+  const filteredOut = Boolean(match && !match.eligible);
+  const canApply = !activeDirectOffer && (!existingApp || wasWithdrawn) && isOfferOpenForTechnicians(offer) && !filteredOut;
   // Una retirada NO cuenta como aplicacion activa: si no, la pantalla
   // mostraria su estado en vez del boton de volver a aplicar.
   const activeApp = !!existingApp && !wasWithdrawn;
@@ -315,6 +321,9 @@ export default function OfferDetailScreen() {
               notEligible={score.blockers.length > 0}
             />
           )}
+          {match && !match.eligible && (
+            <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
+          )}
           <View style={styles.badgeRow}>
             <TechnicianBadge label={getOfferProductTypeLabel(offer.productType)} tone="info" />
             <TechnicianBadge label={CONTRACT_LABELS[offer.contractType] ?? offer.contractType} tone="muted" />
@@ -346,12 +355,17 @@ export default function OfferDetailScreen() {
         {(
           <TechnicianCard style={styles.section}>
             <Text style={styles.sectionTitle}>Requirements</Text>
-            <ReqRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
+            {offer.offerKind === 'engine' ? (
+              <ReqRow label="Engine" items={[offerEngineText(offer, engineIndex) ?? 'Not specified']} />
+            ) : (
+              <ReqRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
+            )}
             <ReqRow
               label="Certified work"
               items={[offer.requiresCertification ? 'Licence required' : 'No licence needed']}
             />
-            {offer.licenseCode && <ReqRow label="Licence" items={[offer.licenseCode]} />}
+            {offer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(offer)!]} />}
+            {offer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}
             {offer.requiredHabilitations.length > 0 && (
               // Fase 6 tanda D: la exigencia se dice UNA vez en la etiqueta,
               // no "(preferred)" por fila. El técnico tiene que saber si le
@@ -371,6 +385,9 @@ export default function OfferDetailScreen() {
             <BreakdownRow label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} accent={accent} />
             <BreakdownRow label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} accent={accent} />
             <BreakdownRow label="License" value={score.breakdown.license} max={weights?.license ?? 0} accent={accent} />
+            {weights && weights.engine > 0 ? (
+              <BreakdownRow label="Engine" value={score.breakdown.engine} max={weights.engine} accent={accent} />
+            ) : null}
             <BreakdownRow label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} accent={accent} />
             <BreakdownRow label="Location" value={score.breakdown.location} max={weights?.location ?? 0} accent={accent} />
             <MatchExplanation score={score} hideBreakdown displayLabel={getMatchDisplayLabel(offer, score)} />

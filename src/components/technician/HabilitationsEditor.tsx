@@ -7,10 +7,16 @@ import { DateField } from '../DateField';
 import type { DateFieldPalette } from '../DateField.types';
 import { AircraftRatingIndex, getAircraftTypeRatingLabel } from '../../constants/aircraftTypeRatings';
 import { getLicenseRatingProductType, isUnusualCombination } from '../../utils/licenseCategoryProductType';
-import { AircraftTypeRatingCatalog, LicenseCode } from '../../types/catalog';
+import { AircraftTypeRatingCatalog, AuthorityCode, LicenseCode } from '../../types/catalog';
+import { credentialLabel } from '../../constants/licenses';
+import { HeldLicense, licensesForHabilitations, sortHeldLicenses } from '../../utils/profileLicenses';
 
 export interface HabilitationRow {
   id?: string;
+  // Paso 5b: la CREDENCIAL de la que cuelga, autoridad incluida. Con una B1.1
+  // EASA y otra UK CAA el código no dice de cuál es, y el repositorio resuelve
+  // technician_license_id por el par (ver replaceHabilitations).
+  authority: AuthorityCode;
   licenseCode: string;
   aircraftTypeRatingId: string;
   experienceYears?: number;
@@ -32,10 +38,10 @@ export interface HabilitationRow {
 interface Props {
   value: HabilitationRow[];
   onChange: (next: HabilitationRow[]) => void;
-  // Only license categories currently held — gates "Add habilitation" the
-  // same way it always has (a habilitation must be issued under a category
-  // the technician actually holds).
-  licenseCategories: string[];
+  // Las credenciales que el técnico tiene AHORA — una habilitación sólo puede
+  // colgar de una licencia que existe. Paso 5b: credenciales (autoridad +
+  // código), no códigos; las de la FAA no se ofrecen, no llevan type ratings.
+  heldLicenses: readonly HeldLicense[];
   // Resolves labels for every rating referenced by `value`, including
   // inactive ones — owned by the parent (profile.tsx also needs it at save
   // time, para los mensajes de validacion), passed down read-only.
@@ -79,33 +85,41 @@ interface Props {
 export function HabilitationsEditor({
   value,
   onChange,
-  licenseCategories,
+  heldLicenses,
   ratingsById,
   onRatingResolved,
   onRequestCatalog,
   dateFieldPalette,
 }: Props) {
-  const [newHabLicense, setNewHabLicense] = useState<LicenseCode | null>(null);
+  const [newHabLicense, setNewHabLicense] = useState<HeldLicense | null>(null);
+  const selectable = sortHeldLicenses(licensesForHabilitations(heldLicenses));
   const [newHabRating, setNewHabRating] = useState<string | null>(null);
   const [newHabExperienceYears, setNewHabExperienceYears] = useState('');
 
   const categoryHint = useMemo(() => {
     if (!newHabLicense) return undefined;
-    const productType = getLicenseRatingProductType(newHabLicense);
-    return productType ? { productType, licenseCode: newHabLicense } : undefined;
+    const productType = getLicenseRatingProductType(newHabLicense.code as LicenseCode);
+    return productType ? { productType, licenseCode: credentialLabel(newHabLicense.authority, newHabLicense.code) } : undefined;
   }, [newHabLicense]);
 
-  function selectCategory(code: LicenseCode) {
-    setNewHabLicense(code);
+  function selectCategory(license: HeldLicense) {
+    setNewHabLicense(license);
     setNewHabRating(null); // a rating picked for a different category may no longer make sense, especially once the pre-filter kicks in
   }
 
   function addHabilitation() {
     if (!newHabLicense || !newHabRating) return;
-    if (value.some((h) => h.licenseCode === newHabLicense && h.aircraftTypeRatingId === newHabRating)) return;
+    if (
+      value.some(
+        (h) => h.authority === newHabLicense.authority && h.licenseCode === newHabLicense.code && h.aircraftTypeRatingId === newHabRating,
+      )
+    ) return;
     const trimmedYears = newHabExperienceYears.trim();
     const experienceYears = trimmedYears ? Number(trimmedYears) : undefined;
-    onChange([...value, { licenseCode: newHabLicense, aircraftTypeRatingId: newHabRating, experienceYears }]);
+    onChange([
+      ...value,
+      { authority: newHabLicense.authority, licenseCode: newHabLicense.code, aircraftTypeRatingId: newHabRating, experienceYears },
+    ]);
     setNewHabLicense(null);
     setNewHabRating(null);
     setNewHabExperienceYears('');
@@ -130,10 +144,10 @@ export function HabilitationsEditor({
         const rating = ratingsById.get(h.aircraftTypeRatingId);
         const unusual = isUnusualCombination(h.licenseCode as LicenseCode, rating?.productType);
         return (
-          <View key={h.id ?? `new-${h.licenseCode}-${h.aircraftTypeRatingId}`} style={styles.habItem}>
+          <View key={h.id ?? `new-${h.authority}-${h.licenseCode}-${h.aircraftTypeRatingId}`} style={styles.habItem}>
             <View style={styles.habTopRow}>
               <View style={styles.habInfo}>
-                <Text style={styles.habLicense}>{h.licenseCode}</Text>
+                <Text style={styles.habLicense}>{credentialLabel(h.authority, h.licenseCode)}</Text>
                 <Text style={styles.habRating}>
                   {getAircraftTypeRatingLabel(h.aircraftTypeRatingId, ratingsById)}
                   {h.experienceYears ? ` · ${h.experienceYears} years` : ''}
@@ -179,12 +193,21 @@ export function HabilitationsEditor({
 
       <View style={styles.fieldGap} />
       <Text style={styles.fieldLabel}>Add habilitation — category</Text>
-      {licenseCategories.length === 0 ? (
-        <Text style={styles.emptyValue}>Add a license above first.</Text>
+      {selectable.length === 0 ? (
+        <Text style={styles.emptyValue}>
+          {heldLicenses.length === 0
+            ? 'Add a license above first.'
+            : 'Your licences carry no aircraft type ratings (FAA certificates do not). Add a Part-66 licence first.'}
+        </Text>
       ) : (
         <View style={styles.chipRow}>
-          {licenseCategories.map((code) => (
-            <TechnicianChip key={code} label={code} selected={newHabLicense === code} onPress={() => selectCategory(code as LicenseCode)} />
+          {selectable.map((license) => (
+            <TechnicianChip
+              key={`${license.authority}-${license.code}`}
+              label={credentialLabel(license.authority, license.code)}
+              selected={newHabLicense?.authority === license.authority && newHabLicense?.code === license.code}
+              onPress={() => selectCategory(license)}
+            />
           ))}
         </View>
       )}

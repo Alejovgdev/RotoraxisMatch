@@ -37,7 +37,8 @@ import { formatOfferSalary } from '../../../src/utils/offerSalary';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
 import { OfferWithRequirements } from '../../../src/types/offer';
-import { technicianTypeLabel } from '../../../src/constants/technicianTypes';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { offerRequirementChips } from '../../../src/utils/offerRequirementsText';
 import { useCompanySession, useSession } from '../../../src/state/SessionContext';
 import { canManageOffers } from '../../../src/utils/companyPermissionsV2';
 
@@ -74,20 +75,11 @@ function formatPublishedDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function compactRequirements(offer: OfferWithRequirements): string[] {
-  return [
-    // El hallazgo I6 de la auditoría (aquí se pintaba el código crudo,
-    // "avionic" / "sheet_metal_worker") queda arreglado de paso: la línea
-    // cambiaba igualmente al pasar a un solo tipo, y dejarla cruda sabiendo
-    // que hay un helper de labels habría sido conservar el bug a mano.
-    technicianTypeLabel(offer.technicianType),
-    // Fase 6 tanda C: el interruptor solo se anuncia cuando dice algo que el
-    // técnico no da por supuesto. "Licence required" es el caso normal y
-    // llenaría la tira de ruido en todas las tarjetas.
-    ...(offer.requiresCertification ? [] : ['No licence needed']),
-    ...(offer.licenseCode ? [offer.licenseCode] : []),
-  ].slice(0, 5);
-}
+// Paso 5b: la tira sale de offerRequirementChips, la misma que usa la
+// moderación de admin — con autoridad ("EASA B1.1"), motor y "sólo sin
+// licencia". Sigue anunciando "No licence needed" sólo cuando lo es: "Licence
+// required" es el caso normal y llenaría la tira de ruido (Fase 6 tanda C).
+const MAX_REQUIREMENT_CHIPS = 5;
 
 export default function OffersListScreen() {
   const router = useRouter();
@@ -98,6 +90,8 @@ export default function OffersListScreen() {
   const companyMemberRole = companySession?.companyMemberRole;
   const { sessionLoading } = useSession();
   const canManage = canManageOffers(companyMemberRole);
+  // Paso 5b: sólo para el nombre del motor en las tarjetas de ofertas de motor.
+  const { engineIndex } = useEnginesCatalog();
 
   const [offers, setOffers] = useState<OfferWithRequirements[]>([]);
   const [counts, setCounts] = useState<Record<string, OfferCounts>>({});
@@ -207,13 +201,10 @@ export default function OffersListScreen() {
 
         {offers.map((offer) => {
           const offerCounts = counts[offer.id] ?? { applications: 0, directOffers: 0 };
-          const requirements = compactRequirements(offer);
-          // 1 = el tipo de perfil, que toda oferta tiene. Se cuenta igual que
-          // se pinta arriba, o el "+N más" mentiría.
-          const hiddenReqs = Math.max(
-            0,
-            1 + (offer.requiresCertification ? 0 : 1) + (offer.licenseCode ? 1 : 0) - requirements.length,
-          );
+          const allRequirements = offerRequirementChips(offer, engineIndex);
+          const requirements = allRequirements.slice(0, MAX_REQUIREMENT_CHIPS);
+          // Se cuenta sobre la MISMA lista que se recorta, o el "+N más" mentiría.
+          const hiddenReqs = allRequirements.length - requirements.length;
 
           return (
             <CompanyCard key={offer.id} style={[styles.offerCard, { borderLeftColor: statusAccent(offer.status) }]}>

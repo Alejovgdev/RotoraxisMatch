@@ -37,6 +37,8 @@ import { ContractTypeCode } from '../../../src/types/catalog';
 import { OfferProductType } from '../../../src/types/offer';
 import { OFFER_PRODUCT_TYPES, getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseText } from '../../../src/utils/offerRequirementsText';
 
 function formatPublishedDate(iso: string): string {
   const d = new Date(iso);
@@ -98,6 +100,8 @@ export default function BrowseOffersScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const { state: catalogState } = useAircraftTypeRatingsCatalog();
+  // Paso 5b: sólo para el nombre del motor en las tarjetas de ofertas de motor.
+  const { engineIndex } = useEnginesCatalog();
 
   const [matches, setMatches] = useState<OfferMatchResult[]>([]);
   const [companyMap, setCompanyMap] = useState<Record<string, CompanyProfileView>>({});
@@ -318,9 +322,11 @@ export default function BrowseOffersScreen() {
                   <TechnicianBadge label={getMatchDisplayLabel(offer, score)} tone={scoreTone(score.total)} small />
                 </View>
 
-                {offer.licenseCode && (
+                {(offer.licenseCode || offer.offerKind === 'engine' || offer.onlyUnlicensed) && (
                   <View style={styles.reqRow}>
-                    <TechnicianChip label={offer.licenseCode} />
+                    {offer.offerKind === 'engine' ? <TechnicianChip label={`Engine: ${offerEngineText(offer, engineIndex) ?? 'not specified'}`} /> : null}
+                    {offer.licenseCode ? <TechnicianChip label={offerLicenseText(offer)!} /> : null}
+                    {offer.onlyUnlicensed ? <TechnicianChip label={ONLY_UNLICENSED_TEXT} /> : null}
                   </View>
                 )}
 

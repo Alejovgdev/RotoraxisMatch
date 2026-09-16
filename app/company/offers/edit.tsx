@@ -23,15 +23,32 @@ import {
   companyStyles,
   companyUi,
 } from '../../../src/components/company/CompanyUI';
-import { TypeRatingRequirementsEditor, ExactHabilitationRow } from '../../../src/components/company/TypeRatingRequirementsEditor';
+import { TypeRatingRequirementsEditor } from '../../../src/components/company/TypeRatingRequirementsEditor';
 import { RequiredLicensesSection } from '../../../src/components/company/RequiredLicensesSection';
+import { OfferEngineSection, OfferKindSection, OnlyUnlicensedSection } from '../../../src/components/company/OfferEngineSections';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
-import { TECHNICIAN_TYPES, isLicensedTechnicianType, technicianTypeLabel } from '../../../src/constants/technicianTypes';
+import { TECHNICIAN_TYPES, technicianTypeLabel } from '../../../src/constants/technicianTypes';
 import { CONTRACT_TYPES } from '../../../src/constants/contractTypes';
 import { OFFER_PRODUCT_TYPES, getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
-import { licensesSelectableForOfferType } from '../../../src/constants/licenses';
-import { isLicenseCompatibleWithProductType } from '../../../src/utils/licenseCategoryProductType';
-import { TechnicianTypeCode, LicenseCode, ContractTypeCode } from '../../../src/types/catalog';
+import { authorityLabel } from '../../../src/constants/licenses';
+import { TechnicianTypeCode, ContractTypeCode, AuthorityCode, AuthorityLicenseCode } from '../../../src/types/catalog';
+import {
+  OfferRequirementsForm,
+  describeDropped,
+  droppedByTransition,
+  requirementsErrors,
+  selectAuthority,
+  selectLicense,
+  selectOfferKind,
+  selectProductType,
+  selectTechnicianType,
+  setRequiresCertification,
+  showsAircraftEditor,
+  showsCertificationQuestion,
+  showsLicenseSection,
+  showsOnlyUnlicensed,
+} from '../../../src/utils/offerFormRules';
+import { OfferKind } from '../../../src/types/offer';
 import { OfferStatus } from '../../../src/types/enums';
 import { OfferProductType, OfferWithRequirements } from '../../../src/types/offer';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -42,20 +59,17 @@ import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { OfferSalarySection } from '../../../src/components/company/OfferSalarySection';
 import { SalaryFormValue, salaryFormFromValue, salaryFormError, salaryFromForm } from '../../../src/utils/offerSalary';
 
-interface FormState {
+// Paso 5b: los campos de requisitos son OfferRequirementsForm y sus
+// transiciones viven en offerFormRules, las mismas que usa la pantalla de
+// creación. Esta pantalla sólo añade la pregunta previa.
+interface FormState extends OfferRequirementsForm {
   title: string;
   description: string;
   contractType: ContractTypeCode;
   salary: SalaryFormValue;
-  productType: OfferProductType;
   // Fase 7 F2c: un solo campo con pais + ciudad.
   location: LocationValue;
   minYearsExperience: number;
-  technicianType: TechnicianTypeCode;
-  requiresCertification: boolean;
-  licenseCode?: LicenseCode;
-  requiresAllAircraft: boolean;
-  requiredHabilitations: ExactHabilitationRow[];
   status: OfferStatus;
 }
 
@@ -68,13 +82,12 @@ function computeErrors(form: FormState) {
     description: !form.description.trim() ? 'Description is required.' : undefined,
     // Solo el pais es obligatorio; la ciudad es opcional.
     location: !form.location.country ? 'Please select a country.' : undefined,
-    // Fase 6 tanda D: exigir certificar sin decir QUÉ licencia es el estado
-    // que el CHECK de la 053 rechaza. Se avisa aquí en vez de dejar que
-    // Postgres devuelva un error de constraint.
-    license: form.requiresCertification && !form.licenseCode ? 'Select the licence this role certifies under.' : undefined,
+    // Fase 6 tanda D / paso 5b: certificar sin autoridad o sin licencia, o una
+    // oferta de motor sin motor, son estados que Postgres rechaza.
+    ...requirementsErrors(form),
   };
 }
-type FormErrors = { title?: string; description?: string; location?: string; license?: string; salary?: string };
+type FormErrors = Partial<ReturnType<typeof computeErrors>>;
 
 export default function EditOfferScreen() {
   const router = useRouter();
@@ -106,12 +119,17 @@ export default function EditOfferScreen() {
           minYearsExperience: o.minYearsExperience,
           technicianType: o.technicianType,
           requiresCertification: o.requiresCertification,
+          licenseAuthority: o.licenseAuthority,
           licenseCode: o.licenseCode,
+          acceptsEquivalent: o.acceptsEquivalent,
           requiresAllAircraft: o.requiresAllAircraft,
           requiredHabilitations: o.requiredHabilitations.map((h) => ({
             aircraftTypeRatingId: h.aircraftTypeRatingId,
             notes: h.notes,
           })),
+          offerKind: o.offerKind,
+          requiredEngineId: o.requiredEngineId,
+          onlyUnlicensed: o.onlyUnlicensed,
           status: o.status,
         });
       }
@@ -128,188 +146,95 @@ export default function EditOfferScreen() {
   // que esconder requisitos que la oferta sí tiene.
   const requiresCertification = form?.requiresCertification ?? true;
 
-  // 2026-08-13: chapa, pintura y composite no tienen licencias Part-66 que
-  // pedir, así que para ellos la pregunta de arriba no se pinta siquiera —
-  // ver la pantalla de creación. `?? true` mientras carga, por lo mismo que
-  // la línea de arriba: enseñar de más un instante antes que esconder algo
-  // que la oferta sí tiene.
-  const licensedType = form ? isLicensedTechnicianType(form.technicianType) : true;
-
   /**
-   * Editando una oferta que YA existe, apagar la certificación avisa antes de
-   * limpiar: lo que se descarta está guardado en la base, no es un borrador a
-   * medias como en la pantalla de creación. Mismo patrón que
-   * `onSelectProductType` de aquí abajo (migración 047).
+   * Editando una oferta que YA existe, toda transición que descarte algo
+   * guardado —licencia, aeronaves, motor— pregunta antes. Lo que se descarta
+   * lo calcula `droppedByTransition` comparando antes y después, así que no
+   * hay que acordarse de qué limpia cada cambio: lo dice offerFormRules.
    *
-   * Si la empresa cancela, el interruptor NO se mueve — no se toca `form`
-   * hasta después del await. Y solo se pregunta cuando hay algo que perder.
+   * Si la empresa cancela, el formulario NO se mueve — no se toca `form`
+   * hasta después del await. Y sólo se pregunta cuando hay algo que perder.
    *
-   * Encenderla nunca pregunta: no destruye nada.
+   * `why` es la frase que explica por qué ese cambio no puede conservarlo, y
+   * `keeps` lo que se queda cuando conviene decirlo (apagar la certificación
+   * conserva las aeronaves).
    */
-  async function onToggleCertification(next: boolean) {
-    if (!form || next === form.requiresCertification) return;
-
-    if (!next) {
-      // Fase 6 tanda E: apagar el interruptor sólo se lleva la LICENCIA. Las
-      // aeronaves se quedan — la oferta sigue siendo para ese avión, sólo que
-      // ya no hace falta poder firmarlo.
-      if (form.licenseCode) {
-        const confirmed = await confirmAction({
-          title: `Drop the ${form.licenseCode} licence requirement?`,
-          message:
-            `An offer that does not need certified work cannot require a licence, so this clears ${form.licenseCode}.\n\n` +
-            'The aircraft stay: the role is still for that work, and it opens up to technicians who have done it without holding the licence.',
-          confirmLabel: 'Drop and continue',
-          destructive: true,
-        });
-        if (!confirmed) return;
-      }
-    }
-
-    setForm((prev) => prev ? {
-      ...prev,
-      requiresCertification: next,
-      ...(next ? {} : { licenseCode: undefined }),
-    } : prev);
-  }
-
-  /**
-   * Cambiar el TIPO de perfil arrastra la licencia (2026-08-13): una B1.2 en
-   * un puesto de aviónico es una contradicción, no una preferencia. Editando
-   * se avisa antes de limpiar, igual que con el producto y el interruptor, y
-   * si la empresa cancela el selector no se mueve.
-   *
-   * Cada rama reutiliza la consecuencia que esta pantalla ya define para esa
-   * transición, en vez de inventar una tercera:
-   *   - a un oficio SIN licencia -> lo mismo que apagar el interruptor (Fase
-   *     6 tanda E): se va la licencia y LAS AERONAVES SE QUEDAN. La oferta
-   *     sigue siendo para ese avión, sólo que ya no hace falta firmarlo.
-   *   - a otro oficio licenciado que no admite la licencia actual -> lo mismo
-   *     que `onSelectLicense`: se va con las aeronaves, que estaban puestas
-   *     para cruzarse con ella.
-   *
-   * Sólo se pregunta cuando hay licencia que perder, que es el mismo criterio
-   * de `onToggleCertification`: cambiar el tipo de una oferta que aún no ha
-   * elegido licencia es un cambio limpio y no merece diálogo.
-   */
-  async function onSelectTechnicianType(next: TechnicianTypeCode) {
-    if (!form || next === form.technicianType) return;
-
-    const nextLicensed = isLicensedTechnicianType(next);
-    const keepsLicense = form.licenseCode
-      ? nextLicensed && licensesSelectableForOfferType(next).includes(form.licenseCode)
-      : true;
-
-    if (form.licenseCode && !keepsLicense) {
-      const droppedRatings = nextLicensed ? form.requiredHabilitations.length : 0;
+  async function applyTransition(
+    next: FormState,
+    dialog: { title: string; why: string; keeps?: string },
+  ) {
+    if (!form || next === form) return;
+    const dropped = describeDropped(droppedByTransition(form, next));
+    const dropsEngine = Boolean(form.requiredEngineId && !next.requiredEngineId);
+    const lost = [dropped, dropsEngine ? 'the engine requirement' : null].filter(Boolean).join(' and ');
+    if (lost) {
       const confirmed = await confirmAction({
-        title: `Switch this offer to ${technicianTypeLabel(next).toLowerCase()}?`,
-        message: nextLicensed
-          ? `${form.licenseCode} is not a licence of that trade, so switching clears it` +
-            (droppedRatings > 0
-              ? `, along with the ${droppedRatings} aircraft requirement${droppedRatings !== 1 ? 's' : ''} added under it. ` +
-                'You will need to add them again under the new licence.'
-              : '. You will need to pick the licence this role certifies under.')
-          : `That trade holds no EASA licence, so this offer stops needing certified work and the ${form.licenseCode} requirement is cleared.\n\n` +
-            'The aircraft stay: the role is still for that work, and it opens up to technicians who have done it without holding the licence.',
-        confirmLabel: 'Switch and clear',
+        title: dialog.title,
+        message: `${dialog.why} This clears ${lost}.${dialog.keeps ? `\n\n${dialog.keeps}` : ''}`,
+        confirmLabel: 'Continue and clear',
         destructive: true,
       });
       if (!confirmed) return;
     }
-
-    setForm((prev) => prev ? {
-      ...prev,
-      technicianType: next,
-      ...(nextLicensed
-        ? keepsLicense
-          ? {}
-          : { licenseCode: undefined, requiredHabilitations: [], requiresAllAircraft: false }
-        : { requiresCertification: false, licenseCode: undefined }),
-    } : prev);
+    setForm(next);
+    setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined }));
   }
 
-  /**
-   * Cambiar la licencia con aeronaves ya metidas (Fase 6 tanda D). Mismo
-   * patrón que el producto y el interruptor: editando se avisa, porque lo que
-   * se descarta ya está en la base; si cancela, el selector no se mueve.
-   *
-   * Las aeronaves caen SIEMPRE que hay licencia nueva, no sólo si "dejan de
-   * encajar": estaban puestas para cruzarse con la licencia anterior, y
-   * conservarlas las dejaría exigiendo un rating bajo una licencia que la
-   * empresa acaba de descartar.
-   */
-  async function onSelectLicense(next: LicenseCode) {
-    if (!form || next === form.licenseCode) return;
-
-    if (form.requiredHabilitations.length > 0) {
-      const n = form.requiredHabilitations.length;
-      const confirmed = await confirmAction({
-        title: `Switch the licence to ${next}?`,
-        message:
-          `The ${n} aircraft requirement${n !== 1 ? 's' : ''} on this offer ${n !== 1 ? 'were' : 'was'} added under ` +
-          `${form.licenseCode ?? 'the previous licence'}, so switching clears ${n !== 1 ? 'them' : 'it'}. ` +
-          'You will need to add the aircraft again under the new licence.',
-        confirmLabel: 'Switch and clear',
-        destructive: true,
-      });
-      if (!confirmed) return;
-    }
-
-    setForm((prev) => prev ? {
-      ...prev,
-      licenseCode: next,
-      requiredHabilitations: [],
-      requiresAllAircraft: false,
-    } : prev);
+  function onSelectOfferKind(kind: OfferKind) {
+    if (!form) return;
+    void applyTransition(selectOfferKind(form, kind), {
+      title: kind === 'engine' ? 'Make this an engine offer?' : 'Make this an aircraft offer?',
+      why: kind === 'engine'
+        ? 'An engine offer asks for one engine and nothing else — no licence and no aircraft.'
+        : 'An aircraft offer does not name an engine.',
+    });
   }
 
-  /**
-   * Editando una oferta que YA existe, cambiar el producto avisa antes de
-   * limpiar: lo que se descarta está guardado en la base, no es un borrador a
-   * medias como en la pantalla de creación.
-   *
-   * Si la empresa cancela, el selector NO se mueve — no se toca `form` hasta
-   * después del await, así que la pantalla se queda exactamente como estaba.
-   *
-   * Solo se pregunta cuando hay algo que perder: cambiar el producto de una
-   * oferta sin requisitos afectados es un cambio limpio y no merece diálogo.
-   */
-  async function onSelectProductType(productType: OfferProductType) {
-    if (!form || productType === form.productType) return;
+  function onToggleCertification(next: boolean) {
+    if (!form) return;
+    // Encenderla nunca pregunta: no destruye nada (desmarca "sólo sin
+    // licencia", que no es un requisito que se pierda sino una contradicción
+    // que se evita).
+    void applyTransition(setRequiresCertification(form, next), {
+      title: `Drop the ${form.licenseCode ?? ''} licence requirement?`,
+      why: 'An offer that does not need certified work cannot require a licence.',
+      // Fase 6 tanda E: las aeronaves se quedan.
+      keeps: 'The aircraft stay: the role is still for that work, and it opens up to technicians who have done it without holding the licence.',
+    });
+  }
 
-    const droppedLicenses =
-      form.licenseCode && !isLicenseCompatibleWithProductType(form.licenseCode, productType)
-        ? [form.licenseCode]
-        : [];
-    const droppedRatings = form.requiredHabilitations.length;
+  function onSelectTechnicianType(next: TechnicianTypeCode) {
+    if (!form) return;
+    void applyTransition(selectTechnicianType(form, next), {
+      title: `Switch this offer to ${technicianTypeLabel(next).toLowerCase()}?`,
+      why: 'The current licence is not one that trade can require.',
+    });
+  }
 
-    if (droppedRatings > 0 || droppedLicenses.length > 0) {
-      const parts: string[] = [];
-      if (droppedRatings > 0) {
-        parts.push(`${droppedRatings} type rating requirement${droppedRatings !== 1 ? 's' : ''}`);
-      }
-      if (droppedLicenses.length > 0) parts.push(`the ${droppedLicenses.join(', ')} licence requirement${droppedLicenses.length !== 1 ? 's' : ''}`);
+  function onSelectAuthority(next: AuthorityCode) {
+    if (!form) return;
+    void applyTransition(selectAuthority(form, next), {
+      title: `Switch the authority to ${authorityLabel(next)}?`,
+      why: next === 'FAA'
+        ? 'FAA certificates carry no aircraft type ratings, and the licence has to be one the FAA issues.'
+        : `The licence has to be one ${authorityLabel(next)} issues.`,
+    });
+  }
 
-      const confirmed = await confirmAction({
-        title: `Switch this offer to ${getOfferProductTypeLabel(productType).toLowerCase()}?`,
-        message: `This clears ${parts.join(' and ')}, which cannot apply to ${getOfferProductTypeLabel(productType).toLowerCase()}. You will need to add the new requirements before saving.`,
-        confirmLabel: 'Switch and clear',
-        destructive: true,
-      });
-      if (!confirmed) return;
-    }
+  function onSelectLicense(next: AuthorityLicenseCode) {
+    if (!form) return;
+    void applyTransition(selectLicense(form, next), {
+      title: `Switch the licence to ${next}?`,
+      why: `The aircraft on this offer were added under ${form.licenseCode ?? 'the previous licence'}; you will need to add them again under the new one.`,
+    });
+  }
 
-    setForm((prev) => prev ? {
-      ...prev,
-      productType,
-      requiredHabilitations: [],
-      requiresAllAircraft: false,
-      licenseCode:
-        prev.licenseCode && isLicenseCompatibleWithProductType(prev.licenseCode, productType)
-          ? prev.licenseCode
-          : undefined,
-    } : prev);
+  function onSelectProductType(productType: OfferProductType) {
+    if (!form) return;
+    void applyTransition(selectProductType(form, productType), {
+      title: `Switch this offer to ${getOfferProductTypeLabel(productType).toLowerCase()}?`,
+      why: `Type ratings and some licences cannot apply to ${getOfferProductTypeLabel(productType).toLowerCase()}.`,
+    });
   }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -320,6 +245,7 @@ export default function EditOfferScreen() {
     if (key === 'location') {
       setErrors((e) => ({ ...e, location: undefined }));
     }
+    if (key === 'requiredEngineId') setErrors((e) => ({ ...e, engine: undefined }));
   }
 
   async function handleSave(overrideStatus?: OfferStatus) {
@@ -342,8 +268,16 @@ export default function EditOfferScreen() {
         // cambia.
         productType: form.productType,
         technicianType: form.technicianType,
+        licenseAuthority: form.licenseAuthority,
         licenseCode: form.licenseCode,
+        acceptsEquivalent: form.acceptsEquivalent,
         requiresAllAircraft: form.requiresAllAircraft,
+        // Paso 5b: clase y motor. El repositorio retira las aeronaves ANTES de
+        // cambiar a motor (los triggers de la 076 lo exigen), igual que con el
+        // producto.
+        offerKind: form.offerKind,
+        requiredEngineId: form.requiredEngineId,
+        onlyUnlicensed: form.onlyUnlicensed,
         // Igual que productType: va en el update() y no en
         // replaceRequirements(), y el repositorio limpia los requisitos
         // Part-66 si ve que se apaga — la invariante lo exige aunque aquí no
@@ -404,42 +338,56 @@ export default function EditOfferScreen() {
           onBack={() => router.back()}
         />
 
-        {/* Mismo orden que la pantalla de creación (Fase 6 tanda C):
+        {/* Mismo orden que la pantalla de creación: 0) aeronave o motor,
             1) tipo de perfil, 2) ¿certificar?, 3) avión o helicóptero,
-            4) licencia, 5) aeronaves. */}
-        <ChoiceSection
-          title="Profile type"
-          helper="One per offer. Two types in one advert are two jobs — publish them separately."
-        >
-          {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
-            <CompanyChip
-              key={t.code}
-              label={t.label}
-              selected={form.technicianType === t.code}
-              onPress={() => { void onSelectTechnicianType(t.code as TechnicianTypeCode); }}
-            />
-          ))}
-        </ChoiceSection>
+            4) licencia o motor, 5) aeronaves. */}
+        <OfferKindSection value={form.offerKind} onChange={onSelectOfferKind} />
+
+        {form.offerKind === 'aircraft' && (
+          <ChoiceSection
+            title="Profile type"
+            helper="One per offer. Two types in one advert are two jobs — publish them separately."
+          >
+            {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
+              <CompanyChip
+                key={t.code}
+                label={t.label}
+                selected={form.technicianType === t.code}
+                onPress={() => onSelectTechnicianType(t.code as TechnicianTypeCode)}
+              />
+            ))}
+          </ChoiceSection>
+        )}
 
         {/* La pregunta sólo existe para los oficios que tienen licencia — ver
             la pantalla de creación. */}
-        {licensedType && (
+        {showsCertificationQuestion(form) && (
           <ChoiceSection
             title="Does this job need certified work?"
             helper={
               requiresCertification
-                ? 'Yes — the technician must hold a valid EASA licence to sign off the work. You can require a licence and type ratings below.'
+                ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.'
                 : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.'
             }
           >
-            <CompanyChip label="Yes, licence required" selected={requiresCertification} onPress={() => { void onToggleCertification(true); }} />
-            <CompanyChip label="No licence needed" selected={!requiresCertification} onPress={() => { void onToggleCertification(false); }} />
+            <CompanyChip label="Yes, licence required" selected={requiresCertification} onPress={() => onToggleCertification(true)} />
+            <CompanyChip label="No licence needed" selected={!requiresCertification} onPress={() => onToggleCertification(false)} />
           </ChoiceSection>
+        )}
+
+        {/* Paso 5b: sólo cuando la oferta NO exige licencia, en aeronave y en
+            motor. Volver a "Yes, licence required" la desmarca. */}
+        {showsOnlyUnlicensed(form) && (
+          <OnlyUnlicensedSection checked={form.onlyUnlicensed} onChange={(next) => setField('onlyUnlicensed', next)} />
         )}
 
         <FormSection
           title="Airplanes or helicopters?"
-          subtitle="An offer covers one or the other, never both. This sets which licence categories and type ratings you can require below."
+          subtitle={
+            form.offerKind === 'engine'
+              ? 'The kind of aircraft this engine work is for.'
+              : 'An offer covers one or the other, never both. This sets which licence categories and type ratings you can require below.'
+          }
           icon={Plane}
         >
           <View style={styles.chipRow}>
@@ -448,7 +396,7 @@ export default function EditOfferScreen() {
                 key={p.code}
                 label={p.label}
                 selected={form.productType === p.code}
-                onPress={() => { void onSelectProductType(p.code); }}
+                onPress={() => onSelectProductType(p.code)}
               />
             ))}
           </View>
@@ -518,20 +466,28 @@ export default function EditOfferScreen() {
           {errors.location ? <Text style={styles.fieldError}>{errors.location}</Text> : null}
         </FormSection>
 
-        {/* 4) licencia y 5) aeronaves, solo si la oferta exige certificar. */}
-        {licensedType && requiresCertification && (
+        {showsLicenseSection(form) && (
           <RequiredLicensesSection
-            licenseCode={form.licenseCode}
-            onChangeLicense={(next) => { void onSelectLicense(next); }}
-            productType={form.productType}
-            technicianType={form.technicianType}
+            form={form}
+            onChangeAuthority={onSelectAuthority}
+            onChangeLicense={onSelectLicense}
+            onChangeAcceptsEquivalent={(next) => setField('acceptsEquivalent', next)}
+            authorityError={errors.authority}
+            licenseError={errors.license}
           />
         )}
 
-        {/* Fase 6 tanda E: las AERONAVES se piden siempre, certifique o no —
-            "ayudante para el A320" tiene que poder decir A320. Lo que
-            desaparece sin certificacion es la LICENCIA, no el avion. */}
-        {(
+        {form.offerKind === 'engine' && (
+          <OfferEngineSection
+            value={form.requiredEngineId}
+            onChange={(engineId) => setField('requiredEngineId', engineId)}
+            error={errors.engine}
+          />
+        )}
+
+        {/* Fase 6 tanda E: las AERONAVES se piden certifique o no. Paso 5b:
+            salvo en una oferta de motor, o certificando bajo la FAA. */}
+        {showsAircraftEditor(form) && (
           <TypeRatingRequirementsEditor
             value={form.requiredHabilitations}
             onChange={(next) => setField('requiredHabilitations', next)}

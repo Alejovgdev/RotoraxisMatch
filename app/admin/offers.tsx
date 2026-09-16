@@ -25,6 +25,8 @@ import { useAdminDashboard } from '../../src/state/useAdminDashboard';
 import type { OfferWithRequirements } from '../../src/types/offer';
 import type { OfferStatus } from '../../src/types/enums';
 import { technicianTypeLabel } from '../../src/constants/technicianTypes';
+import { useEnginesCatalog } from '../../src/state/useEnginesCatalog';
+import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../src/utils/offerRequirementsText';
 import {
   AdminBadge,
   AdminCard,
@@ -221,13 +223,17 @@ function OfferCard({
 }) {
   const [loadingStatus, setLoadingStatus] = useState<OfferStatus | null>(null);
   const nextActions = NEXT_ACTIONS[offer.status];
+  // Paso 5b: el motor de una oferta de motor, para el nombre.
+  const { engineIndex } = useEnginesCatalog();
+  const engine = offerEngineText(offer, engineIndex);
   const requirementChips = [
-    technicianTypeLabel(offer.technicianType),
+    ...(engine ? ['Engine offer', `Engine: ${engine}`] : [technicianTypeLabel(offer.technicianType)]),
     // El moderador necesita ver el interruptor SIEMPRE, en los dos sentidos:
     // aquí se revisa si la oferta es coherente, y "exige licencia" es tan
     // revisable como "no la exige".
     offer.requiresCertification ? 'Licence required' : 'No licence needed',
-    ...(offer.licenseCode ? [offer.licenseCode] : []),
+    ...(offer.licenseCode ? [offerLicenseDetailText(offer)!] : []),
+    ...(offer.onlyUnlicensed ? [ONLY_UNLICENSED_TEXT] : []),
     // Fase 6 tanda D: si la oferta exige TODAS las aeronaves, el moderador
     // tiene que verlo — es lo que separa "pido tres" de "me vale una".
     ...(offer.requiresAllAircraft ? ['All listed aircraft'] : []),

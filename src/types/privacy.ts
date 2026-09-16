@@ -24,10 +24,11 @@
  * getSafeTechnicianPreview() (privacyV2.ts), so the privacy gate is always applied.
  */
 
-import { TechnicianTypeCode, LicenseCode } from './catalog';
+import { TechnicianTypeCode, AuthorityLicenseCode, AuthorityCode } from './catalog';
 import { VerificationStatus } from './enums';
 import {
   TechnicianAircraftExperience,
+  TechnicianEngineExperience,
   TechnicianHabilitation,
   Availability,
   SocialLinks,
@@ -63,7 +64,11 @@ export interface SafeTechnicianPreview extends PersistedLocation {
   baseAirport?: string;
   latitude?: number;
   longitude?: number;
-  licenses: LicenseCode[];
+  // Paso 5b: CREDENCIALES, no códigos. Hasta aquí viajaban sólo los códigos
+  // ("B1.1"), y con cinco autoridades eso no dice cuál es: la empresa no podía
+  // distinguir una B1.1 EASA de una UK CAA ni ver que un A&P es de la FAA. Sin
+  // id ni fechas: la empresa ve QUÉ credencial tiene, no su registro.
+  licenses: PublicLicense[];
   habilitations: TechnicianHabilitation[];
   // Aeronaves declaradas SIN necesidad de licencia (Fase 6 tanda B). Campo
   // público, como las habilitaciones, y por el mismo camino: su propia tabla
@@ -73,13 +78,25 @@ export interface SafeTechnicianPreview extends PersistedLocation {
   //
   // NO puntúa en esta tanda: el scorer no lo lee. Tanda E.
   aircraftExperience: TechnicianAircraftExperience[];
+  // Paso 5b: motores declarados (technician_engine_experience), por el mismo
+  // camino que aircraftExperience — tabla propia con policy de empresa
+  // (tee_select_company, migración 068), no technician_public_view. Es lo que
+  // hace a un técnico elegible y bien puntuado en una oferta de motor, así que
+  // la empresa tiene que poder verlo.
+  engines: TechnicianEngineExperience[];
   // Años declarados — visual y filtrable, nunca puntuable. undefined = no
   // declarado, se muestra "not specified".
   yearsExperience?: number;
   availability: Availability;
   verificationStatus: VerificationStatus;
-  // matchingScore is NOT stored here — use calculateOfferTechnicianMatch(offer, technician, ratingIndex) instead.
+  // matchingScore is NOT stored here — ask matchPair / matchPairs (src/utils/matchingV2.ts) for the pair instead.
   // A score only exists in the context of a specific offer+technician pair.
+}
+
+/** Una licencia tal como la ve una empresa: quién la emite y qué categoría es. */
+export interface PublicLicense {
+  authority: AuthorityCode;
+  licenseCode: AuthorityLicenseCode;
 }
 
 // What a company sees AFTER offer acceptance.

@@ -27,11 +27,10 @@ import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { companyRepositoryV2 } from '../../../src/repositories/v2/companyRepositoryV2';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch } from '../../../src/utils/matchingV2';
-import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { matchPairs, PairMatch } from '../../../src/utils/matchingV2';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { OfferRequest } from '../../../src/types/offerRequest';
-import { MatchScore } from '../../../src/types/matching';
+import { OfferWithRequirements } from '../../../src/types/offer';
 
 type RequestEntry = {
   request: OfferRequest;
@@ -39,7 +38,8 @@ type RequestEntry = {
   offerTitle: string | null;
   contractType: string | null;
   location: string | null;
-  score: MatchScore | null;
+  // null = sin puntuar. Un par que el filtro saca llega como { eligible: false }.
+  match: PairMatch | null;
 };
 
 const STATUS_ORDER: Record<string, number> = {
@@ -91,13 +91,6 @@ export default function DirectOffersListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
-  const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
-
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
     // vacio. El .finally(setLoading(false)) del efecto apaga el spinner, asi
@@ -109,28 +102,34 @@ export default function DirectOffersListScreen() {
       technicianRepositoryV2.getWithRelations(technicianId),
     ]);
 
-    const built = await Promise.all(
+    const loaded = await Promise.all(
       requests.map(async (req) => {
         const [company, offer] = await Promise.all([
           companyRepositoryV2.getById(req.companyId),
           req.offerId ? offerRepository.getWithRequirements(req.offerId) : Promise.resolve(null),
         ]);
-
-        let score: MatchScore | null = null;
-        if (catalogState === 'success' && offer && techWithRelations) {
-          score = calculateOfferTechnicianMatch(offer, techWithRelations, ratingIndex);
-        }
-
-        return {
-          request: req,
-          companyName: company?.name ?? 'Company',
-          offerTitle: offer?.title ?? null,
-          contractType: offer ? (CONTRACT_LABELS[offer.contractType] ?? offer.contractType) : null,
-          location: offer ? `${offer.locationCity}, ${offer.locationCountry}` : null,
-          score,
-        };
+        return { req, company, offer };
       }),
     );
+
+    // Paso 5b: filtro + scorer con los dos catálogos, en el servicio y de una
+    // vez para todas. Si los catálogos no cargan, sin porcentajes.
+    const withOffer = techWithRelations
+      ? loaded.filter((entry): entry is typeof entry & { offer: OfferWithRequirements } => Boolean(entry.offer))
+      : [];
+    const pairResults = techWithRelations
+      ? await matchPairs(withOffer.map(({ offer }) => ({ offer, technician: techWithRelations }))).catch(() => null)
+      : null;
+    const matchByRequestId = new Map(withOffer.map(({ req }, i) => [req.id, pairResults?.[i] ?? null]));
+
+    const built: RequestEntry[] = loaded.map(({ req, company, offer }) => ({
+      request: req,
+      companyName: company?.name ?? 'Company',
+      offerTitle: offer?.title ?? null,
+      contractType: offer ? (CONTRACT_LABELS[offer.contractType] ?? offer.contractType) : null,
+      location: offer ? `${offer.locationCity}, ${offer.locationCountry}` : null,
+      match: matchByRequestId.get(req.id) ?? null,
+    }));
 
     const ids = await activityRepository.getUnreadEntityIds(
       'technician',
@@ -150,13 +149,12 @@ export default function DirectOffersListScreen() {
     if (!signal.active) return;
     setUnreadIds(ids);
     setEntries(built);
-  }, [technicianId, ratingIndex, catalogState]);
+  }, [technicianId]);
 
-  // Señal de cancelacion compartida por el efecto de foco y el pull-to-refresh.
-  // load() la comprueba ANTES de cada setState, no solo en el .finally: cuando
-  // llega el catalogo, `load` cambia de identidad y el efecto relanza; sin esta
-  // señal habria dos load() en vuelo (uno con el indice vacio, otro lleno) y
-  // ganaria el que terminase el ultimo, de forma no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -179,10 +177,7 @@ export default function DirectOffersListScreen() {
     setRefreshing(false);
   }
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar un "% match" calculado sobre un
-  // indice vacio.
-  if (loading || catalogState === 'loading') {
+  if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -216,7 +211,9 @@ export default function DirectOffersListScreen() {
           />
         )}
 
-        {entries.map(({ request, companyName, offerTitle, contractType, location, score }) => {
+        {entries.map(({ request, companyName, offerTitle, contractType, location, match }) => {
+          const score = match?.eligible ? match.score : null;
+          const notEligible = Boolean(match && (!match.eligible || match.score.blockers.length > 0));
           const status = STATUS_INFO[request.status] ?? { label: request.status, tone: 'muted' as const };
           const isUnread = unreadIds.has(request.id);
 
@@ -240,18 +237,18 @@ export default function DirectOffersListScreen() {
                   <TechnicianBadge label={status.label} tone={status.tone} small />
                 </View>
 
-                {(location || contractType || score) && (
+                {(location || contractType || match) && (
                   <View style={styles.detailsRow}>
                     {location ? <TechnicianBadge label={location} tone="muted" small /> : null}
                     {contractType ? <TechnicianBadge label={contractType} tone="muted" small /> : null}
-                    {score ? (
+                    {match ? (
                       <Text
                         style={[
                           styles.matchText,
-                          { color: score.blockers.length > 0 ? colors.error : scoreColor(score.total) },
+                          { color: notEligible || !score ? colors.error : scoreColor(score.total) },
                         ]}
                       >
-                        {score.blockers.length > 0 ? 'Not eligible' : `${score.total}% match`}
+                        {notEligible || !score ? 'Not eligible' : `${score.total}% match`}
                       </Text>
                     ) : null}
                   </View>

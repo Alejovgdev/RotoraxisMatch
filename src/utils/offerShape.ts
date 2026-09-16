@@ -1,0 +1,69 @@
+// Las reglas de FORMA de una oferta, en un solo sitio (Fase 10, paso 5b).
+//
+// Espejo en TypeScript de lo que Postgres ya impone en `offers`, igual que
+// `isValidAuthorityLicense` lo es de la FK compuesta: NO es una segunda fuente
+// de verdad —la base rechaza lo mismo aunque esto no exista— sino la forma de
+// no mandar lo que va a rechazar y de decirlo con un mensaje que una persona
+// entienda. Cada regla nombra su restricción:
+//
+//   chk_offers_license_matches_certification (053)  certificar ⇔ licencia
+//   chk_offers_license_authority_pairing     (075)  licencia ⇔ autoridad
+//   FK a authority_licenses                  (075)  el par existe
+//   chk_offers_engine_kind_shape             (076)  motor ⇒ sin licencia, con motor
+//   triggers de la 076                              motor ⇒ sin aeronaves
+//   chk_offers_aircraft_without_engine       (077)  aeronave ⇒ sin motor
+//   chk_offers_only_unlicensed_without_license (077) "sólo sin licencia" ⇒ no exige licencia
+//
+// La usan offerRepository (antes de escribir, sobre el estado RESULTANTE) y los
+// fixtures de scripts/testMatching.ts (una oferta de test que la base no
+// aceptaría no debe llegar al scorer).
+import { OfferWithRequirements } from '../types/offer';
+import { isValidAuthorityLicense } from '../constants/licenses';
+
+export type OfferShape = Pick<
+  OfferWithRequirements,
+  'offerKind' | 'requiresCertification' | 'licenseCode' | 'licenseAuthority' | 'requiredEngineId' | 'onlyUnlicensed'
+> & {
+  requiredHabilitations: readonly unknown[];
+};
+
+/** Lo que Postgres rechazaría de esta oferta, en inglés de pantalla. Vacío = válida. */
+export function offerShapeViolations(offer: OfferShape): string[] {
+  const violations: string[] = [];
+  const hasLicense = offer.licenseCode !== undefined && offer.licenseCode !== null;
+  const hasAuthority = offer.licenseAuthority !== undefined && offer.licenseAuthority !== null;
+  const hasEngine = Boolean(offer.requiredEngineId);
+
+  if (offer.requiresCertification !== hasLicense) {
+    violations.push(
+      offer.requiresCertification
+        ? 'An offer that requires a licence must name the licence.'
+        : 'An offer that needs no licence cannot name one.',
+    );
+  }
+  if (hasLicense !== hasAuthority) {
+    violations.push('A required licence must name its issuing authority, and an authority needs a licence.');
+  }
+  if (hasLicense && hasAuthority && !isValidAuthorityLicense(offer.licenseAuthority as string, offer.licenseCode as string)) {
+    violations.push(`${offer.licenseAuthority} does not issue a ${offer.licenseCode} licence.`);
+  }
+
+  if (offer.offerKind === 'engine') {
+    if (hasLicense || offer.requiresCertification) violations.push('An engine offer cannot require a licence.');
+    if (!hasEngine) violations.push('An engine offer must name the engine.');
+    if (offer.requiredHabilitations.length > 0) violations.push('An engine offer cannot require aircraft type ratings.');
+  } else if (hasEngine) {
+    violations.push('Only an engine offer can name an engine.');
+  }
+
+  if (offer.onlyUnlicensed && (hasLicense || offer.requiresCertification)) {
+    violations.push('"Only technicians without a licence" cannot be combined with a licence requirement.');
+  }
+
+  return violations;
+}
+
+export function assertOfferShape(offer: OfferShape): void {
+  const violations = offerShapeViolations(offer);
+  if (violations.length > 0) throw new Error(violations.join(' '));
+}

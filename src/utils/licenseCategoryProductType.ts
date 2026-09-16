@@ -1,4 +1,4 @@
-import { LicenseCode, AircraftTypeRatingCatalog } from '../types/catalog';
+import { LicenseCode, AuthorityLicenseCode, AircraftTypeRatingCatalog } from '../types/catalog';
 import { OfferProductType } from '../types/offer';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -104,8 +104,10 @@ export function getLicenseRatingProductType(
 // Esto NO es el enforcement: quien impide de verdad mezclar productos es la
 // base de datos, con las FK compuestas orh_matches_offer / orh_matches_rating
 // (migración 047). Esto es la ayuda de UI que evita llegar hasta ese error.
+// Paso 5b: acepta también los códigos FAA, que caen en el default: A, P y A&P
+// no distinguen aviones de helicópteros, así que no restringen el producto.
 export function getOfferProductTypeRestriction(
-  licenseCode: LicenseCode,
+  licenseCode: AuthorityLicenseCode,
 ): OfferProductType | undefined {
   switch (licenseCode) {
     case 'A1':
@@ -139,7 +141,7 @@ export function getOfferProductTypeRestriction(
  * excluirlas sería inventar una restricción que la norma no pone.
  */
 export function isLicenseCompatibleWithProductType(
-  licenseCode: LicenseCode,
+  licenseCode: AuthorityLicenseCode,
   productType: OfferProductType,
 ): boolean {
   const restriction = getOfferProductTypeRestriction(licenseCode);

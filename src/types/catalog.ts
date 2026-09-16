@@ -4,12 +4,76 @@ export type TechnicianTypeCode =
   | 'sheet_metal_worker'
   | 'painter'
   | 'composite'
-  | 'pilot'; // standby — not active in V2 UI
+  | 'pilot' // standby — not active in V2 UI
+  // Fase 10, paso 5a: fila de `technician_types` desde la migración 076. El
+  // filtro de elegibilidad de las ofertas de motor la lee; ninguna pantalla la
+  // ofrece todavía (paso 5b).
+  | 'engine_technician';
+
+/**
+ * Las cinco autoridades que emiten licencias (Fase 10, migración 064).
+ *
+ * Las cuatro Part-66 comparten códigos y catálogo de aeronaves; la FAA tiene
+ * los suyos (A, P, A&P) y no lleva habilitaciones de tipo. Qué códigos admite
+ * cada una lo dice la tabla `authority_licenses`, no este tipo.
+ */
+export type AuthorityCode = 'EASA' | 'UK_CAA' | 'CASA' | 'GCAA' | 'FAA';
 
 export type LicenseCode =
   | 'A1' | 'A2' | 'A3' | 'A4'
   | 'B1.1' | 'B1.2' | 'B1.3' | 'B1.4'
   | 'B2' | 'B2L' | 'B3' | 'L' | 'C';
+
+/**
+ * Los tres certificados de la FAA (14 CFR 65, migración 065).
+ *
+ * TIPO APARTE, y no tres miembros más de `LicenseCode`, por lo que dice esa
+ * migración: son otro sistema. No llevan habilitaciones de tipo
+ * (`authorities.has_type_ratings = false`), su `category_group` es 'FAA' y no
+ * 'A' —la `A` de Airframe no tiene nada que ver con las A1–A4 Part-66—, y no
+ * cruzan por equivalencia con ninguna Part-66. Fundirlos en `LicenseCode`
+ * habría obligado a toda función que hoy razona sobre categorías Part-66
+ * (propulsión, producto, rama de oficio) a contestar también por ellos.
+ *
+ * `A&P` satisface `A`, `P` y `A&P`. Lo dice `licenseCodeSatisfies`
+ * (src/constants/licenses.ts), y sólo ella.
+ */
+export type FaaLicenseCode = 'A' | 'P' | 'A&P';
+
+/**
+ * Cualquier código que una autoridad pueda emitir. Es el tipo de
+ * `TechnicianLicense.licenseCode` y de `Offer.licenseCode`: una credencial
+ * concreta y una oferta pueden ser FAA. `LicenseCode` a secas sigue
+ * significando "categoría Part-66" en todo lo demás, y por eso
+ * `TechnicianHabilitation.licenseCode` NO se ensancha: la FAA no tiene type
+ * ratings, así que ninguna habilitación puede colgar de un certificado suyo.
+ */
+export type AuthorityLicenseCode = LicenseCode | FaaLicenseCode;
+
+/** Mismo dominio que el CHECK de `engines.engine_type` (migración 067). */
+export type EngineType = 'turbofan' | 'turbojet' | 'turboprop' | 'turboshaft' | 'piston' | 'apu';
+
+/**
+ * Un motor del catálogo (`engines`, migración 067).
+ *
+ * Las dos columnas de agrupación SON los escalones del matching de motores:
+ * mismo id = motor exacto, mismo `family` = misma familia, mismo `engineType`
+ * = mismo tipo. Por eso `family` se repite entre filas y la clave natural es
+ * (manufacturer, displayName), no (manufacturer, family).
+ *
+ * `isActive = false` marca las genéricas ("<fabricante> (model not
+ * specified)", 17 filas del seed de la 071): nadie puede declararlas ni
+ * pedirlas, y el matching NUNCA les da crédito de motor exacto — sólo de
+ * familia, que es lo único que una genérica sabe decir.
+ */
+export interface EngineCatalog {
+  id: string;
+  manufacturer: string;
+  family: string;
+  engineType: EngineType;
+  displayName: string;
+  isActive: boolean;
+}
 
 export type ContractTypeCode = 'permanent' | 'long_term' | 'short_term';
 
@@ -94,6 +158,18 @@ export interface AircraftTypeRatingCatalog {
   aircraftCategory: AircraftRatingCategory;
   /** Optional EASA regulatory group/subgroup — not populated for the initial 80, kept for future use. */
   easaGroup?: string;
+  /**
+   * El motor del rating (`aircraft_type_ratings.engine_id`, migración 069).
+   *
+   * ⚠ ES LA ÚNICA FUENTE del escalón "motor implícito en un type rating".
+   * `engineManufacturer` / `engineFamily` de arriba son el texto de origen de
+   * EASA y están sucios (el Model 250 aparece como `Corp 250`, `250` y `M250`;
+   * 12 filas llevan el modelo escrito en el fabricante), así que inferir el
+   * motor leyéndolos da falsos positivos. No lo hagas: hay un test que lo fija.
+   *
+   * Ausente = el rating no dice qué motor lleva, y entonces no aporta ninguno.
+   */
+  engineId?: string;
   /** Which catalog batch/import this row came from, for future re-imports. */
   sourceRevision?: string;
   /**

@@ -29,15 +29,13 @@ import { offerApplicationRepository } from '../../../src/repositories/v2/offerAp
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch } from '../../../src/utils/matchingV2';
-import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { matchPairs, PairMatch } from '../../../src/utils/matchingV2';
 import { getSafeTechnicianPreview } from '../../../src/utils/privacyV2';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { OfferApplication } from '../../../src/types/offerRequest';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { TechnicianWithRelations } from '../../../src/types/technician';
 import { SafeTechnicianPreview } from '../../../src/types/privacy';
-import { MatchScore } from '../../../src/types/matching';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
 
@@ -48,7 +46,10 @@ type AppEntry = {
   offer: OfferWithRequirements | null;
   tech: TechnicianWithRelations | null;
   safePreview: SafeTechnicianPreview | null;
-  score: MatchScore | null;
+  // null = sin puntuar (técnico borrado, oferta desaparecida o catálogos sin
+  // cargar). Un par que el filtro saca llega como { eligible: false }: la
+  // candidatura existe y se enseña, sin porcentaje.
+  match: PairMatch | null;
 };
 
 function scoreColor(total: number): string {
@@ -86,13 +87,6 @@ export default function ApplicationsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
-  const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
-
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
     // vacio. El .finally(setLoading(false)) del efecto apaga el spinner, asi
@@ -110,6 +104,17 @@ export default function ApplicationsListScreen() {
     const techsMap: Record<string, TechnicianWithRelations> = {};
     uniqueTechIds.forEach((id, i) => { if (techResults[i]) techsMap[id] = techResults[i]!; });
 
+    // Paso 5b: los pares se puntúan en el servicio, con los dos catálogos y el
+    // filtro de elegibilidad — nunca con calculateOfferTechnicianMatch a pelo.
+    // El servicio ESPERA a sus catálogos, así que aquí ya no hay índice vacío
+    // que vigilar. Si no cargan, la lista sale sin porcentajes: un score
+    // erróneo es peor que ningún score, y perder las candidaturas, peor aún.
+    const scorable = apps.filter((app) => offersMap[app.offerId] && techsMap[app.technicianId]);
+    const pairResults = await matchPairs(
+      scorable.map((app) => ({ offer: offersMap[app.offerId], technician: techsMap[app.technicianId] })),
+    ).catch(() => null);
+    const matchByAppId = new Map(scorable.map((app, i) => [app.id, pairResults?.[i] ?? null]));
+
     const built: AppEntry[] = apps.map((app) => {
       const offer = offersMap[app.offerId] ?? null;
       const tech = techsMap[app.technicianId] ?? null;
@@ -118,9 +123,7 @@ export default function ApplicationsListScreen() {
         offer,
         tech,
         safePreview: tech ? getSafeTechnicianPreview(tech) : null,
-        score: catalogState === 'success' && offer && tech
-          ? calculateOfferTechnicianMatch(offer, tech, ratingIndex)
-          : null,
+        match: matchByAppId.get(app.id) ?? null,
       };
     });
 
@@ -144,13 +147,12 @@ export default function ApplicationsListScreen() {
     if (!signal.active) return;
     setUnreadIds(ids);
     setEntries(built);
-  }, [companyId, ratingIndex, catalogState]);
+  }, [companyId]);
 
-  // Señal de cancelacion compartida por el efecto de foco y el pull-to-refresh.
-  // load() la comprueba ANTES de cada setState, no solo en el .finally: cuando
-  // llega el catalogo, `load` cambia de identidad y el efecto relanza; sin esta
-  // señal habria dos load() en vuelo (uno con el indice vacio, otro lleno) y
-  // ganaria el que terminase el ultimo, de forma no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -175,10 +177,7 @@ export default function ApplicationsListScreen() {
 
   const pendingCount = entries.filter((e) => e.app.status === 'pending').length;
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar MatchBadge con un score calculado
-  // sobre un indice vacio.
-  if (loading || catalogState === 'loading') {
+  if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -228,8 +227,9 @@ export default function ApplicationsListScreen() {
           />
         ) : null}
 
-        {filtered.map(({ app, offer, tech, safePreview, score }) => {
+        {filtered.map(({ app, offer, tech, safePreview, match }) => {
           const status = statusInfo(app.status);
+          const score = match?.eligible ? match.score : null;
           const accent = score ? scoreColor(score.total) : companyUi.textMuted;
           const isUnread = unreadIds.has(app.id);
           // A technician account deleted after applying resolves to null
@@ -260,6 +260,7 @@ export default function ApplicationsListScreen() {
                     ) : null}
                   </View>
                   {score ? <MatchBadge score={score.total} context="match for this offer" notEligible={score.blockers.length > 0} /> : null}
+                  {match && !match.eligible ? <MatchBadge score={0} context="for this offer" notEligible /> : null}
                 </View>
 
                 {safePreview ? (

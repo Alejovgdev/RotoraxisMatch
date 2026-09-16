@@ -20,12 +20,16 @@ const LEVEL_COLOR: Record<MatchScore['level'], string> = {
 const BREAKDOWN_LABELS: Record<keyof MatchScore['breakdown'], string> = {
   habilitation: 'Habilitation',
   license: 'License',
+  engine: 'Engine',
   verified: 'Verified',
   contractFit: 'Contract fit',
   location: 'Location',
 };
 // Fixed display order — qualification first, since it dominates the score.
-const BREAKDOWN_ORDER: (keyof MatchScore['breakdown'])[] = ['habilitation', 'license', 'verified', 'contractFit', 'location'];
+// `engine` va con los otros dos ejes de cualificación: en una oferta de motor
+// es el único que puntúa, y en el resto vale 0 (la fila se pinta a 0, igual
+// que hoy se pinta `habilitation` en una oferta de sólo licencia).
+const BREAKDOWN_ORDER: (keyof MatchScore['breakdown'])[] = ['habilitation', 'license', 'engine', 'verified', 'contractFit', 'location'];
 
 // Renders the explainable part of a MatchScore — the numeric breakdown per
 // criterion, what matches, what needs clarification, which mandatory

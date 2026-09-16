@@ -1,3 +1,6 @@
+import type { TechnicianWithRelations } from './technician';
+import type { SafeTechnicianPreview } from './privacy';
+
 // A match score is ALWAYS tied to a specific offer + technician pair.
 // It is never a global score on a technician_profile row.
 //
@@ -58,6 +61,17 @@ export interface MatchScore {
     // vacío de contract_types = abierto a cualquiera = puntúa completo.
     contractFit: number;
     location: number;
+    /**
+     * El eje de motores (Fase 10). Sólo puede ser distinto de 0 en una oferta
+     * de motor, y allí `habilitation` y `license` valen siempre 0: son ejes
+     * excluyentes, no acumulables.
+     *
+     * Nunca vale 0 en una oferta de motor, ni siquiera sin motores
+     * declarados: el escalón más bajo de la escalera puntúa poco pero no
+     * cero, y de eso depende que el tope de cero cualificación no caiga
+     * sobre todo el mundo.
+     */
+    engine: number;
   };
   level: MatchLevel;
   matches: string[];          // human-readable confirmed matches
@@ -115,3 +129,15 @@ export const GENERAL_COMPATIBILITY_LABEL = 'General compatibility';
 // closed union rather than `string`: this type is what stops a typo in a
 // seventh screen from compiling (it briefly was `string`, and did).
 export type MatchDisplayLabel = MatchLabel | typeof GENERAL_COMPATIBILITY_LABEL;
+
+/**
+ * Un técnico candidato a una oferta, en las DOS formas que necesita el
+ * envoltorio oferta→técnicos (Fase 10, paso 5a): la completa, que es lo que
+ * puntúa el scorer, y la anonimizada, que es lo único que la pantalla de
+ * empresa puede recibir. Salen de la MISMA fila de `technician_public_view` y
+ * del mismo lote de relaciones, así que no pueden describir técnicos distintos.
+ */
+export interface TechnicianMatchCandidate {
+  technician: TechnicianWithRelations;
+  preview: SafeTechnicianPreview;
+}

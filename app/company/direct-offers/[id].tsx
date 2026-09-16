@@ -44,8 +44,7 @@ import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { calculateOfferTechnicianMatch, getMatchDisplayLabel } from '../../../src/utils/matchingV2';
-import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../../../src/lib/documentStorage';
 import { useCompanySession } from '../../../src/state/SessionContext';
@@ -93,19 +92,14 @@ export default function DirectOfferDetailScreen() {
   const [req, setReq] = useState<OfferRequest | null>(null);
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [techView, setTechView] = useState<TechnicianView | null>(null);
-  const [score, setScore] = useState<MatchScore | null>(null);
+  // Paso 5b: el par entero (ver app/company/applications/[id].tsx).
+  const [match, setMatch] = useState<PairMatch | null>(null);
+  const score: MatchScore | null = match?.eligible ? match.score : null;
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [viewingDocId, setViewingDocId] = useState<string | null>(null);
-
-  // El catalogo de ratings llega asincrono: en el primer render ratingIndex
-  // esta VACIO, y con el vacio areRatingsRelated() siempre da false, la
-  // habilitacion puntua 0 y ZERO_QUALIFICATION_CAP deja el total en 39 en vez
-  // del real. Por eso no se puntua hasta state === 'success': un score
-  // erroneo es peor que ningun score.
-  const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
 
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -131,9 +125,11 @@ export default function DirectOfferDetailScreen() {
       linkedOffer = await offerRepository.getWithRequirements(request.offerId);
       if (!signal.active) return;
       setOffer(linkedOffer);
-      if (catalogState === 'success' && linkedOffer && rel) {
-        setScore(calculateOfferTechnicianMatch(linkedOffer, rel, ratingIndex));
-      }
+      // El servicio espera a los dos catálogos y aplica el filtro; si no
+      // cargan, no hay bloque de match.
+      const pair = linkedOffer && rel ? await matchPair(linkedOffer, rel).catch(() => null) : null;
+      if (!signal.active) return;
+      setMatch(pair);
     }
 
     if (request.status === 'accepted') {
@@ -145,13 +141,12 @@ export default function DirectOfferDetailScreen() {
     }
 
     await activityRepository.markRead('company', companyId, id);
-  }, [companyId, id, ratingIndex, catalogState]);
+  }, [companyId, id]);
 
-  // Señal de cancelacion compartida por el efecto de foco y el pull-to-refresh.
-  // load() la comprueba ANTES de cada setState, no solo en el .finally: cuando
-  // llega el catalogo, `load` cambia de identidad y el efecto relanza; sin esta
-  // señal habria dos load() en vuelo (uno con el indice vacio, otro lleno) y
-  // ganaria el que terminase el ultimo, de forma no determinista.
+  // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
+  // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
+  // o se refresca con una carga aun en vuelo, sin esta señal habria dos load()
+  // escribiendo y ganaria el que terminase el ultimo, de forma no determinista.
   const loadSignal = useRef<{ active: boolean }>({ active: false });
 
   useFocusEffect(
@@ -201,10 +196,7 @@ export default function DirectOfferDetailScreen() {
     openDocumentUrl(url, win);
   }
 
-  // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
-  // carga no se pinta nada, para no enseñar el bloque Match con un score
-  // calculado sobre un indice vacio.
-  if (loading || catalogState === 'loading') {
+  if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -310,6 +302,9 @@ export default function DirectOfferDetailScreen() {
               />
               <MatchExplanation score={score} displayLabel={getMatchDisplayLabel(offer, score)} />
             </>
+          ) : null}
+          {match && !match.eligible ? (
+            <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
           ) : null}
           {req.message ? (
             <View style={styles.messageBlock}>

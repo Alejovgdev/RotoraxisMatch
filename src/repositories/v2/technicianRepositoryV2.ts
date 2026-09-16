@@ -7,6 +7,7 @@ import {
   AvailabilityStatus,
 } from '../../types/technician';
 import { SafeTechnicianPreview, TechnicianView, isUnlocked } from '../../types/privacy';
+import { TechnicianMatchCandidate } from '../../types/matching';
 import { LicenseCode } from '../../types/catalog';
 import { typesImpliedByLicenses } from '../../constants/licenses';
 import { technicianTypeLabel } from '../../constants/technicianTypes';
@@ -24,7 +25,12 @@ import {
   throwIfNoRows,
 } from './supabaseMappers';
 import { documentRepositoryV2 } from './documentRepositoryV2';
-import { planLicenseRemoval, LicenseEntry } from '../../utils/licenseUpdatePlan';
+import { planLicenseRemovalById, LicenseEntry } from '../../utils/licenseUpdatePlan';
+import { AuthorityCode } from '../../types/catalog';
+import { credentialLabel } from '../../constants/licenses';
+// Fase 10, paso 5b: aquí vivía DEFAULT_AUTHORITY = 'EASA', el relleno de la
+// autoridad mientras el perfil no la pedía. Se retira con el selector de
+// autoridad del perfil: un olvido falla a la vista, no se rellena aquí.
 import { matchesTechnicianSearchIdentity } from '../../utils/technicianSearchFilterMatch';
 
 // `technician_type` (singular) NO se pide en ninguno de los dos SELECT desde
@@ -178,7 +184,7 @@ function matchesSearchFilters(
   if (filters.availableImmediately === true && !preview.availability.immediately) return false;
   if (
     filters.licenseCodes && filters.licenseCodes.length > 0 &&
-    !filters.licenseCodes.some((code) => preview.licenses.includes(code as LicenseCode))
+    !preview.licenses.some((license) => filters.licenseCodes!.includes(license.licenseCode))
   ) {
     return false;
   }
@@ -291,6 +297,37 @@ export const technicianRepositoryV2 = {
     const publicRow = await getPublicRow(id);
     if (!publicRow) return null;
     return publicRowToPrivateCompat(publicRow, rel);
+  },
+
+  /**
+   * Los candidatos de una oferta, en un lote (Fase 10, paso 5a).
+   *
+   * Sustituye al bucle de getTechnicianMatchesForOffer, que por cada técnico
+   * llamaba en serie a getPublicWithRelations y a getSafeView: dos lecturas de
+   * la vista y dos cargas de relaciones (cinco tablas cada una) POR TÉCNICO.
+   * Aquí es una lectura de la vista y un lote de relaciones para todos, igual
+   * que search().
+   *
+   * Mismo conjunto que antes: verificados (lo que filtraban getPublicProfiles
+   * y getPublicWithRelations) y con el filtro duro de años en el servidor.
+   */
+  async getPublicMatchCandidates(minYearsExperience?: number): Promise<TechnicianMatchCandidate[]> {
+    const { data, error, count } = await applyMinYearsFilter(
+      supabase
+        .from('technician_public_view')
+        .select(PUBLIC_SELECT, { count: 'exact' })
+        .eq('verification_status', 'verified'),
+      minYearsExperience,
+    ).range(0, TECHNICIAN_FETCH_LIMIT - 1);
+    throwIfError(error);
+    warnIfTruncated('getPublicMatchCandidates', (data ?? []).length, count ?? null);
+
+    const rows = (data ?? []) as DbRow[];
+    const relations = await loadTechnicianRelations(rows.map((row) => row.id));
+    return rows.map((row) => ({
+      technician: publicRowToPrivateCompat(row, relations[row.id]),
+      preview: mapPublicTechnicianRow(row, relations[row.id]),
+    }));
   },
 
   async getPublicWithRelations(id: string): Promise<TechnicianWithRelations | null> {
@@ -426,13 +463,22 @@ export const technicianRepositoryV2 = {
       .upsert(
         entries.map((e) => ({
           technician_id: technicianId,
+          // Fase 10: NOT NULL y sin default en la base (073). Paso 5b: la manda
+          // el perfil; LicenseEntry la exige.
+          authority: e.authority,
           license_code: e.code,
           issued_at: e.issuedAt ?? null,
           expires_at: e.expiresAt ?? null,
         })),
-        { onConflict: 'technician_id,license_code' },
+        // ⚠ LITERAL DE CADENA, Y NINGÚN COMPILADOR LO MIRA. Tiene que nombrar
+        // las columnas de una constraint única REAL o Postgres devuelve 42P10
+        // y TODOS los guardados de licencia fallan. Copiado de
+        // uq_technician_licenses_authority_code (073), en su orden:
+        //   UNIQUE (technician_id, authority, license_code)
+        // Si esa constraint cambia, esta cadena cambia con ella.
+        { onConflict: 'technician_id,authority,license_code' },
       )
-      .select('license_code');
+      .select('id, authority, license_code');
     throwIfError(error);
     // Hay entradas que escribir, así que 0 filas sólo puede significar que RLS
     // (tl_insert_own / tl_update_own) no dejó pasar ninguna — nunca un no-op
@@ -453,42 +499,56 @@ export const technicianRepositoryV2 = {
    * codes that could NOT be removed, so the caller can tell the technician
    * why instead of surfacing a DB error.
    */
-  async removeUnreferencedLicenses(technicianId: string, nextCodes: string[]): Promise<{ blocked: string[] }> {
+  async removeUnreferencedLicenses(
+    technicianId: string,
+    next: { authority: string; code: string }[],
+  ): Promise<{ blocked: string[] }> {
     const { data: existingRows, error: selectError } = await supabase
       .from('technician_licenses')
-      .select('license_code')
+      .select('id, authority, license_code')
       .eq('technician_id', technicianId);
     throwIfError(selectError);
-    const existingCodes = (existingRows ?? []).map((r: any) => r.license_code as string);
+    const existing = (existingRows ?? []).map((r: any) => ({
+      id: r.id as string,
+      authority: r.authority as string,
+      code: r.license_code as string,
+    }));
 
-    const nextSet = new Set(nextCodes);
-    const candidateCodes = existingCodes.filter((c) => !nextSet.has(c));
-    if (candidateCodes.length === 0) return { blocked: [] };
+    // Paso 5b: el filtro es por CREDENCIAL (autoridad + código), no por
+    // código. Hasta que el perfil supo elegir autoridad, desmarcar "B1.1"
+    // quería decir "ninguna B1.1"; ahora el técnico puede quitar su B1.1 EASA
+    // y quedarse con la UK CAA, y un filtro por código borraría las dos.
+    const nextSet = new Set(next.map((l) => `${l.authority}|${l.code}`));
+    const candidates = existing.filter((l) => !nextSet.has(`${l.authority}|${l.code}`));
+    if (candidates.length === 0) return { blocked: [] };
 
+    const candidateIds = candidates.map((l) => l.id);
     const { data: depRows, error: depError } = await supabase
       .from('technician_habilitations')
-      .select('license_code')
+      .select('technician_license_id')
       .eq('technician_id', technicianId)
-      .in('license_code', candidateCodes);
+      .in('technician_license_id', candidateIds);
     throwIfError(depError);
-    const dependentCodes = [...new Set((depRows ?? []).map((r: any) => r.license_code as string))];
+    const dependents = (depRows ?? []).map((r: any) => ({ technicianLicenseId: r.technician_license_id as string }));
 
-    const plan = planLicenseRemoval(candidateCodes, dependentCodes);
+    const plan = planLicenseRemovalById(candidateIds, dependents);
 
     if (plan.deletes.length > 0) {
       const { data: deleted, error: deleteError } = await supabase
         .from('technician_licenses')
         .delete()
         .eq('technician_id', technicianId)
-        .in('license_code', plan.deletes)
-        .select('license_code');
+        .in('id', plan.deletes)
+        .select('id');
       throwIfError(deleteError);
       // plan.deletes sale de filas que acabamos de leer, así que si no cae
       // ninguna es que RLS bloqueó el borrado, no que ya no estuvieran.
       throwIfNoRows(deleted, 'Could not remove the deselected licences — your session may have expired.');
     }
 
-    return { blocked: plan.blocked };
+    // El aviso que ve el técnico habla de CREDENCIALES ("EASA B1.1"), no de ids.
+    const byId = new Map(candidates.map((l) => [l.id, credentialLabel(l.authority, l.code)]));
+    return { blocked: plan.blocked.map((id) => byId.get(id) ?? id) };
   },
 
   /**
@@ -505,6 +565,8 @@ export const technicianRepositoryV2 = {
     technicianId: string,
     entries: {
       licenseCode: string;
+      /** La autoridad de la licencia de la que cuelga. Obligatoria desde el paso 5b. */
+      authority: AuthorityCode;
       aircraftTypeRatingId: string;
       issuedAt?: string;
       expiresAt?: string;
@@ -524,11 +586,40 @@ export const technicianRepositoryV2 = {
     throwIfError(deleteError);
 
     if (entries.length === 0) return;
+
+    // Fase 10: la fila necesita el ID de la credencial, no su código. Se
+    // resuelve aquí, contra las licencias que el técnico tiene AHORA (el
+    // caller acaba de llamar a upsertLicenses, por eso el orden importa).
+    //
+    // Si el par autoridad+código no tiene licencia, se para ANTES de borrar
+    // nada: es exactamente la invariante de misma fila que protege CLAUDE.md
+    // —una habilitación no existe sin la licencia de la que cuelga— y la base
+    // la rechazaría igual, pero con un error de FK que no dice qué falta.
+    const { data: licenseRows, error: licenseError } = await supabase
+      .from('technician_licenses')
+      .select('id, authority, license_code')
+      .eq('technician_id', technicianId);
+    throwIfError(licenseError);
+    const licenseIdByKey = new Map<string, string>(
+      (licenseRows ?? []).map((r: any) => [`${r.authority}|${r.license_code}`, r.id as string]),
+    );
+    const resolved = entries.map((entry) => {
+      const authority = entry.authority;
+      const licenseId = licenseIdByKey.get(`${authority}|${entry.licenseCode}`);
+      if (!licenseId) {
+        throw new Error(
+          `Cannot save a ${entry.licenseCode} type rating: there is no ${authority} ${entry.licenseCode} licence on this profile. Add the licence first.`,
+        );
+      }
+      return { entry, licenseId };
+    });
+
     const { data, error } = await supabase
       .from('technician_habilitations')
       .insert(
-        entries.map((entry) => ({
+        resolved.map(({ entry, licenseId }) => ({
           technician_id: technicianId,
+          technician_license_id: licenseId,
           license_code: entry.licenseCode,
           aircraft_type_rating_id: entry.aircraftTypeRatingId,
           issued_at: entry.issuedAt ?? null,
@@ -591,6 +682,44 @@ export const technicianRepositoryV2 = {
     // El DELETE ya se llevó las filas viejas: si el INSERT no entra, el
     // técnico se queda SIN experiencia y la pantalla diría "guardado".
     throwIfNoRows(data, 'Could not save your aircraft experience — your session may have expired. Sign in again and retry.');
+  },
+
+  /**
+   * Reemplaza los motores declarados (Fase 10, paso 5b; tabla de la 068).
+   *
+   * Misma semántica de REEMPLAZO que replaceAircraftExperience y por el mismo
+   * motivo: la RLS de technician_engine_experience está calcada de la de
+   * experiencia en aeronaves y NO tiene política de UPDATE (tee_insert_own y
+   * tee_delete_own, nada más). Los años son display-only: se guardan y nunca
+   * puntúan.
+   */
+  async replaceEngineExperience(
+    technicianId: string,
+    entries: { engineId: string; years?: number }[],
+  ): Promise<void> {
+    // Sin comprobación de filas en el DELETE: el primer guardado borra cero.
+    const { error: deleteError } = await supabase
+      .from('technician_engine_experience')
+      .delete()
+      .eq('technician_id', technicianId);
+    throwIfError(deleteError);
+
+    if (entries.length === 0) return;
+    const { data, error } = await supabase
+      .from('technician_engine_experience')
+      .insert(
+        entries.map((entry) => ({
+          technician_id: technicianId,
+          engine_id: entry.engineId,
+          // NULL es "no declarado"; 0 sería una declaración.
+          years: entry.years ?? null,
+        })),
+      )
+      .select('id');
+    throwIfError(error);
+    // El DELETE ya se llevó las filas viejas: si el INSERT no entra, el
+    // técnico se queda SIN motores y la pantalla diría "guardado".
+    throwIfNoRows(data, 'Could not save your engines — your session may have expired. Sign in again and retry.');
   },
 
   /** Deletes a single habilitation row by id. */

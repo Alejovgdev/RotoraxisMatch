@@ -39,7 +39,7 @@
 // catalog request, never a real catalog row) simply resolves to no match,
 // never a crash.
 import { Offer, OfferRequiredHabilitation, OfferWithRequirements } from '../types/offer';
-import { LicenseCode } from '../types/catalog';
+import { AuthorityLicenseCode, EngineCatalog } from '../types/catalog';
 import { TechnicianHabilitation, TechnicianLicense, TechnicianWithRelations } from '../types/technician';
 import {
   MatchScore,
@@ -49,8 +49,15 @@ import {
   VigenciaNotice,
   GENERAL_COMPATIBILITY_LABEL,
 } from '../types/matching';
-import { TECHNICIAN_TYPES } from '../constants/technicianTypes';
+import { ENGINE_TECHNICIAN_TYPE_CODE, TECHNICIAN_TYPES } from '../constants/technicianTypes';
 import { AircraftRatingIndex, areRatingsRelated, getAircraftTypeRatingLabel } from '../constants/aircraftTypeRatings';
+import { EngineIndex, getEngineLabel } from '../constants/engines';
+import {
+  LicenseSatisfaction,
+  authorityLicenseCanExpire,
+  isB1LicenseCode,
+  licenseSatisfiesRequirement,
+} from '../constants/licenses';
 import { localDateToIso } from './dateField';
 
 // ── EL BLOQUE DE CUALIFICACIÓN VALE SIEMPRE 65 ───────────────────────────
@@ -98,14 +105,14 @@ import { localDateToIso } from './dateField';
 // cualquier forma, pero repartir habría reforzado la señal DÉBIL (tener la
 // licencia sin el rating). Concentrarlos afila justo la discriminación que
 // esta misión persigue.
-const QUALIFICATION_WEIGHTS = { verified: 15, habilitation: 45, license: 20, contractFit: 15, location: 5 } as const;
+const QUALIFICATION_WEIGHTS = { verified: 15, habilitation: 45, license: 20, contractFit: 15, location: 5, engine: 0 } as const;
 
 // Fase 6 tanda E — ofertas que NO exigen certificar ("ayudante para el A320,
 // sin licencia"). No hay licencia que puntuar (el CHECK de la 053 la fuerza a
 // NULL), así que sus 20 puntos van ÍNTEGROS a habilitación: sin licencia, la
 // AERONAVE es toda la cualificación que la oferta pide, y se lleva el bloque
 // entero.
-const NO_CERTIFICATION_WEIGHTS = { verified: 15, habilitation: 65, license: 0, contractFit: 15, location: 5 } as const;
+const NO_CERTIFICATION_WEIGHTS = { verified: 15, habilitation: 65, license: 0, contractFit: 15, location: 5, engine: 0 } as const;
 
 // Fase 9 — el caso espejo del anterior, y el que faltaba: la oferta exige
 // licencia pero NO nombra ninguna aeronave ("necesito un B1.1; la flota ya la
@@ -118,7 +125,7 @@ const NO_CERTIFICATION_WEIGHTS = { verified: 15, habilitation: 65, license: 0, c
 // una aeronave que la oferta nunca pidió. El candidato perfecto sacaba 68 y
 // quedaba POR DEBAJO del 75 de una oferta que no pide nada — la escalera dejaba
 // de ser monótona justo donde el técnico la lee, en su lista de ofertas.
-const LICENSE_ONLY_WEIGHTS = { verified: 15, habilitation: 0, license: 65, contractFit: 15, location: 5 } as const;
+const LICENSE_ONLY_WEIGHTS = { verified: 15, habilitation: 0, license: 65, contractFit: 15, location: 5, engine: 0 } as const;
 
 // habilitation/license are always 0 here (never awarded, never penalized —
 // see the no-requirements branch below) — kept as explicit fields rather
@@ -129,7 +136,28 @@ const LICENSE_ONLY_WEIGHTS = { verified: 15, habilitation: 0, license: 65, contr
 // Suma 75, NO 100, y es deliberado: es el techo de la rama sin requisitos.
 // Los 15 que liberaba `experience` se reparten DENTRO de ese techo
 // (25/25/10 → 30/30/15), así que el máximo de esta rama no cambia.
-const NO_REQUIREMENTS_WEIGHTS = { verified: 30, habilitation: 0, license: 0, contractFit: 30, location: 15 } as const;
+const NO_REQUIREMENTS_WEIGHTS = { verified: 30, habilitation: 0, license: 0, contractFit: 30, location: 15, engine: 0 } as const;
+
+// Fase 10 — LA QUINTA TABLA: la oferta de motor.
+//
+// Suma 100, como las tres que piden cualificación, y por el mismo motivo:
+// una oferta de motor PIDE algo comprobable, así que cumplirlo del todo vale
+// 100. Antes de esta tabla caía en NO_REQUIREMENTS_WEIGHTS —techo 75— y
+// encima anunciaba "no requiere licencia ni aeronave" en una oferta que sí
+// pide algo; el candidato perfecto se quedaba por debajo de una oferta que no
+// pide nada, que es justo la no-monotonía que la Fase 9 arregló en la rama de
+// sólo licencia.
+//
+// El reparto es el de NO_CERTIFICATION_WEIGHTS con `engine` en el sitio de
+// `habilitation`, y eso no es una analogía suelta: una oferta de motor tampoco
+// exige papel, así que el eje que pide se lleva el bloque entero de
+// cualificación (65). Ni escala nueva ni pesos inventados.
+//
+// `habilitation` y `license` son 0 AQUÍ Y SIEMPRE en esta rama: la licencia
+// no suma en una oferta de motor (un B2 con el CFM56 no supera a un técnico
+// sin licencia con el mismo CFM56), y las habilitaciones sólo entran como
+// FUENTE del motor implícito, nunca como puntos propios.
+const ENGINE_WEIGHTS = { verified: 15, habilitation: 0, license: 0, contractFit: 15, location: 5, engine: 65 } as const;
 
 export interface MatchScoreWeights {
   verified: number;
@@ -137,6 +165,8 @@ export interface MatchScoreWeights {
   license: number;
   contractFit: number;
   location: number;
+  /** Fase 10: sólo distinto de 0 en ENGINE_WEIGHTS. */
+  engine: number;
 }
 
 // Which weight set applies to a given offer, and therefore what each
@@ -158,6 +188,10 @@ export function getMatchScoreWeights(offer: OfferWithRequirements): MatchScoreWe
   //
   // Fase 9: cuatro. La que faltaba es la simétrica de la anterior — exige
   // licencia y no nombra aeronave.
+  // Fase 10: PRIMERA rama, antes que ninguna otra. Una oferta de motor no
+  // tiene licencia ni aeronaves, así que todas las preguntas de abajo
+  // responderían "no pide nada" sobre una oferta que sí pide.
+  if (offer.offerKind === 'engine') return ENGINE_WEIGHTS;
   if (!offerAsksForQualification(offer)) return NO_REQUIREMENTS_WEIGHTS;
   if (!offer.requiresCertification) return NO_CERTIFICATION_WEIGHTS;
   // `licenseCode != null` no es redundante con requiresCertification: el CHECK
@@ -172,7 +206,14 @@ export function getMatchScoreWeights(offer: OfferWithRequirements): MatchScoreWe
 // ¿La oferta pide ALGO comprobable sobre la cualificación? Una licencia, una
 // aeronave, o las dos. Si no pide nada, no hay nada que confirmar ni que
 // penalizar y se cae en NO_REQUIREMENTS_WEIGHTS.
-function offerAsksForQualification(offer: Pick<OfferWithRequirements, 'requiredHabilitations' | 'licenseCode'>): boolean {
+// Fase 10: el motor es cualificación. No es una licencia ni un type rating,
+// pero es una afirmación comprobable sobre lo que el técnico sabe hacer, y
+// contestar que no a esta pregunta era lo que mandaba la oferta de motor a la
+// escala de 75 Y hacía que el tope de cero cualificación ni se planteara.
+function offerAsksForQualification(
+  offer: Pick<OfferWithRequirements, 'requiredHabilitations' | 'licenseCode' | 'offerKind'>,
+): boolean {
+  if (offer.offerKind === 'engine') return true;
   return offer.requiredHabilitations.length > 0 || offer.licenseCode != null;
 }
 
@@ -207,6 +248,23 @@ const BROAD_TIER_FRACTIONS = { legacy_category_only: 0.29 } as const;
 // stays T1, missingRequirements is never triggered by this alone); it is a
 // paperwork/renewal flag, not a disqualification.
 const VIGENCIA_DEGRADATION_FRACTION = 0.1;
+
+// Fase 10 — equivalencia de autoridad: el mismo recorte multiplicativo, sobre
+// el mismo sitio, cuando la credencial que responde por la oferta viene de
+// OTRA autoridad Part-66 y la empresa marcó "acepto equivalentes".
+//
+// Multiplicador y NO un tier nuevo, a propósito: la equivalencia es
+// ortogonal a lo bien que el técnico cubre la aeronave. Un tier mezclaría las
+// dos cosas y obligaría a inventar la casilla "equivalente con la familia
+// pero no el motor". Así, la escalera de aeronave sigue siendo la misma y la
+// autoridad la escala entera.
+//
+// 0,2 y no 0,1: una licencia de otra autoridad es una diferencia de fondo
+// —otro regulador, otro proceso de convalidación— y no un papel por renovar.
+// Lo único que el número tiene que garantizar es el orden que fija el test:
+// exacto > equivalente > no aceptado, sin que el equivalente caiga al tope de
+// cero cualificación.
+const EQUIVALENT_AUTHORITY_DEGRADATION_FRACTION = 0.2;
 
 // Ladder of score ceilings, loosest to tightest — Fase 5.3 (2026-07-27),
 // checkpoint-confirmed. Applied together via applyScoreCeilings() below,
@@ -347,6 +405,23 @@ type VigenciaOutcome = { kind: 'ok' | 'expired' | 'not_current'; notice?: Vigenc
 // individually expired/not-current that would be a second, redundant
 // notice about the same underlying fact — so license expiry always wins
 // and produces exactly one notice, never two.
+/**
+ * ¿Está caducada ESTA credencial? (Fase 10)
+ *
+ * Única implementación de la pregunta, y consulta la autoridad ANTES que la
+ * fecha: el certificado de mecánico de la FAA (14 CFR 65.19) se emite sin
+ * expiración y no se renueva, así que ninguna licencia FAA caduca — ni
+ * siquiera una que, por un PATCH directo, llevara fecha escrita.
+ *
+ * Sin fecha = no caduca. Es el caso normal de la FAA y también el de una
+ * Part-66 cuyo titular no la ha rellenado: la ausencia de dato no penaliza.
+ */
+function isLicenseExpired(license: TechnicianLicense | undefined, today: string): boolean {
+  if (!license?.expiresAt) return false;
+  if (!authorityLicenseCanExpire(license.authority)) return false;
+  return license.expiresAt < today;
+}
+
 function evaluateVigencia(
   row: Pick<TechnicianHabilitation, 'expiresAt' | 'isCurrent'>,
   license: TechnicianLicense | undefined,
@@ -354,7 +429,7 @@ function evaluateVigencia(
   ratingLabel: string,
   today: string,
 ): VigenciaOutcome {
-  const licenseExpired = Boolean(license?.expiresAt && license.expiresAt < today);
+  const licenseExpired = isLicenseExpired(license, today);
   if (licenseExpired) {
     return {
       kind: 'expired',
@@ -383,21 +458,167 @@ function evaluateVigencia(
   return { kind: 'ok' };
 }
 
+/**
+ * ¿CUÁL de las licencias del técnico responde por esta oferta, y con qué
+ * exactitud? (Fase 10, pasos 3 y 4)
+ *
+ * Hasta el paso 3 era `licenses.find(l => l.licenseCode === código)`: la
+ * PRIMERA DEL ARRAY. Inofensivo mientras el UNIQUE (technician_id,
+ * license_code) garantizaba que sólo había una; desde la 073 un técnico puede
+ * tener una B1.1 EASA y una B1.1 UK CAA, y "la primera" pasa a ser el orden en
+ * que PostgREST devolvió las filas. Esa elección decide la vigencia, y la
+ * vigencia decide entre 100 y 39 puntos.
+ *
+ * ── SE ELIGE UNA VEZ POR PAR (OFERTA, TÉCNICO), NO UNA POR AERONAVE ──────
+ * Ésta es la parte que hay que entender antes de tocar nada. Si la elección se
+ * hiciera dentro de cada requisito, un técnico con el A320 bajo su EASA y el
+ * B777 bajo su UK CAA cumpliría una oferta que exige LAS DOS: cada aeronave
+ * elegiría la licencia que le conviene. Eso es exactamente la combinación
+ * falsa que la invariante de MISMA FILA prohíbe, colada por la puerta de la
+ * autoridad. Una credencial responde por la oferta entera o no responde.
+ *
+ * ── EL ORDEN DE PREFERENCIA, Y POR QUÉ ÉSE ──────────────────────────────
+ *   1. CUALIFICACIÓN VÁLIDA. Sólo compiten las que satisfacen lo que la oferta
+ *      pide: código (con A&P cubriendo A y P) y autoridad, exacta o
+ *      equivalente si la empresa marcó la casilla. El resto ni entra.
+ *   2. CALIDAD: cuántas de las aeronaves pedidas sostiene, y en qué tier. Es
+ *      lo que la oferta vino a preguntar, así que va antes que cualquier
+ *      consideración sobre el papel.
+ *   3. VIGENCIA: primero las vigentes, y entre ellas la de caducidad más
+ *      lejana (sin fecha = no caduca = la mejor).
+ *   4. EXACTA SOBRE EQUIVALENTE, sólo a igualdad de todo lo anterior.
+ *   5. Desempate por id, para que el mismo par puntúe siempre igual pase lo
+ *      que pase con el orden de las filas.
+ *
+ * El 3 antes del 4 es una decisión, no un descuido: una EASA CADUCADA no debe
+ * bloquear a una UK CAA VIGENTE en una oferta que acepta equivalentes. Con la
+ * caducada elegida el técnico sacaría el tope de 39 teniendo en la mano una
+ * credencial válida para ese trabajo.
+ */
+interface SelectedLicense {
+  license: TechnicianLicense;
+  satisfaction: LicenseSatisfaction;
+}
+
+function selectLicenseForOffer(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptsEquivalent' | 'requiredHabilitations'>,
+  technician: TechnicianWithRelations,
+  ratingIndex: AircraftRatingIndex,
+  today: string,
+): SelectedLicense | undefined {
+  const required = offer.licenseCode;
+  if (!required) return undefined;
+
+  const candidates: SelectedLicense[] = [];
+  for (const license of technician.licenses) {
+    const satisfaction = licenseSatisfiesRequirement(
+      license,
+      { authority: offer.licenseAuthority, licenseCode: required },
+      offer.acceptsEquivalent,
+    );
+    if (satisfaction) candidates.push({ license, satisfaction });
+  }
+  if (candidates.length <= 1) return candidates[0];
+
+  const rank = (c: SelectedLicense) => ({
+    quality: licenseCoverageQuality(c.license, offer.requiredHabilitations, technician, ratingIndex),
+    expired: isLicenseExpired(c.license, today),
+    // Sin fecha de caducidad = no caduca: el mejor sostén posible.
+    expiresAt: c.license.expiresAt ?? '9999-12-31',
+    exact: c.satisfaction === 'exact',
+  });
+  return [...candidates].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra.quality !== rb.quality) return rb.quality - ra.quality;
+    if (ra.expired !== rb.expired) return ra.expired ? 1 : -1;
+    if (ra.expiresAt !== rb.expiresAt) return ra.expiresAt < rb.expiresAt ? 1 : -1;
+    if (ra.exact !== rb.exact) return ra.exact ? -1 : 1;
+    return a.license.id < b.license.id ? -1 : a.license.id > b.license.id ? 1 : 0;
+  })[0];
+}
+
+// Cuánto de lo que la oferta pide sostiene ESTA credencial, sumando el tier de
+// cada aeronave. Sin aeronaves pedidas todas empatan en 0 y decide el criterio
+// siguiente, que es lo correcto: no hay nada que cubrir mejor o peor.
+//
+// La vigencia NO entra aquí a propósito — es el criterio 3, y mezclarla haría
+// que una credencial caducada con la aeronave perdiera contra una vigente sin
+// ella por el motivo equivocado (o al revés, según el orden).
+function licenseCoverageQuality(
+  license: TechnicianLicense,
+  requirements: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>[],
+  technician: TechnicianWithRelations,
+  ratingIndex: AircraftRatingIndex,
+): number {
+  if (requirements.length === 0) return 0;
+  const rows = habilitationsOfLicense(technician, license);
+  return requirements.reduce(
+    (sum, req) => sum + TIER_RANK[bestHabilitationTier(rows, req.aircraftTypeRatingId, ratingIndex).tier],
+    0,
+  );
+}
+
+// ¿Cuelgan de ESTA credencial? Por id, nunca por código (Fase 10, paso 3).
+//
+// El paso 3 tenía aquí una red para filas con `technicianLicenseId` nulo. Se
+// retira en el paso 4: la columna es NOT NULL con FK desde la 074, así que esa
+// fila no existe, y la red sólo podía acertar por código — que es justamente
+// lo que deja de identificar una credencial en cuanto hay dos autoridades.
+// Una red que no puede distinguir las dos B1.1 no es una red, es el bug.
+function habilitationsOfLicense(
+  technician: TechnicianWithRelations,
+  license: TechnicianLicense | undefined,
+): TechnicianHabilitation[] {
+  if (!license) return [];
+  return technician.habilitations.filter((h) => h.technicianLicenseId === license.id);
+}
+
+// El tier de UNA aeronave sobre las filas de UNA credencial, sin mirar fechas.
+//
+// Separado de evaluateHabilitationRequirement porque lo necesitan dos
+// preguntas distintas: qué nota saca el requisito (allí, con vigencia y
+// textos) y qué credencial elegir (licenseCoverageQuality, sin nada de eso).
+// Duplicar el emparejamiento en los dos sitios habría sido la forma de que la
+// elección y la puntuación acabaran discrepando.
+function bestHabilitationTier(
+  rows: TechnicianHabilitation[],
+  requiredRatingId: string,
+  ratingIndex: AircraftRatingIndex,
+): { tier: HabilitationTier; row?: TechnicianHabilitation } {
+  // T1 — exact: same license, same rating, in the same row.
+  const exactRow = rows.find((h) => h.aircraftTypeRatingId === requiredRatingId);
+  if (exactRow) return { tier: 'exact', row: exactRow };
+
+  // T2 — related_family: same license, a different rating in the same
+  // aircraft family (same manufacturer, overlapping family), different engine.
+  const relatedRow = rows.find(
+    (h): h is TechnicianHabilitation & { aircraftTypeRatingId: string } =>
+      Boolean(h.aircraftTypeRatingId) &&
+      areRatingsRelated(h.aircraftTypeRatingId as string, requiredRatingId, ratingIndex),
+  );
+  if (relatedRow) return { tier: 'related_family', row: relatedRow };
+
+  return { tier: 'not_met' };
+}
+
 // Fase 6 tanda D: la licencia ya no viene en `req` — es de la OFERTA, y se
 // pasa aparte. El emparejamiento sigue siendo exactamente igual de estricto:
 // se cruza contra las filas del técnico que tienen ESA licencia, nunca
 // combinando un chequeo de licencia con otro de aeronave por separado.
 function evaluateHabilitationRequirement(
   req: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>,
-  offerLicenseCode: LicenseCode,
+  offerLicenseCode: AuthorityLicenseCode,
+  license: TechnicianLicense | undefined,
   technician: TechnicianWithRelations,
   ratingIndex: AircraftRatingIndex,
   today: string,
 ): RequirementOutcome {
   const reqLabel = getAircraftTypeRatingLabel(req.aircraftTypeRatingId, ratingIndex);
-  const rating = ratingIndex.get(req.aircraftTypeRatingId);
-  const sameLicenseRows = technician.habilitations.filter((h) => h.licenseCode === offerLicenseCode);
-  const license = technician.licenses.find((l) => l.licenseCode === offerLicenseCode);
+  // Fase 10, paso 4: la credencial LLEGA ELEGIDA. Antes se elegía aquí dentro,
+  // una vez por aeronave, y con dos licencias del mismo código eso permitía que
+  // cada requisito escogiera la que le convenía — ver selectLicenseForOffer.
+  const sameLicenseRows = habilitationsOfLicense(technician, license);
+  const best = bestHabilitationTier(sameLicenseRows, req.aircraftTypeRatingId, ratingIndex);
 
   // T1 — exact: same license, same rating, in the same row. Deliberately
   // does not look at experienceYears — optional, informational only, never
@@ -410,9 +631,8 @@ function evaluateHabilitationRequirement(
   // may record some B2 endorsements without an engine designation. Not
   // special-cased here — would affect this tier and T2 below, and the
   // category pre-filter planned for a later phase.
-  const exactRow = sameLicenseRows.find((h) => h.aircraftTypeRatingId === req.aircraftTypeRatingId);
-  if (exactRow) {
-    const vigencia = evaluateVigencia(exactRow, license, offerLicenseCode, reqLabel, today);
+  if (best.tier === 'exact') {
+    const vigencia = evaluateVigencia(best.row!, license, offerLicenseCode, reqLabel, today);
     // Fase 6 tanda E: una CADUCIDAD (licencia o rating) en una oferta que
     // exige certificar no es una degradación, es una descalificación —
     // legalmente no puede firmar ese trabajo. Cae a 'not_met', que arrastra
@@ -432,13 +652,9 @@ function evaluateHabilitationRequirement(
   // T2 — related_family: same license, a different rating in the same
   // aircraft family (same manufacturer, overlapping family), different
   // engine.
-  const relatedRow = sameLicenseRows.find(
-    (h): h is TechnicianHabilitation & { aircraftTypeRatingId: string } =>
-      Boolean(h.aircraftTypeRatingId) && areRatingsRelated(h.aircraftTypeRatingId as string, req.aircraftTypeRatingId, ratingIndex),
-  );
-  if (relatedRow) {
-    const heldLabel = getAircraftTypeRatingLabel(relatedRow.aircraftTypeRatingId, ratingIndex);
-    const vigencia = evaluateVigencia(relatedRow, license, offerLicenseCode, heldLabel, today);
+  if (best.tier === 'related_family') {
+    const heldLabel = getAircraftTypeRatingLabel(best.row!.aircraftTypeRatingId as string, ratingIndex);
+    const vigencia = evaluateVigencia(best.row!, license, offerLicenseCode, heldLabel, today);
     if (vigencia.kind === 'expired') {
       return { tier: 'not_met', expiredText: `${offerLicenseCode} + ${heldLabel}`, vigenciaNotice: vigencia.notice };
     }
@@ -503,7 +719,10 @@ function evaluateAircraftKnowledgeRequirement(
   // no tiene fechas que degradar).
   const exactHab = technician.habilitations.find((h) => h.aircraftTypeRatingId === req.aircraftTypeRatingId);
   if (exactHab) {
-    const license = technician.licenses.find((l) => l.licenseCode === exactHab.licenseCode);
+    // Por el id de la credencial de la que cuelga la habilitación: es la
+    // única que puede caducarla. Buscarla por código elegía la primera del
+    // array, que con dos autoridades puede ser otra distinta.
+    const license = technician.licenses.find((l) => l.id === exactHab.technicianLicenseId);
     const vigencia = evaluateVigencia(exactHab, license, exactHab.licenseCode, reqLabel, today);
     // Sin certificación una caducidad NO excluye: degrada, como siempre. Para
     // trabajar de ayudante el papel vencido no borra la experiencia.
@@ -554,6 +773,13 @@ interface BroadOutcome {
   tier: 'legacy_category_only' | 'not_met';
   matchText?: string;
   clarificationText?: string;
+  /**
+   * Fase 10, paso 3: la licencia EXISTE pero está caducada. Se distingue de
+   * "no la tiene" porque el mensaje es otro y es accionable — renovar, no
+   * formarse — igual que ya hacía la rama con aeronave (tanda E).
+   */
+  expiredText?: string;
+  vigenciaNotice?: VigenciaNotice;
 }
 
 // Fase 5 (2026-08-04) — this was evaluateLegacyBroadMatch, and it evaluated
@@ -581,20 +807,41 @@ interface BroadOutcome {
 // Esta rama pasa de residual a NORMAL: "exijo B1.1, me da igual la aeronave"
 // es justo lo que la tanda hace fácil de expresar.
 function evaluateLicenseCategoryMatch(
-  offer: OfferWithRequirements,
-  technician: TechnicianWithRelations,
+  offer: Pick<OfferWithRequirements, 'licenseCode'>,
+  license: TechnicianLicense | undefined,
+  today: string,
 ): BroadOutcome {
   const required = offer.licenseCode;
   if (!required) return { tier: 'not_met' };
 
-  // The offer never asked for a specific aircraft, so there is nothing to
-  // confirm beyond the license category itself — the technician could hold
-  // this license with zero aircraft experience on record.
-  const holds =
-    technician.licenses.some((l) => l.licenseCode === required) ||
-    technician.habilitations.some((h) => h.licenseCode === required);
+  // La credencial LLEGA ELEGIDA (Fase 10, paso 4). Aquí ya no se busca nada:
+  // quien decide cuál responde por la oferta —código, autoridad, equivalencias
+  // y el A&P de la FAA— es selectLicenseForOffer, y tiene que ser la misma
+  // decisión que en la rama con aeronave.
 
-  return holds
+  // Fase 10, paso 3 — LA CADUCIDAD TAMBIÉN CUENTA AQUÍ.
+  //
+  // Esta rama no la miraba: una B1.1 vencida puntuaba 100 en una oferta que
+  // sólo pedía la B1.1, mientras la MISMA licencia vencida en una oferta que
+  // nombra aeronave caía al tope de 39 (tanda E). El criterio es el mismo en
+  // los dos sitios y no depende de que la oferta liste aviones: con la
+  // licencia vencida no se puede firmar el trabajo.
+  if (isLicenseExpired(license, today)) {
+    return {
+      tier: 'not_met',
+      expiredText: `${required}`,
+      vigenciaNotice: {
+        label: 'Expired',
+        detail: `License ${required} expired ${toYearMonth(license!.expiresAt!)}.`,
+      },
+    };
+  }
+
+  // Sin red por código. La que había —"o alguna habilitación declara este
+  // código"— cubría filas sin licencia, que desde la 074 no pueden existir, y
+  // con dos autoridades habría contestado que sí a una oferta EASA por una
+  // habilitación colgada de una UK CAA.
+  return license
     ? {
         tier: 'legacy_category_only',
         matchText: 'Required license category present in profile',
@@ -616,11 +863,18 @@ function upgradeTier(current: HabilitationTier, next: HabilitationTier): Habilit
 // check — defaults to the real clock. Tests pass a fixed Date so expired-
 // vs-future fixtures are deterministic regardless of when they run (same
 // dependency-injection style as aircraftTypeRatingsCache.ts).
+//
+// engineIndex: el catálogo de motores ya cargado, igual que ratingIndex. Vacío
+// por defecto para no obligar a los llamadores de ofertas de aeronave —que son
+// todos hoy— a cargar un catálogo que no van a mirar. En una oferta de motor
+// sin él, el escalón exacto sigue funcionando (compara ids) y los de familia y
+// tipo no pueden resolverse: bajo, nunca inventado.
 export function calculateOfferTechnicianMatch(
   offer: OfferWithRequirements,
   technician: TechnicianWithRelations,
   ratingIndex: AircraftRatingIndex,
   now: Date = new Date(),
+  engineIndex: EngineIndex = new Map(),
 ): MatchScore {
   const hasQualificationRequirements = offerAsksForQualification(offer);
   const weights = getMatchScoreWeights(offer);
@@ -631,6 +885,7 @@ export function calculateOfferTechnicianMatch(
   let license = 0;
   let contractFit = 0;
   let location = 0;
+  let engine = 0;
 
   const matches: string[] = [];
   const clarifications: string[] = [];
@@ -647,7 +902,35 @@ export function calculateOfferTechnicianMatch(
 
   const offerLicenseCode = offer.licenseCode;
 
-  if (offer.requiredHabilitations.length > 0) {
+  // Fase 10 — LA CREDENCIAL SE ELIGE AQUÍ, UNA VEZ, ANTES DE PUNTUAR NADA.
+  // Ver selectLicenseForOffer: elegirla dentro de cada requisito dejaría que
+  // una oferta que exige dos aeronaves se cumpliera con una licencia distinta
+  // por aeronave.
+  const selectedLicense = selectLicenseForOffer(offer, technician, ratingIndex, today);
+
+  // El recorte por equivalencia de autoridad. Multiplica a los DOS ejes de
+  // papel (habilitación y licencia) porque los dos salen de la misma
+  // credencial: si la que responde es de otra autoridad, lo es para todo lo
+  // que sostiene, no sólo para la línea de licencia.
+  const equivalenceFraction =
+    selectedLicense?.satisfaction === 'equivalent' ? 1 - EQUIVALENT_AUTHORITY_DEGRADATION_FRACTION : 1;
+
+  if (offer.offerKind === 'engine') {
+    // ── Oferta de motor ────────────────────────────────────────────────
+    // Ni licencia ni aeronaves: un solo eje, y con el bloque de cualificación
+    // entero (ENGINE_WEIGHTS). `habilitation` y `license` se quedan en 0 —no
+    // por no haberlos calculado, sino porque su peso es 0 en esta rama— y eso
+    // es lo que hace que un B2 con el motor pedido no supere a un técnico sin
+    // licencia con el mismo motor.
+    const outcome = evaluateEngineRequirement(offer.requiredEngineId, technician, ratingIndex, engineIndex);
+    engine = Math.round(weights.engine * ENGINE_TIER_FRACTIONS[outcome.tier]);
+    level = ENGINE_TIER_LEVEL[outcome.tier];
+    if (outcome.matchText) matches.push(outcome.matchText);
+    if (outcome.clarificationText) clarifications.push(outcome.clarificationText);
+    // Sin missingRequirements: no tener el motor pedido baja la nota, no es un
+    // requisito incumplido que nombrar. La oferta pide un motor y el eje
+    // siempre contesta algo — incluso "ninguno", que puntúa poco pero cuenta.
+  } else if (offer.requiredHabilitations.length > 0) {
     // Fase 6 tanda E — LA FUENTE DE EVIDENCIA LA ELIGE LA OFERTA.
     //
     //   requiresCertification = true  -> sólo technician_habilitations, y sólo
@@ -660,7 +943,8 @@ export function calculateOfferTechnicianMatch(
     //
     // Es el interruptor que la tanda C dejó montado sin conectar.
     const evaluate = offer.requiresCertification && offerLicenseCode
-      ? (req: OfferRequiredHabilitation) => evaluateHabilitationRequirement(req, offerLicenseCode, technician, ratingIndex, today)
+      ? (req: OfferRequiredHabilitation) =>
+          evaluateHabilitationRequirement(req, offerLicenseCode, selectedLicense?.license, technician, ratingIndex, today)
       : (req: OfferRequiredHabilitation) => evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today);
 
     //
@@ -729,10 +1013,13 @@ export function calculateOfferTechnicianMatch(
     // (NO_CERTIFICATION_WEIGHTS), así que este cálculo no puede sumar nada
     // aunque el técnico tenga licencias. No hace falta condicionarlo: los 20
     // puntos ya están en habilitación.
-    const licenseHeld =
-      offerLicenseCode != null &&
-      (technician.licenses.some((l) => l.licenseCode === offerLicenseCode) ||
-        technician.habilitations.some((h) => h.licenseCode === offerLicenseCode));
+    // Fase 10: "¿tiene la licencia?" es "¿hay credencial elegida?", ni más ni
+    // menos. Antes se comparaba el código a mano contra las licencias Y contra
+    // las habilitaciones, y eso ignoraba la autoridad: una B1.1 UK CAA cobraba
+    // los 20 puntos de una oferta EASA sin equivalencias. La pregunta la
+    // contesta selectLicenseForOffer, que sí mira código, autoridad, casilla
+    // de equivalencias y el A&P de la FAA.
+    const licenseHeld = selectedLicense != null;
 
     // `everyAircraftExact` sólo degrada el nivel cuando la oferta EXIGE todas
     // las aeronaves. Con "basta con una", cubrir una de tres es un match
@@ -743,12 +1030,14 @@ export function calculateOfferTechnicianMatch(
     const requiredSetSatisfied = !offer.requiresAllAircraft || everyAircraftExact;
     level = bestTier === 'exact' && requiredSetSatisfied ? 'exact' : bestTier !== 'not_met' ? 'related' : 'not_met';
     const vigenciaFraction = vigenciaDegraded ? 1 - VIGENCIA_DEGRADATION_FRACTION : 1;
-    habilitation = Math.round(weights.habilitation * HABILITATION_TIER_FRACTIONS[bestTier] * vigenciaFraction);
-    license = licenseHeld ? weights.license : 0;
+    habilitation = Math.round(
+      weights.habilitation * HABILITATION_TIER_FRACTIONS[bestTier] * vigenciaFraction * equivalenceFraction,
+    );
+    license = licenseHeld ? Math.round(weights.license * equivalenceFraction) : 0;
   } else if (hasQualificationRequirements) {
     // No aircraft named — the offer only states its license category, so
     // fall back to the category check.
-    const broad = evaluateLicenseCategoryMatch(offer, technician);
+    const broad = evaluateLicenseCategoryMatch(offer, selectedLicense?.license, today);
     if (broad.tier !== 'not_met') {
       level = 'legacy';
       if (broad.matchText) matches.push(broad.matchText);
@@ -761,15 +1050,22 @@ export function calculateOfferTechnicianMatch(
       // volvería a aplicarse si alguna rama futura vuelve a puntuar la
       // aeronave aquí; hoy multiplica a cero.
       habilitation = Math.round(weights.habilitation * BROAD_TIER_FRACTIONS[broad.tier]);
-      license = weights.license;
+      license = Math.round(weights.license * equivalenceFraction);
     } else {
       level = 'not_met';
       habilitation = 0;
       license = 0;
-      // La SEGUNDA fuente de missingRequirements, y la que sobrevive intacta
-      // a la tanda D: no depende de mandatory/preferred, sino de que la
-      // oferta pida una licencia que el técnico no tiene.
-      missingRequirements.push(`Required license: ${offer.licenseCode}`);
+      if (broad.expiredText) {
+        // La tiene, vencida. Mismo formato que la rama con aeronave, para que
+        // las dos pantallas digan lo mismo: qué caducó, no qué falta.
+        missingRequirements.push(`${broad.expiredText} — expired`);
+        if (broad.vigenciaNotice) vigenciaNotices.push(broad.vigenciaNotice);
+      } else {
+        // La SEGUNDA fuente de missingRequirements, y la que sobrevive intacta
+        // a la tanda D: no depende de mandatory/preferred, sino de que la
+        // oferta pida una licencia que el técnico no tiene.
+        missingRequirements.push(`Required license: ${offer.licenseCode}`);
+      }
     }
   } else {
     // The offer specifies no qualification requirement at all — habilitation
@@ -836,7 +1132,17 @@ export function calculateOfferTechnicianMatch(
   // A technician can declare several types (Fase 6 tanda A), so this is a
   // membership check: matching ANY declared type is sufficient. The offer
   // always declares exactly one type (`offers.technician_type` is NOT NULL).
-  if (technician.technicianTypes.includes(offer.technicianType)) {
+  // Fase 10 — NO SE APLICA EN OFERTAS DE MOTOR, y no es una excepción de
+  // conveniencia: `offers.technician_type` es NOT NULL, así que TODA oferta
+  // nombra un oficio, incluidas las de motor, donde ese campo no describe nada
+  // que la oferta pida. Con el techo puesto, un mecánico con el CFM56 exacto
+  // caía a 19 frente a una oferta cuyo único requisito ya cumplía. Aquí el
+  // oficio se calla igual que se calla la habilitación: ni suma ni topa. La
+  // columna se queda como está — cambiarla a NULL era mover el esquema para
+  // arreglar un problema del scorer.
+  if (offer.offerKind === 'engine') {
+    // Nada: ni línea de match, ni aclaración, ni techo.
+  } else if (technician.technicianTypes.includes(offer.technicianType)) {
     matches.push(`Technician type: ${technicianTypeLabel(offer.technicianType)}`);
   } else {
     const profileIs = technician.technicianTypes.map(technicianTypeLabel).join(', ');
@@ -867,7 +1173,7 @@ export function calculateOfferTechnicianMatch(
     );
   }
 
-  const rawTotal = verified + habilitation + license + contractFit + location;
+  const rawTotal = verified + habilitation + license + contractFit + location + engine;
 
   // Every score ceiling is applied in one place — see applyScoreCeilings()
   // and the ladder documented above it. Most restrictive always wins,
@@ -880,8 +1186,21 @@ export function calculateOfferTechnicianMatch(
   // fase arregla. La regla que el tope defiende no cambia ni un ápice: en una
   // oferta que nombra aeronave, tener la licencia sin el rating sigue topado
   // en ZERO_QUALIFICATION_CAP.
+  //
+  // Fase 10 — tercera rama: en una oferta de motor el eje que la oferta pide es
+  // el motor. Preguntar por la habilitación o por la licencia allí daba SIEMPRE
+  // cero (sus pesos son 0 por construcción) y tumbaba al candidato perfecto al
+  // tope de 39. Como el escalón más bajo del eje puntúa 3 y no 0, esta rama no
+  // se cumple nunca hoy — y está escrita igualmente, porque el tope defiende
+  // una regla ("cero en lo que la oferta pidió no puede leerse como Partial"),
+  // no un número, y bajar NO_ENGINE a cero no debe abrir el agujero en
+  // silencio.
   const zeroOnRequestedAxis =
-    offer.requiredHabilitations.length > 0 ? habilitation === 0 : license === 0;
+    offer.offerKind === 'engine'
+      ? engine === 0
+      : offer.requiredHabilitations.length > 0
+        ? habilitation === 0
+        : license === 0;
 
   const total = applyScoreCeilings(rawTotal, {
     hasIncompleteAircraftSet: missingRequirements.length > 0,
@@ -895,7 +1214,7 @@ export function calculateOfferTechnicianMatch(
     technicianId: technician.id,
     total,
     label: getMatchLabel(total),
-    breakdown: { verified, habilitation, license, contractFit, location },
+    breakdown: { verified, habilitation, license, contractFit, location, engine },
     level,
     matches,
     clarifications,
@@ -928,4 +1247,393 @@ export function getMatchDisplayLabel(
   score: Pick<MatchScore, 'label'>,
 ): MatchDisplayLabel {
   return offer.requiresCertification ? score.label : GENERAL_COMPATIBILITY_LABEL;
+}
+
+// PRESENTACIÓN — el texto de un par que el filtro saca (paso 5b). Un solo sitio
+// para el copy, por la misma razón que GENERAL_COMPATIBILITY_LABEL: lo pintan
+// varias pantallas y cada copia escrita a mano diría una cosa distinta.
+export function ineligibilityReasonText(reason: IneligibilityReason): string {
+  switch (reason) {
+    case 'no_engine_experience':
+      return 'This engine offer is for technicians with engine experience: a declared engine, a B1 type rating on this engine or its family, or the Engine Technician trade.';
+    case 'licensed_technician':
+      return 'This offer is only for technicians without a licence.';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// EL EJE DE MOTORES (Fase 10)
+//
+// Una oferta de motor no pide licencia ni aeronaves: pide UN MOTOR. Hasta esta
+// fase el scorer no sabía que ese eje existía, y las tres consecuencias
+// hundían al candidato bueno — caía en la escala de 75, se comía el tope de
+// cero cualificación por no tener ni habilitación ni licencia, y el oficio le
+// topaba a 19 si no coincidía. Las tres se arreglan aquí y en las tres ramas
+// que llaman a esto, no con excepciones sueltas.
+//
+// LA ESCALERA, de más a menos evidencia:
+//   declared_exact  el técnico DECLARÓ ese motor.
+//   implicit_exact  ese motor cuelga de un type rating B1 que el técnico tiene.
+//   same_family     mismo `engines.family` (CFM56-7B / CFM56-5B), declarado o
+//                   por type rating B1.
+//   same_type       mismo `engines.engine_type` (dos turbofanes cualesquiera).
+//   other_type      tiene motores, ninguno se parece.
+//   none            no ha declarado motores ni tiene ratings B1 con motor.
+//
+// `same_type` y `other_type` son los dos "motor sin relación" del paso 5b,
+// partidos: un turbofán de otra familia se parece más a un CFM56 que un
+// turboeje. Los dos quedan por debajo de la familia y por encima de `none`,
+// que es el orden que fija el paso.
+//
+// CUATRO REGLAS QUE NO SON NEGOCIABLES:
+//
+//  1. El motor implícito sale de `AircraftTypeRatingCatalog.engineId` Y DE
+//     NADA MÁS. `engineManufacturer` / `engineFamily` son texto EASA sucio
+//     (`Corp 250` es el Model 250 mal partido, 12 filas llevan el modelo
+//     escrito en el fabricante), y leerlos daría el motor equivocado con cara
+//     de acierto.
+//
+//  1b. Y sólo de habilitaciones colgadas de una B1 (B1.1–B1.4), paso 5b. La B1
+//     es la rama que certifica el motor; una B2 o una C en el 737NG no dicen
+//     nada del CFM56-7B. Se lee `habilitation.licenseCode`, que es el código de
+//     SU credencial por construcción: la FK compuesta
+//     (technician_license_id, license_code) de la 074 no deja que difieran.
+//     No es cruzar por código, es leer el de la fila a la que ya apunta.
+//
+//  2. Un rating enlazado a un motor GENÉRICO (`isActive: false`, las 17 filas
+//     "<fabricante> (model not specified)" del seed de la 071) da crédito de
+//     FAMILIA y nunca de motor exacto: una genérica no dice qué motor es, sólo
+//     de quién.
+//
+//  3. `none` PUNTÚA, poco pero no cero. El eje arranca vacío para todos los
+//     perfiles, así que un cero aquí sería castigar por un campo que nadie ha
+//     tenido ocasión de rellenar — y además dispararía el tope de cero
+//     cualificación sobre toda la lista. De ahí salen también los años: 1 año
+//     y 20 valen lo mismo, porque "la cualificación puntúa, la experiencia
+//     informa".
+type EngineTier = 'declared_exact' | 'implicit_exact' | 'same_family' | 'same_type' | 'other_type' | 'none';
+
+// Fracciones del presupuesto de motor (65), misma mecánica que
+// HABILITATION_TIER_FRACTIONS: la escalera es multiplicativa sobre el peso, no
+// una escala aparte.
+const ENGINE_TIER_FRACTIONS: Record<EngineTier, number> = {
+  declared_exact: 1,
+  implicit_exact: 0.8,
+  same_family: 0.55,
+  same_type: 0.3,
+  other_type: 0.12,
+  none: 0.05,
+};
+
+// Qué `MatchLevel` cuenta cada escalón. Es el mismo reparto que en aeronave:
+// el motor pedido es 'exact', algo del mismo aire es 'related', y lo demás no
+// confirma nada.
+const ENGINE_TIER_LEVEL: Record<EngineTier, MatchLevel> = {
+  declared_exact: 'exact',
+  implicit_exact: 'exact',
+  same_family: 'related',
+  same_type: 'related',
+  other_type: 'not_met',
+  none: 'not_met',
+};
+
+interface EngineOutcome {
+  tier: EngineTier;
+  matchText?: string;
+  clarificationText?: string;
+}
+
+interface EngineEvidence {
+  engineId: string;
+  /** De dónde salió: declarado por el técnico, o implícito en un type rating B1. */
+  source: 'declared' | 'implicit';
+  /** El rating del que salió, cuando es implícito — sólo para el texto. */
+  ratingId?: string;
+  /** La licencia B1 de la que cuelga ese rating, cuando es implícito — sólo para el texto. */
+  licenseCode?: string;
+}
+
+// Los motores que el perfil respalda, por las dos vías. NO se deduplica: el
+// escalón se decide por el mejor hallazgo, y un motor que aparece dos veces no
+// vale más que uno que aparece una. Los declarados van PRIMERO: a igualdad de
+// motor, el declarado es el escalón más alto (ver matchEngineEvidence).
+function collectEngineEvidence(
+  technician: Pick<TechnicianWithRelations, 'engines' | 'habilitations'>,
+  ratingIndex: AircraftRatingIndex,
+): EngineEvidence[] {
+  const evidence: EngineEvidence[] = technician.engines.map((e) => ({
+    engineId: e.engineId,
+    source: 'declared' as const,
+  }));
+  for (const hab of technician.habilitations) {
+    if (!hab.aircraftTypeRatingId) continue;
+    // Regla 1b de la cabecera: sólo la rama B1 dice algo del motor.
+    if (!isB1LicenseCode(hab.licenseCode)) continue;
+    const engineId = ratingIndex.get(hab.aircraftTypeRatingId)?.engineId;
+    if (engineId) {
+      evidence.push({ engineId, source: 'implicit', ratingId: hab.aircraftTypeRatingId, licenseCode: hab.licenseCode });
+    }
+  }
+  return evidence;
+}
+
+/**
+ * El escalón de un conjunto de evidencia frente al motor pedido. UNA sola
+ * implementación para las dos preguntas que lo necesitan: cuánto puntúa el
+ * técnico (evaluateEngineRequirement, con toda su evidencia) y si entra en la
+ * oferta por la vía (b) de la elegibilidad (sólo con la implícita). Escribir
+ * el emparejamiento dos veces es la forma de que la lista y la nota acaben
+ * discrepando.
+ */
+function matchEngineEvidence(
+  evidence: EngineEvidence[],
+  requiredEngineId: string,
+  engineIndex: EngineIndex,
+): { tier: EngineTier; exact?: EngineEvidence; held?: EngineCatalog } {
+  if (evidence.length === 0) return { tier: 'none' };
+
+  // Exacto: por id, y sólo si la fila del motor está ACTIVA. Una genérica
+  // nunca puede ser el motor exacto de nadie (regla 2 de la cabecera). Un id
+  // que no esté en el índice —catálogo a medio cargar— sí cuenta: la igualdad
+  // de id es evidencia por sí sola, y desconocer la fila no la desmiente.
+  const exact = evidence.find(
+    (ev) => ev.engineId === requiredEngineId && engineIndex.get(ev.engineId)?.isActive !== false,
+  );
+  if (exact) return { tier: exact.source === 'declared' ? 'declared_exact' : 'implicit_exact', exact };
+
+  const required = engineIndex.get(requiredEngineId);
+  if (required) {
+    const held = evidence.map((ev) => engineIndex.get(ev.engineId)).filter((e): e is EngineCatalog => Boolean(e));
+    const sameFamily = held.find((e) => e.family === required.family);
+    if (sameFamily) return { tier: 'same_family', held: sameFamily };
+    const sameType = held.find((e) => e.engineType === required.engineType);
+    if (sameType) return { tier: 'same_type', held: sameType };
+  }
+  return { tier: 'other_type' };
+}
+
+function evaluateEngineRequirement(
+  requiredEngineId: string | undefined,
+  technician: Pick<TechnicianWithRelations, 'engines' | 'habilitations'>,
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+): EngineOutcome {
+  // Una oferta de motor sin motor es una fila que la base no acepta (CHECK de
+  // la 076). Si llega, no se inventa una escalera: nadie confirma nada.
+  if (!requiredEngineId) return { tier: 'none' };
+
+  const match = matchEngineEvidence(collectEngineEvidence(technician, ratingIndex), requiredEngineId, engineIndex);
+  const requiredLabel = getEngineLabel(requiredEngineId, engineIndex);
+
+  switch (match.tier) {
+    case 'none':
+      return { tier: 'none' };
+    case 'declared_exact':
+      return { tier: 'declared_exact', matchText: `Engine: ${requiredLabel}` };
+    case 'implicit_exact':
+      return {
+        tier: 'implicit_exact',
+        matchText: `Engine: ${requiredLabel} — from the ${match.exact!.licenseCode} ${getAircraftTypeRatingLabel(match.exact!.ratingId as string, ratingIndex)} type rating`,
+        clarificationText: `${requiredLabel} is not declared directly; it comes from a B1 type rating in the profile.`,
+      };
+    case 'same_family':
+      return {
+        tier: 'same_family',
+        clarificationText: `Same engine family, different model: ${requiredLabel} vs ${match.held!.displayName}.`,
+      };
+    case 'same_type':
+      return {
+        tier: 'same_type',
+        clarificationText: `Another ${match.held!.engineType}, different family: ${requiredLabel} vs ${match.held!.displayName}.`,
+      };
+    case 'other_type':
+      return { tier: 'other_type', clarificationText: `No declared engine is related to ${requiredLabel}.` };
+  }
+}
+
+/**
+ * ⚠ LOS ÚNICOS FILTROS EXCLUYENTES DE TODA LA PLATAFORMA. Son dos, y viven
+ * juntos aquí a propósito.
+ *
+ * Todo lo demás en este fichero ORDENA: un requisito incumplido baja el
+ * porcentaje, lo explica y deja el par en la lista, porque quien decide a quién
+ * llamar es una persona. Esto no: el técnico que no pasa NO APARECE. No sale
+ * abajo con nota baja — no sale.
+ *
+ * Se aplican en LAS DOS DIRECCIONES (rankTechniciansForOffer y
+ * rankOffersForTechnician, y por tanto los dos envoltorios de matchingV2). Un
+ * filtro que excluye en una sola dirección es un filtro que se puede rodear
+ * entrando por la otra pantalla. Por eso son UNA función y no dos: un tercer
+ * filtro escrito aparte sería el que una de las dos direcciones olvide.
+ *
+ * ── 1. Oferta de motor: sólo quien tiene algo que ver con motores ────────
+ * Elegible si cumple AL MENOS UNA (paso 5b, sustituye a la regla del 5a):
+ *   (a) ha DECLARADO algún motor, sea cual sea su oficio;
+ *   (b) tiene un type rating colgado de una B1 (B1.1–B1.4) cuyo motor es el de
+ *       la oferta o de su familia — el 737NG de un B1 entra en una oferta de
+ *       CFM56-7B sin haber declarado nada;
+ *   (c) tiene 'engine_technician' entre sus oficios, aunque no declare motores.
+ * Nadie más. Un type rating colgado sólo de B2, C u otra licencia no da
+ * entrada: esas ramas no certifican el motor (regla 1b del eje de motores).
+ *
+ * Sin este filtro, una oferta de motor enseñaba a toda la plataforma: el eje
+ * puntúa 3 a quien no tiene motores (ENGINE_TIER_FRACTIONS.none), así que
+ * pintores y aviónicos sin motor alguno llenaban la lista con un "Weak".
+ *
+ * Es elegibilidad, NO puntuación: quien pasa puntúa con la escalera normal. La
+ * vía (b) pregunta al MISMO emparejador que la puntuación (matchEngineEvidence)
+ * y exige de él lo mismo que la escalera llama exacto o familia, así que entrar
+ * por (b) y puntuar ese escalón no pueden discrepar. Por eso necesita los dos
+ * catálogos: sin `engineIndex` la familia no se resuelve y la vía (b) sólo
+ * reconoce el motor exacto.
+ *
+ * ── 2. "Sólo técnicos sin licencia" ─────────────────────────────────────
+ * Existe porque hay un caso real que ninguna puntuación resuelve: un taller de
+ * motores que busca mano de obra sin licencia no quiere ordenar a los
+ * licenciados los últimos, quiere no verlos. Ordenarlos los dejaría en la
+ * lista, y la lista es el producto.
+ *
+ * "Licenciado" es tener alguna credencial DECLARADA, caducada o no: una B2
+ * vencida sigue describiendo a un técnico licenciado, que es lo que el filtro
+ * mira. No se consulta el OFICIO —un mecánico sin licencias es un perfil
+ * perfectamente válido para estas ofertas— ni ningún otro campo.
+ */
+export function isTechnicianEligibleForOffer(
+  offer: Pick<Offer, 'onlyUnlicensed' | 'offerKind' | 'requiredEngineId'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'engines' | 'technicianTypes' | 'habilitations'>,
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+): boolean {
+  return technicianIneligibilityReason(offer, technician, ratingIndex, engineIndex) === null;
+}
+
+/** Por qué un par no pasa el filtro. La pantalla lo traduce a texto (ineligibilityReasonText). */
+export type IneligibilityReason = 'no_engine_experience' | 'licensed_technician';
+
+/**
+ * Lo mismo que isTechnicianEligibleForOffer, diciendo CUÁL de los dos filtros
+ * falla. Es la implementación; la booleana la envuelve. Las pantallas que
+ * muestran un par concreto (una candidatura, una oferta directa) necesitan el
+ * motivo: el par existe y hay que explicar por qué no lleva porcentaje.
+ */
+export function technicianIneligibilityReason(
+  offer: Pick<Offer, 'onlyUnlicensed' | 'offerKind' | 'requiredEngineId'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'engines' | 'technicianTypes' | 'habilitations'>,
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+): IneligibilityReason | null {
+  if (offer.offerKind === 'engine' && !isEngineOfferCandidate(offer, technician, ratingIndex, engineIndex)) return 'no_engine_experience';
+  if (offer.onlyUnlicensed && technician.licenses.length > 0) return 'licensed_technician';
+  return null;
+}
+
+/**
+ * Un par (oferta, técnico) YA FILTRADO Y PUNTUADO. La variante no elegible no
+ * tiene `score`: un par que el filtro saca no tiene porcentaje que enseñar, y
+ * un campo a null sería la invitación a pintarlo igualmente.
+ */
+export type PairMatch =
+  | { eligible: true; score: MatchScore }
+  | { eligible: false; reason: IneligibilityReason };
+
+/**
+ * EL camino de un par: filtro y, si pasa, scorer. Las dos funciones de ranking
+ * de abajo son esto más deduplicar y ordenar, y las pantallas que miran un par
+ * suelto lo usan a través de matchingService.matchPairs. Que las tres cosas
+ * pasen por aquí es lo que impide que una pantalla puntúe a quien la lista
+ * habría sacado.
+ */
+export function matchOfferTechnicianPair(
+  offer: OfferWithRequirements,
+  technician: TechnicianWithRelations,
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+  now: Date = new Date(),
+): PairMatch {
+  const reason = technicianIneligibilityReason(offer, technician, ratingIndex, engineIndex);
+  if (reason) return { eligible: false, reason };
+  return { eligible: true, score: calculateOfferTechnicianMatch(offer, technician, ratingIndex, now, engineIndex) };
+}
+
+function eligibleScores(pairs: PairMatch[]): MatchScore[] {
+  return pairs.flatMap((pair) => (pair.eligible ? [pair.score] : []));
+}
+
+// Filtro 1 de isTechnicianEligibleForOffer: las vías (a), (b) y (c), en orden
+// de coste — las dos baratas primero.
+function isEngineOfferCandidate(
+  offer: Pick<Offer, 'requiredEngineId'>,
+  technician: Pick<TechnicianWithRelations, 'engines' | 'technicianTypes' | 'habilitations'>,
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+): boolean {
+  if (technician.engines.length > 0) return true; // (a)
+  if (technician.technicianTypes.includes(ENGINE_TECHNICIAN_TYPE_CODE)) return true; // (c)
+  if (!offer.requiredEngineId) return false;
+  // (b) Sin motores declarados, toda la evidencia que queda es implícita y B1
+  // (collectEngineEvidence ya descarta las demás ramas).
+  const { tier } = matchEngineEvidence(collectEngineEvidence(technician, ratingIndex), offer.requiredEngineId, engineIndex);
+  return tier === 'implicit_exact' || tier === 'same_family';
+}
+
+// Orden del ranking: por total descendente, y a igualdad por id. El desempate
+// por id no es cosmético — sin él, dos técnicos empatados salen en el orden en
+// que PostgREST devolvió las filas, y la misma lista se repinta distinta.
+function byTotalThen(id: (score: MatchScore) => string) {
+  return (a: MatchScore, b: MatchScore) => (b.total !== a.total ? b.total - a.total : id(a) < id(b) ? -1 : id(a) > id(b) ? 1 : 0);
+}
+
+// Un id, un resultado. Una consulta con join devuelve el mismo técnico una vez
+// por licencia, y tres B1.1 no pueden convertirse en tres filas del ranking.
+function dedupeById<T>(items: T[], id: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = id(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Los técnicos de una oferta, filtrados (isTechnicianEligibleForOffer),
+ * puntuados y ordenados. Pura: recibe el catálogo ya cargado y no importa
+ * Supabase. Es la función que usa getTechnicianMatchesForOffer (matchingV2).
+ *
+ * UN SOLO RESULTADO POR TÉCNICO, siempre. `calculateOfferTechnicianMatch`
+ * elige UNA credencial y puntúa una vez con ella, así que tener tres licencias
+ * válidas a la vez no suma tres veces la habilitación; esta función además
+ * deduplica la entrada, que es la otra mitad del mismo problema.
+ */
+// `engineIndex` es obligatorio aquí (paso 5b), a diferencia de
+// calculateOfferTechnicianMatch: el filtro lo necesita para la vía (b), y un
+// valor por defecto vacío es exactamente la forma de olvidarlo sin que nada
+// avise.
+export function rankTechniciansForOffer(
+  offer: OfferWithRequirements,
+  technicians: TechnicianWithRelations[],
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+  now: Date = new Date(),
+): MatchScore[] {
+  return eligibleScores(
+    dedupeById(technicians, (t) => t.id).map((technician) => matchOfferTechnicianPair(offer, technician, ratingIndex, engineIndex, now)),
+  ).sort(byTotalThen((s) => s.technicianId));
+}
+
+/**
+ * La dirección contraria, con exactamente las mismas reglas: mismo filtro,
+ * mismo scorer, mismo resultado para el mismo par. Que las dos pantallas
+ * pudieran discrepar es un fallo que ya se ha cometido en este producto.
+ */
+export function rankOffersForTechnician(
+  technician: TechnicianWithRelations,
+  offers: OfferWithRequirements[],
+  ratingIndex: AircraftRatingIndex,
+  engineIndex: EngineIndex,
+  now: Date = new Date(),
+): MatchScore[] {
+  return eligibleScores(
+    dedupeById(offers, (o) => o.id).map((offer) => matchOfferTechnicianPair(offer, technician, ratingIndex, engineIndex, now)),
+  ).sort(byTotalThen((s) => s.offerId));
 }

@@ -46,6 +46,9 @@ import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../../../src/lib/documentStorage';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
+import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
+import { getEngineLabel } from '../../../src/constants/engines';
+import { credentialLabel } from '../../../src/constants/licenses';
 import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { CONTRACT_TYPES } from '../../../src/constants/contractTypes';
@@ -101,6 +104,7 @@ export default function CompanyTechnicianProfileScreen() {
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const { ratingIndex } = useAircraftTypeRatingsCatalog();
+  const { engineIndex } = useEnginesCatalog();
 
   const [profile, setProfile] = useState<UnlockedTechnicianView | null>(null);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -380,7 +384,12 @@ export default function CompanyTechnicianProfileScreen() {
             >
               <View style={styles.chipRow}>
                 {profile.licenses.length > 0
-                  ? profile.licenses.map((license) => <CompanyChip key={license} label={license} />)
+                  ? profile.licenses.map((license) => (
+                      <CompanyChip
+                        key={`${license.authority}-${license.licenseCode}`}
+                        label={credentialLabel(license.authority, license.licenseCode)}
+                      />
+                    ))
                   : <Text style={styles.emptyText}>No licenses listed.</Text>}
               </View>
             </ProfileSection>
@@ -421,6 +430,24 @@ export default function CompanyTechnicianProfileScreen() {
                   meta={experience.years === undefined ? 'Experience duration not specified' : `${experience.years} years declared`}
                 />
               )) : <Text style={styles.emptyText}>No aircraft experience listed.</Text>}
+            </ProfileSection>
+
+            {/* Paso 5b: los motores declarados. Hacen a un técnico elegible y
+                bien puntuado en una oferta de motor; la empresa los ve igual
+                que la experiencia en aeronaves. */}
+            <ProfileSection
+              icon={Wrench}
+              title="Engine experience"
+              subtitle="Engines the technician has declared working on."
+            >
+              {profile.engines.length > 0 ? profile.engines.map((engine) => (
+                <QualificationRow
+                  key={engine.id}
+                  icon={Wrench}
+                  title={getEngineLabel(engine.engineId, engineIndex)}
+                  meta={engine.years === undefined ? 'Experience duration not specified' : `${engine.years} years declared`}
+                />
+              )) : <Text style={styles.emptyText}>No engines listed.</Text>}
             </ProfileSection>
           </View>
         </View>
