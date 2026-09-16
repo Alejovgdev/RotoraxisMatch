@@ -10,7 +10,7 @@ import {
   companyUi,
 } from '../company/CompanyUI';
 import type { CompanyTone } from '../company/CompanyUI';
-
+ 
 export const adminUi = companyUi;
 
 export const AdminScreen = CompanyScreen;
