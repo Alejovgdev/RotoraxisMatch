@@ -182,6 +182,10 @@ async function main() {
   // Tablas del técnico, para technicianRepositoryV2.
   let licenseRows: Record<string, unknown>[] = [];
   let licenseDependents: Record<string, unknown>[] = [];
+  // offer_applications, para offerApplicationRepository (paso 5c). La base de
+  // verdad rechaza con el trigger de la 080; aquí se simula su respuesta.
+  let applicationRows: Record<string, unknown>[] = [];
+  let applicationRejection: { code: string; message: string; details: string } | null = null;
 
   const fakeSupabase = {
     from(table: string) {
@@ -217,6 +221,21 @@ async function main() {
           }
           if (table === 'technician_engine_experience') {
             return Promise.resolve({ data: op === 'insert' ? write : [], error: null }).then(resolve);
+          }
+          if (table === 'offer_applications') {
+            if ((op === 'insert' || op === 'update') && applicationRejection) {
+              return Promise.resolve({ data: null, error: applicationRejection }).then(resolve);
+            }
+            if (op === 'insert' && write && !Array.isArray(write)) {
+              const row = { id: 'app-1', status: 'pending', identity_revealed: false, documents_unlocked: false, created_at: '2026-09-16', updated_at: '2026-09-16', ...write };
+              applicationRows = [row];
+              return Promise.resolve({ data: row, error: null }).then(resolve);
+            }
+            if (op === 'update' && write && !Array.isArray(write)) {
+              applicationRows = applicationRows.map((r) => ({ ...r, ...write }));
+              return Promise.resolve({ data: applicationRows[0], error: null }).then(resolve);
+            }
+            return Promise.resolve({ data: applicationRows, error: null }).then(resolve);
           }
           if (table === 'offers') {
             if (write && !Array.isArray(write)) offerRow = { id: 'offer-1', created_at: '2026-09-16', updated_at: '2026-09-16', ...offerRow, ...write };
@@ -429,6 +448,47 @@ async function main() {
     calls.length = 0;
     await technicianRepositoryV2.replaceEngineExperience('tech-1', []);
     assert.deepEqual(calls.map((c) => c.op), ['delete'], 'sin motores sólo se borra');
+  });
+
+  // ── Candidaturas: el rechazo de la base llega como el texto de siempre ──
+
+  const { offerApplicationRepository } = require('../src/repositories/v2/offerApplicationRepository') as typeof import('../src/repositories/v2/offerApplicationRepository');
+  const { ineligibilityReasonText } = require('../src/utils/offerMatchExplain') as typeof import('../src/utils/offerMatchExplain');
+  const aplicar = () =>
+    offerApplicationRepository.create({ technicianId: 'tech-1', offerId: 'offer-1', companyId: 'company-1', coverNote: 'hola' });
+  const ofertaPublicada = () => {
+    offerRow = { id: 'offer-1', company_id: 'company-1', status: 'published', visible: true, offer_kind: 'engine', required_engine_id: 'eng-1' };
+  };
+
+  await test('Candidatura — un técnico no elegible no la crea aunque salte la UI: el PT403 de la base llega con su motivo', async () => {
+    ofertaPublicada();
+    applicationRows = [];
+    for (const reason of ['no_engine_experience', 'licensed_technician'] as const) {
+      applicationRejection = { code: 'PT403', message: 'The technician is not eligible for this offer.', details: reason };
+      await assert.rejects(aplicar(), (err: Error) => err.message === ineligibilityReasonText(reason), `motivo ${reason}`);
+    }
+    assert.deepEqual(applicationRows, [], 'no queda candidatura');
+  });
+
+  await test('Candidatura — re-aplicar tras retirarse también pasa por la base: la reactivación rechazada da el mismo texto', async () => {
+    ofertaPublicada();
+    applicationRows = [{ id: 'app-1', technician_id: 'tech-1', offer_id: 'offer-1', company_id: 'company-1', status: 'withdrawn', created_at: '2026-09-01', updated_at: '2026-09-01' }];
+    applicationRejection = { code: 'PT403', message: 'The technician is not eligible for this offer.', details: 'no_engine_experience' };
+    await assert.rejects(aplicar(), (err: Error) => err.message === ineligibilityReasonText('no_engine_experience'));
+    assert.equal(applicationRows[0].status, 'withdrawn', 'sigue retirada');
+  });
+
+  await test('Candidatura — un técnico elegible la crea; un error que no es de elegibilidad no se disfraza de motivo', async () => {
+    ofertaPublicada();
+    applicationRows = [];
+    applicationRejection = null;
+    const creada = await aplicar();
+    assert.equal(creada.status, 'pending');
+    assert.equal(creada.technicianId, 'tech-1');
+
+    applicationRows = [];
+    applicationRejection = { code: '42501', message: 'new row violates row-level security policy', details: '' };
+    await assert.rejects(aplicar(), /row-level security/);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -4,8 +4,30 @@ import { OfferRequestStatus } from '../../types/enums';
 import { evaluateApplicationConflict, isActiveOfferRelationStatus } from '../../utils/offerRelationStateMachine';
 import { isOfferOpenForTechnicians, offerRepository } from './offerRepository';
 import { mapOfferApplicationRow, mapOfferRequestRow, throwIfError } from './supabaseMappers';
+import { IneligibilityReason, ineligibilityReasonText } from '../../utils/offerMatchExplain';
 
 const SELECT_FIELDS = 'id, technician_id, offer_id, company_id, status, identity_revealed, documents_unlocked, cover_note, created_at, updated_at';
+
+const INELIGIBILITY_REASONS: readonly IneligibilityReason[] = ['no_engine_experience', 'licensed_technician'];
+
+/**
+ * Fase 10, paso 5c: la base rechaza una candidatura de un técnico no elegible
+ * (trigger enforce_offer_application_eligibility, migración 080) con
+ * ERRCODE PT403 y el MOTIVO en `details`, con los mismos códigos que
+ * IneligibilityReason. Aquí se traduce al texto de siempre
+ * (ineligibilityReasonText) en vez de enseñar el mensaje técnico de Postgres:
+ * el copy vive en un solo sitio, en TS.
+ *
+ * Se mira el motivo y no sólo el código porque es lo que dice QUÉ texto poner;
+ * un PT403 con un motivo desconocido cae al error genérico de throwIfError.
+ */
+export function throwIfIneligible(error: { code?: string; details?: string | null } | null | undefined): void {
+  if (!error) return;
+  const reason = error.details as IneligibilityReason;
+  if (INELIGIBILITY_REASONS.includes(reason)) {
+    throw new Error(ineligibilityReasonText(reason));
+  }
+}
 
 export const offerApplicationRepository = {
   async getAll(): Promise<OfferApplication[]> {
@@ -111,6 +133,9 @@ export const offerApplicationRepository = {
         .eq('id', existingApplication.id)
         .select(SELECT_FIELDS)
         .single();
+      // Re-aplicar también pasa por la elegibilidad: el trigger de la 080 mira
+      // la transición a pending, no sólo el INSERT.
+      throwIfIneligible(reactivateError);
       throwIfError(reactivateError);
       return mapOfferApplicationRow(reactivated as any);
     }
@@ -125,6 +150,10 @@ export const offerApplicationRepository = {
       })
       .select(SELECT_FIELDS)
       .single();
+    // La elegibilidad la impone la base (migración 080), no esta función: la
+    // pantalla ya quita el botón, pero una llamada que se la salte llega aquí
+    // con el rechazo del trigger.
+    throwIfIneligible(error);
     throwIfError(error);
     return mapOfferApplicationRow(inserted as any);
   },

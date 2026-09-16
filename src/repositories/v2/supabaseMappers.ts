@@ -152,10 +152,12 @@ export function mapOfferRow(row: DbRow): Offer {
     // nada: se refleja lo que hay.
     licenseAuthority: (row.license_authority as AuthorityCode | null) ?? undefined,
     requiresAllAircraft: Boolean(row.requires_all_aircraft),
-    // Fase 10 (migración 070). `?? 'aircraft'` y `Boolean(...)` reproducen los
-    // DEFAULT de la columna para las filas escritas antes de que existiera, no
-    // para tapar un SELECT incompleto: las cuatro están en OFFER_COLUMNS, y si
-    // alguna saliera de ahí la oferta se puntuaría como de aeronave sin avisar.
+    // Fase 10 (migración 070). `Boolean(...)` reproduce el DEFAULT de las dos
+    // columnas booleanas, que siguen siendo nullables. `offer_kind` es NOT NULL
+    // desde la 079, así que el `?? 'aircraft'` ya no rellena ninguna fila real:
+    // sólo cubriría un SELECT que se olvidara de pedirla —las cuatro están en
+    // OFFER_COLUMNS, y si alguna saliera de ahí la oferta se puntuaría como de
+    // aeronave sin avisar—.
     offerKind: (row.offer_kind as OfferKind | null) ?? 'aircraft',
     acceptsEquivalent: Boolean(row.accepts_equivalent),
     requiredEngineId: row.required_engine_id ?? undefined,
