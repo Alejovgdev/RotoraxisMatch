@@ -3241,6 +3241,54 @@ async function main() {
 
   // ── Identidad de licencia ─────────────────────────────────────────────
 
+  await test('H2 — una equivalente con fecha más lejana no desplaza la exacta vigente', () => {
+    const easa = makeLicense('B1.1', { authority: 'EASA', expiresAt: '2028-01-01' });
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA', expiresAt: '2030-01-01' });
+    const oferta = makeOffer({ licenseAuthority: 'EASA', acceptsEquivalent: true });
+    const before = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [easa] });
+    assert.equal(puntuar(oferta, before).total, 100);
+    assert.equal(puntuar(oferta, { ...before, licenses: [easa, uk] }).total, 100);
+  });
+
+  await test('H2 — el rating caducado de otra credencial no baja 100 a 39', () => {
+    const easa = makeLicense('B1.1', { authority: 'EASA', expiresAt: '2028-01-01' });
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA', expiresAt: '2030-01-01' });
+    const oferta = ofertaA320('EASA', { acceptsEquivalent: true });
+    const before = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [easa], habilitations: [makeHabOn(easa, { aircraftTypeRatingId: 'fx-a320-cfm56' })] });
+    assert.equal(puntuar(oferta, before).total, 100);
+    assert.equal(puntuar(oferta, { ...before, licenses: [easa, uk], habilitations: [...before.habilitations,
+      makeHabOn(uk, { aircraftTypeRatingId: 'fx-a320-cfm56', expiresAt: '2020-01-01' })] }).total, 100);
+  });
+
+  await test('H2 — propiedad: añadir una credencial no reduce la puntuación de una oferta con licencia', () => {
+    const candidates: { license: TechnicianLicense; habs: TechnicianHabilitation[] }[] = [];
+    for (const authority of ['EASA', 'UK_CAA'] as const) for (const expired of [false, true])
+      for (const state of ['current', 'expired', 'not_current']) for (const subset of [0, 1, 2, 3]) {
+        const license = makeLicense('B1.1', { id: `property-${candidates.length}`, authority,
+          expiresAt: expired ? '2020-01-01' : authority === 'EASA' ? '2028-01-01' : '2030-01-01' });
+        const habs = ['fx-a320-cfm56', 'fx-b777-ge90'].flatMap((id, i) => (subset & (1 << i)) ? [makeHabOn(license, {
+          aircraftTypeRatingId: id, expiresAt: state === 'expired' ? '2020-01-01' : undefined, isCurrent: state !== 'not_current',
+        })] : []);
+        candidates.push({ license, habs });
+      }
+    let checked = 0;
+    for (const requiresAllAircraft of [false, true]) for (const count of [0, 1, 2]) {
+      const offer = makeOffer({ licenseAuthority: 'EASA', acceptsEquivalent: true, requiresAllAircraft,
+        requiredHabilitations: ['fx-a320-cfm56', 'fx-b777-ge90'].slice(0, count).map((id) => makeHabReq(id)) });
+      for (const a of candidates) for (const b of candidates) {
+        if (a.license.authority === b.license.authority) continue; // real unique authority/category pairs
+        const before = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [a.license], habilitations: a.habs });
+        const after = { ...before, licenses: [a.license, b.license], habilitations: [...a.habs, ...b.habs] };
+        const oldScore = puntuar(offer, before).total;
+        const newScore = puntuar(offer, after).total;
+        assert.ok(newScore >= oldScore, `${a.license.id} + ${b.license.id}, all=${requiresAllAircraft}, aircraft=${count}: ${oldScore} -> ${newScore}`);
+        assert.equal(puntuar(offer, { ...after, licenses: [...after.licenses].reverse() }).total, newScore);
+        checked++;
+      }
+    }
+    assert.ok(checked > 5000);
+  });
+
   await test('Fase 10 · Identidad — dos B1.1 (EASA y UK CAA) no mezclan habilitaciones ni caducidades', () => {
     // Habilitaciones: el A320 cuelga de la UK. Una oferta EASA sin
     // equivalencias no puede verlo, aunque el código sea el mismo.

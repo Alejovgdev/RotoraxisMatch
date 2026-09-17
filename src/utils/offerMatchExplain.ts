@@ -458,42 +458,11 @@ function evaluateVigencia(
   return { kind: 'ok' };
 }
 
-/**
- * ¿CUÁL de las licencias del técnico responde por esta oferta, y con qué
- * exactitud? (Fase 10, pasos 3 y 4)
- *
- * Hasta el paso 3 era `licenses.find(l => l.licenseCode === código)`: la
- * PRIMERA DEL ARRAY. Inofensivo mientras el UNIQUE (technician_id,
- * license_code) garantizaba que sólo había una; desde la 073 un técnico puede
- * tener una B1.1 EASA y una B1.1 UK CAA, y "la primera" pasa a ser el orden en
- * que PostgREST devolvió las filas. Esa elección decide la vigencia, y la
- * vigencia decide entre 100 y 39 puntos.
- *
- * ── SE ELIGE UNA VEZ POR PAR (OFERTA, TÉCNICO), NO UNA POR AERONAVE ──────
- * Ésta es la parte que hay que entender antes de tocar nada. Si la elección se
- * hiciera dentro de cada requisito, un técnico con el A320 bajo su EASA y el
- * B777 bajo su UK CAA cumpliría una oferta que exige LAS DOS: cada aeronave
- * elegiría la licencia que le conviene. Eso es exactamente la combinación
- * falsa que la invariante de MISMA FILA prohíbe, colada por la puerta de la
- * autoridad. Una credencial responde por la oferta entera o no responde.
- *
- * ── EL ORDEN DE PREFERENCIA, Y POR QUÉ ÉSE ──────────────────────────────
- *   1. CUALIFICACIÓN VÁLIDA. Sólo compiten las que satisfacen lo que la oferta
- *      pide: código (con A&P cubriendo A y P) y autoridad, exacta o
- *      equivalente si la empresa marcó la casilla. El resto ni entra.
- *   2. CALIDAD: cuántas de las aeronaves pedidas sostiene, y en qué tier. Es
- *      lo que la oferta vino a preguntar, así que va antes que cualquier
- *      consideración sobre el papel.
- *   3. VIGENCIA: primero las vigentes, y entre ellas la de caducidad más
- *      lejana (sin fecha = no caduca = la mejor).
- *   4. EXACTA SOBRE EQUIVALENTE, sólo a igualdad de todo lo anterior.
- *   5. Desempate por id, para que el mismo par puntúe siempre igual pase lo
- *      que pase con el orden de las filas.
- *
- * El 3 antes del 4 es una decisión, no un descuido: una EASA CADUCADA no debe
- * bloquear a una UK CAA VIGENTE en una oferta que acepta equivalentes. Con la
- * caducada elegida el técnico sacaría el tope de 39 teniendo en la mano una
- * credencial válida para ese trabajo.
+/** One credential supports the whole offer; aircraft from different licences
+ * are never combined. Compare the actual complete-offer score (validity,
+ * authority degradation and requiresAllAircraft ceilings included). This
+ * makes adding a credential monotone: existing alternatives remain available.
+ * Ties prefer effective coverage, a valid licence, exact authority, then expiry.
  */
 interface SelectedLicense {
   license: TechnicianLicense;
@@ -501,61 +470,38 @@ interface SelectedLicense {
 }
 
 function selectLicenseForOffer(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptsEquivalent' | 'requiredHabilitations'>,
+  offer: OfferWithRequirements,
   technician: TechnicianWithRelations,
   ratingIndex: AircraftRatingIndex,
   today: string,
-): SelectedLicense | undefined {
+  scoreCandidate: (candidate: SelectedLicense) => MatchScore,
+): (SelectedLicense & { score: MatchScore }) | undefined {
   const required = offer.licenseCode;
   if (!required) return undefined;
-
-  const candidates: SelectedLicense[] = [];
-  for (const license of technician.licenses) {
+  const candidates = technician.licenses.flatMap((license) => {
     const satisfaction = licenseSatisfiesRequirement(
-      license,
-      { authority: offer.licenseAuthority, licenseCode: required },
-      offer.acceptsEquivalent,
+      license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptsEquivalent,
     );
-    if (satisfaction) candidates.push({ license, satisfaction });
-  }
-  if (candidates.length <= 1) return candidates[0];
-
-  const rank = (c: SelectedLicense) => ({
-    quality: licenseCoverageQuality(c.license, offer.requiredHabilitations, technician, ratingIndex),
-    expired: isLicenseExpired(c.license, today),
-    // Sin fecha de caducidad = no caduca: el mejor sostén posible.
-    expiresAt: c.license.expiresAt ?? '9999-12-31',
-    exact: c.satisfaction === 'exact',
+    if (!satisfaction) return [];
+    const candidate = { license, satisfaction };
+    const quality = offer.requiredHabilitations.reduce((sum, req) => {
+      const outcome = evaluateHabilitationRequirement(req, required, license, technician, ratingIndex, today);
+      return sum + HABILITATION_TIER_FRACTIONS[outcome.tier] *
+        (outcome.vigenciaDegraded ? 1 - VIGENCIA_DEGRADATION_FRACTION : 1);
+    }, 0);
+    return [{ ...candidate, score: scoreCandidate(candidate), quality,
+      expired: isLicenseExpired(license, today), exact: satisfaction === 'exact',
+      expiresAt: authorityLicenseCanExpire(license.authority) ? license.expiresAt ?? '9999-12-31' : '9999-12-31',
+    }];
   });
-  return [...candidates].sort((a, b) => {
-    const ra = rank(a), rb = rank(b);
-    if (ra.quality !== rb.quality) return rb.quality - ra.quality;
-    if (ra.expired !== rb.expired) return ra.expired ? 1 : -1;
-    if (ra.expiresAt !== rb.expiresAt) return ra.expiresAt < rb.expiresAt ? 1 : -1;
-    if (ra.exact !== rb.exact) return ra.exact ? -1 : 1;
-    return a.license.id < b.license.id ? -1 : a.license.id > b.license.id ? 1 : 0;
+  return candidates.sort((a, b) => {
+    if (a.score.total !== b.score.total) return b.score.total - a.score.total;
+    if (a.quality !== b.quality) return b.quality - a.quality;
+    if (a.expired !== b.expired) return a.expired ? 1 : -1;
+    if (a.exact !== b.exact) return a.exact ? -1 : 1;
+    if (a.expiresAt !== b.expiresAt) return a.expiresAt < b.expiresAt ? 1 : -1;
+    return a.license.id.localeCompare(b.license.id);
   })[0];
-}
-
-// Cuánto de lo que la oferta pide sostiene ESTA credencial, sumando el tier de
-// cada aeronave. Sin aeronaves pedidas todas empatan en 0 y decide el criterio
-// siguiente, que es lo correcto: no hay nada que cubrir mejor o peor.
-//
-// La vigencia NO entra aquí a propósito — es el criterio 3, y mezclarla haría
-// que una credencial caducada con la aeronave perdiera contra una vigente sin
-// ella por el motivo equivocado (o al revés, según el orden).
-function licenseCoverageQuality(
-  license: TechnicianLicense,
-  requirements: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>[],
-  technician: TechnicianWithRelations,
-  ratingIndex: AircraftRatingIndex,
-): number {
-  if (requirements.length === 0) return 0;
-  const rows = habilitationsOfLicense(technician, license);
-  return requirements.reduce(
-    (sum, req) => sum + TIER_RANK[bestHabilitationTier(rows, req.aircraftTypeRatingId, ratingIndex).tier],
-    0,
-  );
 }
 
 // ¿Cuelgan de ESTA credencial? Por id, nunca por código (Fase 10, paso 3).
@@ -577,7 +523,7 @@ function habilitationsOfLicense(
 //
 // Separado de evaluateHabilitationRequirement porque lo necesitan dos
 // preguntas distintas: qué nota saca el requisito (allí, con vigencia y
-// textos) y qué credencial elegir (licenseCoverageQuality, sin nada de eso).
+// textos) y la comparación de cobertura efectiva entre credenciales.
 // Duplicar el emparejamiento en los dos sitios habría sido la forma de que la
 // elección y la puntuación acabaran discrepando.
 function bestHabilitationTier(
@@ -876,6 +822,19 @@ export function calculateOfferTechnicianMatch(
   now: Date = new Date(),
   engineIndex: EngineIndex = new Map(),
 ): MatchScore {
+  const selected = selectLicenseForOffer(offer, technician, ratingIndex, localDateToIso(now),
+    (candidate) => scoreWithSelectedLicense(offer, technician, ratingIndex, now, engineIndex, candidate));
+  return selected?.score ?? scoreWithSelectedLicense(offer, technician, ratingIndex, now, engineIndex, undefined);
+}
+
+function scoreWithSelectedLicense(
+  offer: OfferWithRequirements,
+  technician: TechnicianWithRelations,
+  ratingIndex: AircraftRatingIndex,
+  now: Date,
+  engineIndex: EngineIndex,
+  selectedLicense: SelectedLicense | undefined,
+): MatchScore {
   const hasQualificationRequirements = offerAsksForQualification(offer);
   const weights = getMatchScoreWeights(offer);
   const today = localDateToIso(now);
@@ -902,11 +861,7 @@ export function calculateOfferTechnicianMatch(
 
   const offerLicenseCode = offer.licenseCode;
 
-  // Fase 10 — LA CREDENCIAL SE ELIGE AQUÍ, UNA VEZ, ANTES DE PUNTUAR NADA.
-  // Ver selectLicenseForOffer: elegirla dentro de cada requisito dejaría que
-  // una oferta que exige dos aeronaves se cumpliera con una licencia distinta
-  // por aeronave.
-  const selectedLicense = selectLicenseForOffer(offer, technician, ratingIndex, today);
+  // The same selected credential supplies every certification requirement.
 
   // El recorte por equivalencia de autoridad. Multiplica a los DOS ejes de
   // papel (habilitación y licencia) porque los dos salen de la misma
