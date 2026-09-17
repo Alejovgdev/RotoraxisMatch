@@ -50,10 +50,27 @@ sin datos por la RLS nueva.
 
 ## 2. Plan de cierre
 
-**Sesión 1** — experiencia de aeronaves transaccional; H15 en
-`tae_select_company` y `tpt_select_company`; el perfil se guarda aunque falle
-el catálogo de motores; separar las suites de base del `npm test` general;
-textos de UI nuevos al inglés.
+**Sesión 1** (hecha) — experiencia de aeronaves transaccional (084); H15 en
+`tae_select_company` y `tpt_select_company` (085); el perfil se guarda aunque
+falle el catálogo de motores; separar las suites de base del `npm test`
+general; textos de UI nuevos al inglés.
+
+Cierre de la sesión 1:
+
+- **084** y **085** están escritas y ensayadas con rollback, **sin aplicar**.
+  Las dos suites de base pasan con ellas puestas dentro de la transacción
+  (13 + 16 comprobaciones) y el snapshot antes/después es idéntico.
+- Reproducido antes de arreglar, en los dos casos: la experiencia en aeronaves
+  se quedaba en cero tras un INSERT fallido, y sin la 085 un usuario de empresa
+  leía 3 filas (1 experiencia de aeronave, 2 tipos de perfil) de un técnico
+  bloqueado y sin relación.
+- El guardado del perfil ya no depende del catálogo de motores salvo cuando la
+  acción reescribe las habilitaciones.
+- `npm test` ya no escribe en la base; `npm run test:db` es el que sí.
+- Textos: el único literal de UI en castellano que queda es
+  «Considerar otras autoridades» (`RequiredLicensesSection.tsx:87`), reservado
+  para la sesión 2 junto con las equivalencias. Todo lo demás que parecía
+  castellano eran comentarios, que van en castellano por convención.
 
 **Sesión 2** — ofertas FAA con aeronaves como experiencia; licencia opcional en
 ofertas de motor (FAA P o A&P, Part-66 B1.x); equivalencias por autoridad
@@ -90,11 +107,15 @@ despliegue.
   la CLI no casa ninguno y trataría de aplicarlos todos.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
-  ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye.
+  ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
+  las suites que no escriben, más los dos validadores, que sólo leen.
+- **084 y 085 no están aplicadas.** El código de la sesión 1 ya las usa, así
+  que hay que aplicarlas antes de desplegar esta rama — junto con el despliegue
+  que arregla lo de arriba, no por separado.
 
 ## 5. Estado de las sesiones
 
-- Sesión 1: en curso.
+- Sesión 1: **hecha**. 084 y 085 pendientes de aplicar.
 - Sesión 2: pendiente.
 - Sesión 3: pendiente.
 - Final: pendiente.
