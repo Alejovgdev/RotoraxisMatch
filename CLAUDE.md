@@ -22,7 +22,7 @@ The app must run on:
 - TypeScript
 - Expo Router
 - Supabase (Postgres + Auth + Storage + Edge Functions) — the active backend, not a future migration target. `src/repositories/v2/*` query Supabase directly (`src/lib/supabase.ts`); real Supabase Auth is wired (`AuthContext`, `/auth/*` screens); RLS is enabled on every table.
-- `supabase/migrations/*.sql` — 84 files, numbered `001`–`083` (the `014` slot is split into `0140`/`0141`). **064–080 are single-application migrations, not a replayable script set.** Never edit an already-applied migration; add a new one. Use Supabase MCP `apply_migration`, or the official Management API migration endpoint when MCP is unavailable, so the application is recorded in `supabase_migrations.schema_migrations`. Do not apply through the SQL editor or `execute_sql`. Transactional rehearsal queries must end in ROLLBACK.
+- `supabase/migrations/*.sql` — 86 files, numbered `001`–`085` (the `014` slot is split into `0140`/`0141`). `084` and `085` are written and rehearsed with rollback but **not applied yet**; everything up to `083` is live. **064–080 are single-application migrations, not a replayable script set.** Never edit an already-applied migration; add a new one. Use Supabase MCP `apply_migration`, or the official Management API migration endpoint when MCP is unavailable, so the application is recorded in `supabase_migrations.schema_migrations`. Do not apply through the SQL editor or `execute_sql`. Transactional rehearsal queries must end in ROLLBACK.
   - **Paso 5d, 2026-09-17:** 081, 082 and 083 are applied and registered — `20260917071326`, `20260917071907` and `20260917150705`, the last after explicit user confirmation, all through the official Management API migration endpoint. Installed triggers and rollback regressions verified. No client release has been deployed by this work. Full history, plan and caveats: `docs/fase-10.md`.
   - **History repair, 2026-09-15.** `001`, `004`–`007` and `061`–`063` had been applied through the SQL editor, so they were live but missing from `schema_migrations`. They were registered by hand, each with its file's full SQL in `statements` (md5 byte-identical to the file), under versions that keep the order: `001`→`20260603000100`, `004`→`20260604000400`, `005`→`20260604000500`, `006`→`20260606000600`, `007`→`20260606000700`, `061`→`20260812120000`, `062`→`20260910120000`, `063`→`20260910120100`. Backup taken first: `supabase_migrations.schema_migrations_backup_20260915` (the 73 rows before the repair; drop it once nobody needs it). At the time of that repair, history had 81 rows, one per migration file (`020` counts as 9 batches).
   - ⚠ **Do not run `supabase db push` or `supabase migration repair` as-is.** The CLI matches a local file to the history by the filename prefix (`001`, `002`…), but every history version is a timestamp (`20260603112059`…). To the CLI, no local file matches any history row, so it would try to run all of them. Renaming the files to timestamps, or rewriting the versions, has to come first, and it is a separate decision. Supabase branching builds from the files on an empty database, so this does not affect it.
@@ -204,8 +204,19 @@ Before major implementation:
 5. Do not remove existing functionality without permission.
 6. Run available checks before finishing.
 
-General checks: `npm test` runs all regression suites and both authority/eligibility
-validators sequentially, stopping on failure. Run `npm run ts` separately.
-Database suites use rollback and must not run concurrently with themselves.
-For this 5d work, present any new migration and its rollback test results to the
-user and wait for explicit confirmation before applying it to production.
+General checks: `npm test` runs the regression suites that **never write to the
+database**, plus both authority/eligibility validators, sequentially and stopping
+on failure. The validators do query the live project, but read-only (a `SELECT`
+on two catalogs and a `STABLE` function that takes facts as arguments), and they
+are the TS↔SQL parity guard, so they stay in the general run. Run `npm run ts`
+separately.
+
+⚠ `npm run test:db` is the one that **writes to production** — `test:database`
+and `test:habilitation-scope:database`. Everything goes inside `BEGIN … ROLLBACK`
+and both runners check afterwards that nothing was left behind, but while a run
+lasts it injects triggers and, in rehearsal mode, replaces installed functions,
+so a concurrent real write can block on it. Never run it in parallel with itself,
+and never assume `npm test` covers it.
+
+Present any new migration and its rollback test results to the user and wait for
+explicit confirmation before applying it to production.
