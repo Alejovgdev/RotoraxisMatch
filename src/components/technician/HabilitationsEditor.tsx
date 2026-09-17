@@ -7,7 +7,8 @@ import { DateField } from '../DateField';
 import type { DateFieldPalette } from '../DateField.types';
 import { AircraftRatingIndex, getAircraftTypeRatingLabel } from '../../constants/aircraftTypeRatings';
 import { individualTypeRatingScopeError } from '../../utils/individualTypeRatingScope';
-import { useEnginesCatalog } from '../../state/useEnginesCatalog';
+import { EngineIndex } from '../../constants/engines';
+import { EnginesLoadState } from '../../state/useEnginesCatalog';
 import { AircraftTypeRatingCatalog, AuthorityCode } from '../../types/catalog';
 import { credentialLabel } from '../../constants/licenses';
 import { HeldLicense, licensesForHabilitations, sortHeldLicenses } from '../../utils/profileLicenses';
@@ -53,6 +54,9 @@ interface Props {
   onRatingResolved: (rating: AircraftTypeRatingCatalog) => void;
   onRequestCatalog: () => void;
   dateFieldPalette: DateFieldPalette;
+  engineIndex: EngineIndex;
+  engineState: EnginesLoadState;
+  retryEngines: () => void;
 }
 
 // H3: new individual ratings must fit their credential. Existing rows stay
@@ -65,13 +69,15 @@ export function HabilitationsEditor({
   onRatingResolved,
   onRequestCatalog,
   dateFieldPalette,
+  engineIndex,
+  engineState,
+  retryEngines,
 }: Props) {
   const [newHabLicense, setNewHabLicense] = useState<HeldLicense | null>(null);
   const selectable = sortHeldLicenses(licensesForHabilitations(heldLicenses));
   const [newHabRating, setNewHabRating] = useState<string | null>(null);
   const [newHabExperienceYears, setNewHabExperienceYears] = useState('');
 
-  const { engineIndex, state: engineState, retry: retryEngines } = useEnginesCatalog();
   const activeLicense = newHabLicense && selectable.find(
     (l) => l.authority === newHabLicense.authority && l.code === newHabLicense.code,
   );

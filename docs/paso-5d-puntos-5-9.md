@@ -147,3 +147,62 @@ migración nueva es [083_individual_type_rating_scope.sql](../supabase/migration
 Sus funciones y triggers se probaron dentro de transacciones revertidas; no se
 registró ni se dejó instalada. H3 en servidor solo será efectivo en producción
 tras esa aplicación. No hay despliegue del cliente.
+
+## Anexo — 083 aplicada y avisos del perfil (17 septiembre 2026)
+
+Este anexo sustituye el estado «pendiente» de la entrega inicial anterior.
+Tras la confirmación explícita del usuario, se aplicó **exactamente la 083
+revisada**, sin editarla, al proyecto `rwauwuremzkizeoginza` mediante el
+[endpoint oficial de migraciones](https://supabase.com/docs/reference/api/v1-apply-a-migration).
+Registro: `20260917150705`, `083_individual_type_rating_scope`, una sentencia
+registrada. SHA256 del archivo enviado:
+`35bfabc2086e88878b2aebbada9593d9c74b3bec2795cf870eca7a59b3893a13`.
+
+Se verificaron los dos triggers activos y la igualdad de las filas de licencias
+y habilitaciones antes/después. `node scripts/testHabilitationScopeDatabase.cjs --installed`
+ejecutó 412 controles y las 26 regresiones anteriores contra las funciones
+instaladas, **sin reemplazarlas**; todos PASS y con rollback exacto.
+
+### Qué veía el técnico y qué cambia
+
+- Un rechazo de la 083 llegaba al perfil como `Individual type rating is outside
+  the licence scope.` o `Existing type rating is outside the new licence scope.`,
+  sin identificar aeronave. El mapper conservaba solo el mensaje de Postgres.
+- El caso B1.1 + A320 → seleccionar B1.2 no reasigna una credencial por ID:
+  los chips quitan/añaden licencias. El A320 seguía bajo B1.1, cuya retirada se
+  bloqueaba al final del guardado con un aviso que solo nombraba la licencia.
+- Ahora el perfil muestra un aviso inmediato con **Airbus A320 — CFM56 y EASA
+  B1.1** si se desmarca esa licencia. Explica que elegir otra no transfiere la
+  habilitación. Guardar se detiene antes de cualquier escritura mientras exista
+  esa dependencia. Añadir B1.2 conservando B1.1 y A320 sí se permite.
+- Una combinación incompatible que eluda el selector también se comprueba antes
+  de guardar: el mensaje nombra la aeronave, la credencial y la limitación
+  (por ejemplo, B1.2 cubre pistón). No se borra ni reasigna la habilitación.
+- Si los datos locales estaban desactualizados y la base rechaza por 083, el
+  cliente consulta el predicado SQL existente para cada habilitación. Solo
+  señala las que fallan; las demás no aparecen como culpables. Esto cubre tanto
+  la RPC de habilitaciones como el rechazo de credencial durante el guardado.
+  No requiere otra migración ni reintenta la escritura automáticamente.
+- Si también falla el diagnóstico, se informa de que no se pudo identificar
+  cuál y se nombran las habilitaciones a revisar. Sin catálogo de etiquetas se
+  usan posiciones legibles, nunca UUIDs ni mensajes SQL. Otros errores de base
+  conservan su tratamiento y no se disfrazan como un fallo de alcance.
+
+El perfil y su editor comparten ahora el mismo estado de catálogo de motores,
+incluido el reintento, para no validar con dos cargas desincronizadas.
+
+### Pruebas y límites del anexo
+
+`test:profile-habilitations`, incorporado a `npm test`, prueba las reglas, el
+repositorio real con transporte inyectado y el **handler real de Save Changes**
+extraído mediante AST. Verifica que la retirada dependiente y una combinación
+incompatible hacen cero escrituras, que el rechazo del trigger de credencial
+termina en el mensaje legible del perfil, y que un fallo de diagnóstico no
+oculta ni reintenta el rechazo. También cubre autoridad distinta, catálogo
+ausente y conservación de una segunda habilitación compatible.
+
+El formulario completo sigue sin ser una transacción única: si la base rechaza
+después del preaviso por datos desactualizados, cambios previos de otros bloques
+podrían haberse guardado. Este anexo no cambia ese límite ni afirma un rollback
+global del perfil. No se ha realizado una comprobación manual en dispositivo.
+No se ha desplegado el cliente, hecho push ni merge. Cambios en un commit aparte.

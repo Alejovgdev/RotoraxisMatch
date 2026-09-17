@@ -51,6 +51,8 @@ import {
   updateHeldLicenseDates,
 } from '../../src/utils/profileLicenses';
 import { EngineExperienceEditor, EngineExperienceRow } from '../../src/components/technician/EngineExperienceEditor';
+import { useEnginesCatalog } from '../../src/state/useEnginesCatalog';
+import { isHabilitationScopeRejection, profileHabilitationProblems } from '../../src/utils/profileHabilitationValidation';
 import { AuthorityCode, AuthorityLicenseCode } from '../../src/types/catalog';
 import { TechnicianTypeSelector } from '../../src/components/TechnicianTypeSelector';
 import { useTechnicianTypes } from '../../src/auth/useCatalogOptions';
@@ -269,6 +271,8 @@ export default function TechnicianProfileScreen() {
   // previously-selected, now-deactivated rating still shows a real label
   // instead of a bare UUID (see catalogRepository.getAircraftTypeRatingsByIds).
   const [ratingsById, setRatingsById] = useState<AircraftRatingIndex>(new Map());
+  const { engineIndex, state: engineState, retry: retryEngines } = useEnginesCatalog();
+  const habilitationProblems = profileHabilitationProblems(habilitations, heldLicenses, ratingsById, engineIndex);
 
   const [requestPanelOpen, setRequestPanelOpen] = useState(false);
   const [requestLicense, setRequestLicense] = useState<string | null>(null);
@@ -606,6 +610,7 @@ export default function TechnicianProfileScreen() {
   // queda la UK CAA no cambia ningún código, y por tanto no toca los tipos.
   function toggleLicense(authority: AuthorityCode, code: AuthorityLicenseCode) {
     if (!form) return;
+    setProfileError(null);
     const next = sortHeldLicenses(toggleHeldLicense(heldLicenses, authority, code));
     const nextCodes = heldLicenseCodes(next);
     setHeldLicenses(next);
@@ -629,6 +634,7 @@ export default function TechnicianProfileScreen() {
   // the resulting array flows back up, marking both dirty flags exactly
   // like the three separate handlers it replaces used to.
   function onChangeHabilitations(next: HabRow[]) {
+    setProfileError(null);
     setHabilitations(next);
     setHabDirty(true);
     setIsDirty(true);
@@ -699,6 +705,13 @@ export default function TechnicianProfileScreen() {
     const yearsError = validateProfileYearsExperience(yearsInput);
     if (yearsError) {
       setProfileError(yearsError);
+      return;
+    }
+
+    // Warn before ANY profile write, including a deselected credential that
+    // still supports an unchanged rating. Never move/delete ratings implicitly.
+    if (habilitationProblems.length > 0) {
+      setProfileError(habilitationProblems.join('\n'));
       return;
     }
 
@@ -922,7 +935,9 @@ export default function TechnicianProfileScreen() {
         await loadProfile();
       }
     } catch (err: any) {
-      setProfileError(err?.message ?? 'Save failed. Please try again.');
+      const scopeMessage = isHabilitationScopeRejection(err)
+        ? await technicianRepositoryV2.describeHabilitationScopeRejection(habilitations) : null;
+      setProfileError(scopeMessage ?? err?.message ?? 'Save failed. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -1065,7 +1080,7 @@ export default function TechnicianProfileScreen() {
 
           {profileError && (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{profileError}</Text>
+              <Text accessibilityRole="alert" style={styles.errorText}>{profileError}</Text>
             </View>
           )}
 
@@ -1238,6 +1253,11 @@ export default function TechnicianProfileScreen() {
             title="Licenses"
             subtitle="Pick the issuing authority, then every licence you hold from it. Leave empty if you hold none. Each one ticks the profile type it certifies — mechanical or avionics — and unticks it again if you remove it."
           />
+          {habilitationProblems.length > 0 ? (
+            <View style={styles.warningBanner}>
+              <Text accessibilityRole="alert" style={styles.warningText}>{habilitationProblems.join('\n')}</Text>
+            </View>
+          ) : null}
           <TechnicianCard style={styles.sectionCard}>
             {/* Paso 5b: primero la autoridad. Con cinco autoridades "B1.1" no
                 dice cuál es, y los códigos que existen dependen de quién los
@@ -1313,6 +1333,9 @@ export default function TechnicianProfileScreen() {
           </TechnicianCard>
 
           <HabilitationsEditor
+            engineIndex={engineIndex}
+            engineState={engineState}
+            retryEngines={retryEngines}
             value={habilitations}
             onChange={onChangeHabilitations}
             heldLicenses={heldLicenses}

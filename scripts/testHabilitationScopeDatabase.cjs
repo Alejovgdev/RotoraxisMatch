@@ -1,4 +1,5 @@
-// Rehearsal ONLY: the candidate migration and every test mutation roll back.
+// Every mutation rolls back. Default: rehearse the candidate migration.
+// --installed tests the production functions/triggers without replacing them.
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
@@ -9,6 +10,7 @@ const env = Object.fromEntries(fs.readFileSync(path.join(root, '.env'), 'utf8').
   }));
 const token = process.env.SUPABASE_TEST_ACCESS_TOKEN ?? env.SUPABASE_ACCESS_TOKEN ?? process.env.SUPABASE_ACCESS_TOKEN;
 const baseline = process.argv.includes('--baseline');
+const installed = process.argv.includes('--installed');
 async function query(query) {
   const host = new URL(env.EXPO_PUBLIC_SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL).hostname;
   if (!/^[a-z0-9]+\.supabase\.co$/.test(host) || !token) throw new Error('Missing hosted test project / token');
@@ -29,14 +31,14 @@ async function main() {
     'triggers',(SELECT coalesce(jsonb_agg(pg_get_triggerdef(oid) ORDER BY tgname),'[]') FROM pg_trigger WHERE tgname IN ('enforce_individual_type_rating_scope','enforce_credential_type_rating_scope'))
   ) AS snapshot`;
   const before = await query(snapshotQuery);
-  const migration = baseline ? '' : fs.readFileSync(path.join(root, 'supabase/migrations/083_individual_type_rating_scope.sql'), 'utf8');
+  const migration = baseline || installed ? '' : fs.readFileSync(path.join(root, 'supabase/migrations/083_individual_type_rating_scope.sql'), 'utf8');
   const sql = fs.readFileSync(path.join(__dirname, 'testHabilitationScope.sql'), 'utf8');
   const rows = await query(`BEGIN; SET LOCAL statement_timeout='45s'; SET LOCAL app.scope_baseline='${baseline}';\n${migration}\n${sql}\nROLLBACK;`);
   const after = await query(snapshotQuery);
   if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Rollback did not restore the exact data / schema snapshot');
   const result = rows[0];
   if (rows.length !== 1 || result.cases < 300 || result.failures !== 0) throw new Error(JSON.stringify(rows));
-  console.log(`PASS H3 ${baseline ? 'baseline reproduction' : 'migration rehearsal'}: ${result.cases} cases; rollback restored exact data, functions and triggers`);
+  console.log(`PASS H3 ${baseline ? 'baseline reproduction' : installed ? 'installed migration' : 'migration rehearsal'}: ${result.cases} cases; rollback restored exact data, functions and triggers`);
   if (!baseline) {
     for (const file of ['testApplicationSecurity.sql', 'testTransactionalWrites.sql']) {
       const suite = fs.readFileSync(path.join(__dirname, file), 'utf8');

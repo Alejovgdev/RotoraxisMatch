@@ -32,6 +32,7 @@ import { credentialLabel } from '../../constants/licenses';
 // autoridad mientras el perfil no la pedía. Se retira con el selector de
 // autoridad del perfil: un olvido falla a la vista, no se rellena aquí.
 import { matchesTechnicianSearchIdentity } from '../../utils/technicianSearchFilterMatch';
+import { explainHabilitationScopeRejection, HabilitationCredential, isHabilitationScopeRejection } from '../../utils/profileHabilitationValidation';
 
 // `technician_type` (singular) NO se pide en ninguno de los dos SELECT desde
 // la Fase 6 tanda A: los tipos salen de `technician_profile_types` vía
@@ -565,7 +566,24 @@ export const technicianRepositoryV2 = {
         is_current: entry.isCurrent ?? true,
       })),
     });
+    if (isHabilitationScopeRejection(error)) {
+      throw new Error(await technicianRepositoryV2.describeHabilitationScopeRejection(entries));
+    }
     throwIfError(error);
+  },
+
+  /** Read-only diagnosis also used by the profile when a credential upsert
+   * hits 083's parent trigger before ratings are replaced. */
+  async describeHabilitationScopeRejection(entries: readonly HabilitationCredential[]): Promise<string> {
+    return explainHabilitationScopeRejection(entries,
+        async () => buildAircraftRatingIndex(await catalogRepository.getAircraftTypeRatingsByIds(entries.map((e) => e.aircraftTypeRatingId))),
+        async (entry) => {
+          const { data, error: diagnosticError } = await supabase.rpc('individual_type_rating_scope_error', {
+            p_authority: entry.authority, p_license_code: entry.licenseCode, p_rating_id: entry.aircraftTypeRatingId,
+          });
+          throwIfError(diagnosticError);
+          return data as string | null;
+        });
   },
 
   /**
