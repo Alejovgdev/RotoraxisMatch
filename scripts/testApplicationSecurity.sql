@@ -93,11 +93,16 @@ BEGIN
   INSERT INTO technician_habilitations(technician_id,technician_license_id,license_code,aircraft_type_rating_id)
     VALUES(other_t,lic,'B1.1',rating) ON CONFLICT DO NOTHING;
   INSERT INTO technician_engine_experience(technician_id,engine_id) VALUES(other_t,engine) ON CONFLICT DO NOTHING;
+  -- 085: las otras dos tablas de cualificación que lee loadTechnicianRelations.
+  INSERT INTO technician_aircraft_experience(technician_id,aircraft_type_rating_id) VALUES(other_t,rating) ON CONFLICT DO NOTHING;
+  INSERT INTO technician_profile_types(technician_id,type_code) VALUES(other_t,'mechanic') ON CONFLICT DO NOTHING;
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',cu,'role','authenticated')::text,true);
   SET LOCAL ROLE authenticated;
   SELECT ARRAY[(SELECT count(*) FROM technician_licenses WHERE technician_id=other_t),
     (SELECT count(*) FROM technician_habilitations WHERE technician_id=other_t),
-    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t)] INTO before_counts;
+    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t),
+    (SELECT count(*) FROM technician_aircraft_experience WHERE technician_id=other_t),
+    (SELECT count(*) FROM technician_profile_types WHERE technician_id=other_t)] INTO before_counts;
   INSERT INTO security_results VALUES('H15 visible profile keeps qualifications',
     EXISTS(SELECT 1 FROM technician_public_view WHERE id=other_t) AND 0<ALL(before_counts),before_counts::text);
   RESET ROLE;
@@ -107,7 +112,9 @@ BEGIN
   SET LOCAL ROLE authenticated;
   SELECT (SELECT count(*) FROM technician_licenses WHERE technician_id=other_t)+
     (SELECT count(*) FROM technician_habilitations WHERE technician_id=other_t)+
-    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t) INTO observed;
+    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t)+
+    (SELECT count(*) FROM technician_aircraft_experience WHERE technician_id=other_t)+
+    (SELECT count(*) FROM technician_profile_types WHERE technician_id=other_t) INTO observed;
   INSERT INTO security_results VALUES('H15 hidden unrelated profile hides qualifications',observed='0',observed);
   RESET ROLE;
   INSERT INTO offer_requests(technician_id,offer_id,company_id) VALUES(other_t,o,cid);
@@ -115,7 +122,9 @@ BEGIN
   INSERT INTO security_results SELECT 'H15 existing relationship keeps qualifications',
     before_counts=ARRAY[(SELECT count(*) FROM technician_licenses WHERE technician_id=other_t),
     (SELECT count(*) FROM technician_habilitations WHERE technician_id=other_t),
-    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t)],'relationship';
+    (SELECT count(*) FROM technician_engine_experience WHERE technician_id=other_t),
+    (SELECT count(*) FROM technician_aircraft_experience WHERE technician_id=other_t),
+    (SELECT count(*) FROM technician_profile_types WHERE technician_id=other_t)],'relationship';
   -- Company status transitions are still allowed (must not demand technician auth).
   observed:=pg_temp.attempt(format('UPDATE offer_applications SET status=''accepted'' WHERE id=%L',app));
   INSERT INTO security_results VALUES('company can accept application',observed='OK',observed);
