@@ -3576,7 +3576,7 @@ async function main() {
 
   await test('Fase 10 · FAA — una licencia FAA sin fecha de caducidad NO se trata como caducada', () => {
     assert.equal(authorityLicenseCanExpire('FAA'), false, '14 CFR 65: el certificado no expira');
-    for (const authority of PART66_AUTHORITIES) assert.equal(authorityLicenseCanExpire(authority), true, authority);
+    for (const authority of ['EASA', 'UK_CAA', 'GCAA']) assert.equal(authorityLicenseCanExpire(authority), true, authority);
 
     // Por la rama FAA de verdad (A&P frente a A) y con el reloj muy adelante:
     // nada puede leerse como caducado.
@@ -3586,6 +3586,25 @@ async function main() {
     assert.deepEqual(r.vigenciaNotices, []);
     assert.deepEqual(r.missingRequirements, []);
     assert.equal(r.total, 100);
+  });
+
+  await test('H7 — CASA y FAA ignoran caducidades históricas; EASA, UK y GCAA las conservan', () => {
+    for (const authority of ['CASA', 'FAA', 'EASA', 'UK_CAA', 'GCAA'] as AuthorityCode[]) {
+      const code = authority === 'FAA' ? 'A&P' : 'B1.1';
+      const perpetual = authority === 'CASA' || authority === 'FAA';
+      assert.equal(authorityLicenseCanExpire(authority), !perpetual);
+      for (const withRating of authority === 'FAA' ? [false] : [false, true]) {
+        const offer = makeOffer({ licenseAuthority: authority, licenseCode: code,
+          requiredHabilitations: withRating ? [makeHabReq('fx-a320-cfm56')] : [] });
+        const license = makeLicense(code, { authority });
+        const tech = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [license],
+          habilitations: withRating ? [makeHabOn(license, { aircraftTypeRatingId: 'fx-a320-cfm56' })] : [] });
+        const control = puntuar(offer, tech);
+        const historical = puntuar(offer, { ...tech, licenses: [{ ...license, expiresAt: '2000-01-01' }] });
+        if (perpetual) assert.deepEqual(historical, control, authority);
+        else assert.ok(historical.total < control.total, authority);
+      }
+    }
   });
 
   await test('Fase 10 · FAA — una oferta FAA no depende de que el catálogo de type ratings esté cargado', () => {

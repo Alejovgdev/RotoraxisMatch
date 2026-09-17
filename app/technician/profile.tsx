@@ -36,6 +36,7 @@ import {
   AUTHORITY_LICENSES,
   LICENSE_CATEGORIES,
   authorityLabel,
+  authorityLicenseCanExpire,
   credentialLabel,
   typesAfterLicenseChange,
   typesImpliedByLicenses,
@@ -707,7 +708,7 @@ export default function TechnicianProfileScreen() {
     // flagged.
     const dateErrors: string[] = [];
     heldLicenses.forEach((license) => {
-      if (!isValidDateOrder(license.issuedAt, license.expiresAt)) {
+      if (authorityLicenseCanExpire(license.authority) && !isValidDateOrder(license.issuedAt, license.expiresAt)) {
         dateErrors.push(`${credentialLabel(license.authority, license.code)}: expiry date must be after the issue date.`);
       }
     });
@@ -1292,9 +1293,8 @@ export default function TechnicianProfileScreen() {
                           palette={DATE_FIELD_PALETTE}
                         />
                       </View>
-                      {/* La FAA no caduca (14 CFR 65.19): no se pide fecha de
-                          caducidad que nadie tiene. */}
-                      {license.authority !== 'FAA' ? (
+                      {/* La caducidad del documento depende de su autoridad. */}
+                      {authorityLicenseCanExpire(license.authority) ? (
                         <View style={styles.licenseDetailField}>
                           <Text style={styles.fieldLabelXs}>Expires</Text>
                           <DateField

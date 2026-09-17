@@ -354,14 +354,16 @@ export function equivalentAuthorities(authority: string): AuthorityCode[] {
  * del 65.83 —haber ejercido 6 meses de los últimos 24 para poder ejercer los
  * privilegios—, que es otra cosa: no es una fecha impresa en el papel, esta
  * plataforma no la conoce, y tratarla como caducidad marcaría como vencido a
- * todo titular FAA. Las cuatro Part-66 sí caducan.
+ * todo titular FAA. CASA también es perpetua: guía oficial de carreras AME,
+ * página 7 (https://www.casa.gov.au/sites/default/files/2021-12/aircraft-maintenance-engineer-careers-guide.pdf).
+ * EASA, UK CAA y GCAA sí tienen caducidad administrativa.
  *
  * El scorer lo consulta ANTES de comparar `expiresAt` con hoy, así que una
- * fila FAA con fecha —dato que no debería existir, pero que un PATCH podría
+ * fila FAA/CASA con fecha —dato histórico que un PATCH podría
  * escribir— tampoco se lee como caducada.
  */
 export function authorityLicenseCanExpire(authority: string): boolean {
-  return authority !== 'FAA';
+  return authority !== 'FAA' && authority !== 'CASA';
 }
 
 /**
