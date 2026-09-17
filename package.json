@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "test": "npm run test:transactions && npm run test:database && npm run test:offer-salary && npm run test:url-validation && npm run test:offer-map-markers && npm run test:matching && npm run test:offer-form && npm run test:location && npm run test:habilitation-scope && npm run test:habilitation-scope:database && npm run test:search-catalog-failure && npm run validate:authority-licenses && npm run validate:application-eligibility",
     "test:search-catalog-failure": "node scripts/testSearchCatalogFailure.cjs",
     "test:habilitation-scope": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-habilitation-scope scripts/testHabilitationScope.ts && node .tmp-test-habilitation-scope/scripts/testHabilitationScope.js",
     "test:habilitation-scope:database": "node scripts/testHabilitationScopeDatabase.cjs",

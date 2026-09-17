@@ -79,6 +79,14 @@ incompleto y cambio de oferta/lote. El hook real se ejecuta con adaptador de
 estado en memoria para error, reintento y carreras. Matching 236 PASS; hook PASS;
 TypeScript limpio. No se ha hecho una prueba manual completa de las pantallas.
 
+## 8 — comprobación general
+
+No existía `npm test` ni otro script agregador en el repositorio. Se añade
+`npm test` con las ocho suites anteriores, las tres nuevas y ambos validadores,
+incluido `validate:application-eligibility`. Ejecución secuencial y parada ante
+fallo; las pruebas de base requieren credenciales de pruebas y usan rollback.
+TypeScript se comprueba por separado con `npm run ts`.
+
 ## Estado
 
-Puntos 8–9 en curso. Ninguna migración de esta segunda parte aplicada en producción.
+Punto 9 en curso. Ninguna migración de esta segunda parte aplicada en producción.
