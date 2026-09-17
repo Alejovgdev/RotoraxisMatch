@@ -5,6 +5,8 @@ repositorio por petición del usuario durante el paso 5d. Describe el estado
 auditado en `f7d9275`, **antes de las correcciones del paso 5d**. Los identificadores
 H1–H16 se conservan para relacionar correcciones y tareas pendientes.
 
+Estado posterior: [cierre de los puntos 1–4 del paso 5d](paso-5d-puntos-1-4.md).
+
 ## 1. Dictamen y alcance
 
 No aprobar el merge en el estado auditado. Hay fallos de seguridad, pérdida de

@@ -85,6 +85,8 @@ import {
   AUTHORITY_LICENSES,
   LICENSE_CODES,
   authorityLicenseCanExpire,
+  licenseCodeSatisfies,
+  licenseSatisfiesRequirement,
   equivalentAuthorities,
   isValidAuthorityLicense,
   licensesSelectableForOfferType,
@@ -3515,6 +3517,36 @@ async function main() {
   });
 
   // ── FAA ───────────────────────────────────────────────────────────────
+
+  await test('H8 — B1.x cubre A.x solo bajo la misma autoridad y en la dirección correcta', () => {
+    for (const authority of PART66_AUTHORITIES) for (const i of [1, 2, 3, 4] as const) {
+      assert.equal(licenseCodeSatisfies(`B1.${i}`, `A${i}`), true);
+      assert.equal(licenseCodeSatisfies(`A${i}`, `B1.${i}`), false);
+      const offer = makeOffer({ licenseAuthority: authority, licenseCode: `A${i}` });
+      const technician = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense(`B1.${i}`, { authority })] });
+      assert.equal(puntuar(offer, technician).total, 100);
+      for (const other of PART66_AUTHORITIES.filter((a) => a !== authority)) {
+        assert.equal(licenseSatisfiesRequirement({ authority: other, licenseCode: `B1.${i}` }, { authority, licenseCode: `A${i}` }, true), null);
+      }
+      for (const j of [1, 2, 3, 4].filter((n) => n !== i)) assert.equal(licenseCodeSatisfies(`B1.${i}`, `A${j}`), false);
+    }
+  });
+
+  await test('H8 — FAA A y P en filas separadas equivalen a A&P sin mezclar autoridades', () => {
+    const a = makeLicense('A', { authority: 'FAA', expiresAt: '2020-01-01' });
+    const p = makeLicense('P', { authority: 'FAA' });
+    for (const code of ['A', 'P', 'A&P']) {
+      const offer = makeOffer({ licenseAuthority: 'FAA', licenseCode: code });
+      const separate = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [a, p] });
+      assert.equal(puntuar(offer, separate).total, 100);
+      assert.equal(puntuar(offer, { ...separate, licenses: [p, a] }).total, 100);
+      assert.equal(separate.licenses.length, 2, 'normalizar para matching no muta el perfil');
+    }
+    const offer = makeOffer({ licenseAuthority: 'FAA', licenseCode: 'A&P' });
+    assert.ok(puntuar(offer, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [a] })).total < 100);
+    assert.ok(puntuar(offer, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [p] })).total < 100);
+    assert.ok(puntuar(offer, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [a, { ...p, authority: 'EASA' }] })).total < 100);
+  });
 
   await test('Fase 10 · FAA — A&P satisface una oferta que pide A, una que pide P y una que pide A&P', () => {
     const tecnico = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A&P', { authority: 'FAA' })] });

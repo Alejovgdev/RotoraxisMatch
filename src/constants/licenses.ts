@@ -368,8 +368,7 @@ export function authorityLicenseCanExpire(authority: string): boolean {
  * ¿El código que el técnico TIENE satisface el que la oferta PIDE?
  *
  * ── LA ÚNICA IMPLEMENTACIÓN DE ESTA PREGUNTA ──────────────────────────
- * Comparar códigos a mano (`held === required`) es correcto para las trece
- * Part-66 y MENTIRA para la FAA, donde A&P es literalmente "airframe and
+ * B1.1–B1.4 incluyen respectivamente A1–A4. En FAA, A&P es "airframe and
  * powerplant": quien lo tiene satisface una oferta de A, una de P y una de
  * A&P. Si esa comparación vive en dos sitios, uno de los dos se olvidará del
  * A&P, y el que se olvide dejará fuera al candidato que sí puede hacer el
@@ -380,6 +379,8 @@ export function authorityLicenseCanExpire(authority: string): boolean {
  */
 export function licenseCodeSatisfies(held: string, required: string): boolean {
   if (held === required) return true;
+  const includedCategory: Record<string, string> = { 'B1.1': 'A1', 'B1.2': 'A2', 'B1.3': 'A3', 'B1.4': 'A4' };
+  if (includedCategory[held] === required) return true;
   return held === 'A&P' && (required === 'A' || required === 'P');
 }
 
@@ -406,6 +407,9 @@ export function licenseSatisfiesRequirement(
   if (!licenseCodeSatisfies(held.licenseCode, required.licenseCode)) return null;
   if (required.authority === undefined || held.authority === required.authority) return 'exact';
   if (!acceptsEquivalent) return null;
+  // B1 -> A is an inclusion within one authority, not an extra cross-authority
+  // equivalence. The checkbox continues to compare the same category abroad.
+  if (held.licenseCode !== required.licenseCode) return null;
   return equivalentAuthorities(required.authority).includes(held.authority as AuthorityCode)
     ? 'equivalent'
     : null;

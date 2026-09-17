@@ -478,7 +478,14 @@ function selectLicenseForOffer(
 ): (SelectedLicense & { score: MatchScore }) | undefined {
   const required = offer.licenseCode;
   if (!required) return undefined;
-  const candidates = technician.licenses.flatMap((license) => {
+  // FAA A and P are ratings on one mechanic certificate. Two stored rows
+  // represent A&P for matching; this projection is never persisted and never
+  // joins Part-66 aircraft from separate credentials.
+  const credentials = [...technician.licenses];
+  const faaA = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'A');
+  const faaP = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'P');
+  if (faaA && faaP) credentials.push({ ...faaA, id: `faa-ap:${faaA.id}:${faaP.id}`, licenseCode: 'A&P' });
+  const candidates = credentials.flatMap((license) => {
     const satisfaction = licenseSatisfiesRequirement(
       license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptsEquivalent,
     );
