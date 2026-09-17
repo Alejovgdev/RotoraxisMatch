@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "test:search-catalog-failure": "node scripts/testSearchCatalogFailure.cjs",
     "test:habilitation-scope": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-habilitation-scope scripts/testHabilitationScope.ts && node .tmp-test-habilitation-scope/scripts/testHabilitationScope.js",
     "test:habilitation-scope:database": "node scripts/testHabilitationScopeDatabase.cjs",
     "start": "expo start",

@@ -61,6 +61,24 @@ se conservan; cambiar su semántica o añadir endosos de grupo/sistemas es otra
 decisión de producto. No se certifica individualmente el reconocimiento del
 catálogo EASA por las otras autoridades.
 
+## 7 — H13: búsqueda sin continuación silenciosa
+
+Eliminado el `.catch(() => null)` de matching y el retorno de la lista original
+cuando aún no había puntuaciones. Una búsqueda con oferta solo publica un
+resultado calculado para esa revisión de oferta y ese lote de técnicos.
+Mientras carga, muestra estado de comprobación; si falla, mensaje visible con
+reintento. El contador refleja los resultados filtrados.
+
+También se controla el fallo de catálogo inicial del hook de búsqueda (antes
+dejaba loading activo). Vacía resultados, publica error y descarta respuestas
+de búsquedas antiguas o canceladas al limpiar filtros.
+
+Pruebas: fallo de cada catálogo contra el servicio real con I/O inyectada,
+reintento con exclusiones de motor/sin licencia, perfiles ausentes, resultado
+incompleto y cambio de oferta/lote. El hook real se ejecuta con adaptador de
+estado en memoria para error, reintento y carreras. Matching 236 PASS; hook PASS;
+TypeScript limpio. No se ha hecho una prueba manual completa de las pantallas.
+
 ## Estado
 
-Puntos 7–9 en curso. Ninguna migración de esta segunda parte aplicada en producción.
+Puntos 8–9 en curso. Ninguna migración de esta segunda parte aplicada en producción.

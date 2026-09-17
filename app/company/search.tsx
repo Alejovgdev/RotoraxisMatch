@@ -40,6 +40,7 @@ import { offerRequestRepository } from '../../src/repositories/v2/offerRequestRe
 import { offerApplicationRepository } from '../../src/repositories/v2/offerApplicationRepository';
 import { technicianRepositoryV2 } from '../../src/repositories/v2/technicianRepositoryV2';
 import { matchPairs } from '../../src/utils/matchingV2';
+import { loadSearchOfferResults, visibleSearchResults, SearchOfferResults } from '../../src/utils/searchOfferResults';
 import { useAircraftTypeRatingsCatalog } from '../../src/state/useAircraftTypeRatingsCatalog';
 import { AircraftRatingIndex } from '../../src/constants/aircraftTypeRatings';
 import { CollapsibleAircraftFilter } from '../../src/components/CollapsibleAircraftFilter';
@@ -65,7 +66,6 @@ import { ViewTechnicianProfileButton } from '../../src/components/company/ViewTe
 import { spacing } from '../../src/theme';
 
 type PreviewMap = Record<string, SafeTechnicianPreview>;
-type ScoreMap = Record<string, MatchScore>;
 
 function labelize(value?: string): string {
   if (!value) return 'Not specified';
@@ -109,7 +109,7 @@ export default function TechnicianSearchScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= 960;
-  const { results, filters, loading, hasSearched, updateFilter, clearFilters, search } =
+  const { results, filters, loading, hasSearched, error: sourceError, updateFilter, clearFilters, search } =
     useTechnicianSearch();
   // Aquí el catálogo de ratings ya sólo pinta etiquetas de las tarjetas. La
   // puntuación la hace matchPairs, que espera a sus catálogos (ratings y
@@ -124,11 +124,11 @@ export default function TechnicianSearchScreen() {
   const [offers, setOffers] = useState<OfferWithRequirements[]>([]);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(preselectedOfferId ?? null);
   const [previews, setPreviews] = useState<PreviewMap>({});
-  const [scores, setScores] = useState<ScoreMap>({});
-  // Paso 5b: los que el filtro de la oferta elegida saca. No se pintan con nota
-  // baja: no aparecen, igual que en la lista de la oferta.
-  const [ineligibleIds, setIneligibleIds] = useState<Set<string>>(new Set());
-  const [scoredOfferId, setScoredOfferId] = useState<string | null>(null);
+  const [offerResults, setOfferResults] = useState<SearchOfferResults<SafeTechnicianView> | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [offersLoading, setOffersLoading] = useState(true);
+  const [offersError, setOffersError] = useState<string | null>(null);
   const [offerRequests, setOfferRequests] = useState<OfferRequest[]>([]);
   const [offerApplications, setOfferApplications] = useState<OfferApplication[]>([]);
   const [sendingTechId, setSendingTechId] = useState<string | null>(null);
@@ -166,14 +166,21 @@ export default function TechnicianSearchScreen() {
 
   useEffect(() => {
     let active = true;
+    setOffersLoading(true);
+    setOffersError(null);
     offerRepository.getAllWithRequirements().then((all) => {
       if (!active) return;
       setOffers(all.filter((offer) => offer.companyId === companyId && isOfferOpenForTechnicians(offer)));
+      setOffersLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setOffersLoading(false);
+      setOffersError('Offers could not be loaded. Please retry.');
     });
     return () => {
       active = false;
     };
-  }, [companyId]);
+  }, [companyId, retryAttempt]);
 
   const selectedOffer = useMemo(
     () => offers.find((offer) => offer.id === selectedOfferId) ?? null,
@@ -183,11 +190,8 @@ export default function TechnicianSearchScreen() {
   useEffect(() => {
     let active = true;
 
-    // A score only belongs to one offer. Clear the previous map immediately
-    // so changing the selected offer never shows or sorts by stale scores.
-    setScores({});
-    setIneligibleIds(new Set());
-    setScoredOfferId(null);
+    setOfferResults(null);
+    setPreviewError(null);
 
     async function loadPreviewData() {
       if (!results.length) {
@@ -207,67 +211,32 @@ export default function TechnicianSearchScreen() {
         if (preview) nextPreviews[id] = preview;
       });
 
-      const nextScores: ScoreMap = {};
-      const nextIneligible = new Set<string>();
-      let scored = false;
-      if (selectedOffer) {
-        const loaded = (await Promise.all(results.map((tech) => technicianRepositoryV2.getWithRelations(tech.id))))
-          .filter((full): full is NonNullable<typeof full> => Boolean(full));
-        // Filtro + scorer con los dos catálogos, en el servicio. Si los
-        // catálogos no cargan, la lista queda sin puntuar en el orden del
-        // repositorio: mejor que ordenar por un score erróneo.
-        const pairs = await matchPairs(loaded.map((technician) => ({ offer: selectedOffer, technician }))).catch(() => null);
-        if (pairs) {
-          scored = true;
-          loaded.forEach((technician, i) => {
-            const pair = pairs[i];
-            if (pair.eligible) nextScores[technician.id] = pair.score;
-            else nextIneligible.add(technician.id);
-          });
-        }
-      }
+      const matched = selectedOffer ? await loadSearchOfferResults(
+        results, selectedOffer, (id) => technicianRepositoryV2.getWithRelations(id), matchPairs,
+      ) : null;
 
       if (!active) return;
       setPreviews(nextPreviews);
-      setScores(nextScores);
-      setIneligibleIds(nextIneligible);
-      setScoredOfferId(selectedOffer && scored ? selectedOffer.id : null);
+      setOfferResults(matched);
     }
 
-    loadPreviewData();
+    loadPreviewData().catch(() => {
+      if (!active) return;
+      setOfferResults(null);
+      setPreviews({});
+      setPreviewError('We could not load the catalogs or qualifications needed for this search. Please retry.');
+    });
     return () => {
       active = false;
     };
-  }, [results, selectedOffer]);
+  }, [results, selectedOffer, retryAttempt]);
 
-  const orderedResults = useMemo(() => {
-    // Preserve the repository order until every score for the currently
-    // selected offer has finished loading. This prevents list jumping while
-    // the async calculation is still in flight.
-    if (!selectedOffer || scoredOfferId !== selectedOffer.id) return results;
-
-    return results
-      .filter((technician) => !ineligibleIds.has(technician.id))
-      .map((technician, originalIndex) => ({ technician, originalIndex }))
-      .sort((a, b) => {
-        const aScore = scores[a.technician.id];
-        const bScore = scores[b.technician.id];
-
-        if (aScore && bScore) {
-          const aEligible = aScore.blockers.length === 0;
-          const bEligible = bScore.blockers.length === 0;
-          if (aEligible !== bEligible) return aEligible ? -1 : 1;
-
-          const scoreDifference = bScore.total - aScore.total;
-          if (scoreDifference !== 0) return scoreDifference;
-        } else if (aScore || bScore) {
-          return aScore ? -1 : 1;
-        }
-
-        return a.originalIndex - b.originalIndex;
-      })
-      .map(({ technician }) => technician);
-  }, [results, scores, ineligibleIds, selectedOffer, scoredOfferId]);
+  const searchError = sourceError ?? previewError ?? (selectedOfferId ? offersError
+    ?? (!offersLoading && !selectedOffer ? 'The selected offer is unavailable. Select another offer or retry.' : null) : null);
+  const orderedResults = searchError ? [] : visibleSearchResults(results, selectedOfferId, selectedOffer, offerResults);
+  const matchingLoading = Boolean(selectedOfferId && !searchError &&
+    (offersLoading || !selectedOffer || (results.length > 0 && (offerResults?.source !== results || offerResults.offer !== selectedOffer))));
+  const scores = offerResults?.source === results && offerResults.offer === selectedOffer ? offerResults.scores : {};
 
   async function handleSearch() {
     await search();
@@ -275,8 +244,8 @@ export default function TechnicianSearchScreen() {
 
   function handleClearFilters() {
     clearFilters();
-    setScores({});
-    setScoredOfferId(null);
+    setOfferResults(null);
+    setPreviewError(null);
     setPreviews({});
   }
 
@@ -496,10 +465,10 @@ export default function TechnicianSearchScreen() {
               )}
             </CompanyCard>
 
-            {hasSearched && !loading ? (
+            {hasSearched && !loading && !matchingLoading && !searchError ? (
               <View style={styles.resultHeader}>
                 <Text style={styles.resultTitle}>
-                  {results.length} {results.length === 1 ? 'result' : 'results'}
+                  {orderedResults.length} {orderedResults.length === 1 ? 'result' : 'results'}
                 </Text>
                 <Text style={styles.resultSub}>
                   {selectedOffer
@@ -511,7 +480,16 @@ export default function TechnicianSearchScreen() {
           </View>
         }
         ListEmptyComponent={
-          !loading ? (
+          searchError ? (
+            <CompanyCard>
+              <Text accessibilityRole="alert" style={styles.panelSub}>{searchError}</Text>
+              <TouchableOpacity accessibilityRole="button" onPress={() => { setRetryAttempt((n) => n + 1); void search(); }} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>Retry search</Text>
+              </TouchableOpacity>
+            </CompanyCard>
+          ) : matchingLoading ? (
+            <View><ActivityIndicator /><Text style={styles.panelSub}>Checking offer eligibility?</Text></View>
+          ) : !loading ? (
             hasSearched ? (
               <EmptyPanel
                 title="No technicians found"

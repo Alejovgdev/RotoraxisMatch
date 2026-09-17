@@ -50,6 +50,7 @@ import {
 import { createAircraftTypeRatingsCache } from '../src/repositories/v2/aircraftTypeRatingsCache';
 import { createEnginesCache } from '../src/repositories/v2/enginesCache';
 import { createMatchingService } from '../src/utils/matchingService';
+import { loadSearchOfferResults, visibleSearchResults } from '../src/utils/searchOfferResults';
 import { offerShapeViolations } from '../src/utils/offerShape';
 import {
   heldCountByAuthority,
@@ -4266,7 +4267,7 @@ async function main() {
   const previewDe = (t: TechnicianWithRelations) =>
     ({ id: t.id, anonymousCode: `ANON-${t.id}` }) as unknown as SafeTechnicianPreview;
 
-  const montarServicio = () => {
+  const montarServicio = (failCatalog?: 'ratings' | 'engines') => {
     const minYearsPedidos: number[] = [];
     const service = createMatchingService({
       getOfferWithRequirements: async (id) => ofertasServicio.find((o) => o.id === id) ?? null,
@@ -4276,14 +4277,42 @@ async function main() {
         return tecnicosServicio.map((t) => ({ technician: t, preview: previewDe(t) }));
       },
       getTechnicianWithRelations: async (id) => tecnicosServicio.find((t) => t.id === id) ?? null,
-      getAircraftTypeRatings: async () => [...FIXTURES, ...ENGINE_RATING_FIXTURES],
+      getAircraftTypeRatings: async () => {
+        if (failCatalog === 'ratings') throw new Error('ratings unavailable');
+        return [...FIXTURES, ...ENGINE_RATING_FIXTURES];
+      },
       // El catálogo ENTERO, con la genérica inactiva: es lo que devuelve
       // catalogRepository.getEngines().
-      getEngines: async () => ENGINE_FIXTURES,
+      getEngines: async () => {
+        if (failCatalog === 'engines') throw new Error('engines unavailable');
+        return ENGINE_FIXTURES;
+      },
       now: () => NOW,
     });
     return { service, minYearsPedidos };
   };
+
+  await test('H13 — búsqueda falla sin catálogos y nunca publica resultados sin comprobar', async () => {
+    const source = tecnicosServicio.map((t) => ({ id: t.id }));
+    const offer = ofertasServicio[2]; // motor + sólo sin licencia
+    const getTech = async (id: string) => tecnicosServicio.find((t) => t.id === id) ?? null;
+    for (const catalog of ['ratings', 'engines'] as const) {
+      const { service } = montarServicio(catalog);
+      await assert.rejects(loadSearchOfferResults(source, offer, getTech, service.matchPairs), new RegExp(`${catalog} unavailable`));
+    }
+    assert.deepEqual(visibleSearchResults(source, offer.id, offer, null), [], 'cargando/error: ninguna fila');
+    assert.deepEqual(visibleSearchResults(source, offer.id, null, null), [], 'la oferta preseleccionada aún no ha cargado');
+    const { service } = montarServicio();
+    const snapshot = await loadSearchOfferResults(source, offer, getTech, service.matchPairs);
+    const expected = rankTechniciansForOffer(offer, tecnicosServicio, RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.deepEqual(visibleSearchResults(source, offer.id, offer, snapshot).map((t) => t.id), expected.map((s) => s.technicianId));
+    assert.ok(snapshot.visible.length > 0 && snapshot.visible.length < source.length, 'el reintento recupera solo los elegibles');
+    assert.deepEqual(visibleSearchResults([...source], offer.id, offer, snapshot), [], 'otra búsqueda: snapshot antiguo no vale');
+    assert.deepEqual(visibleSearchResults(source, offer.id, { ...offer }, snapshot), [], 'otra revisión de oferta no vale');
+    assert.equal(visibleSearchResults(source, null, null, null), source, 'búsqueda general sin oferta conserva sus resultados');
+    await assert.rejects(loadSearchOfferResults(source, offer, async () => null, service.matchPairs), /qualifications/);
+    await assert.rejects(loadSearchOfferResults(source, offer, getTech, async () => []), /Incomplete/);
+  });
 
   await test('Paso 5a · Envoltorios — oferta→técnicos da exactamente lo mismo que rankTechniciansForOffer (aeronave, motor y "sólo sin licencia")', async () => {
     const { service, minYearsPedidos } = montarServicio();
