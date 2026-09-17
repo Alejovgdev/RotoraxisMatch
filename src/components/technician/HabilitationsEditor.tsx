@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
 import { TechnicianCard, TechnicianChip, TechnicianBadge, techUi } from './TechnicianUI';
@@ -6,8 +6,9 @@ import { AircraftTypeRatingPicker } from '../AircraftTypeRatingPicker';
 import { DateField } from '../DateField';
 import type { DateFieldPalette } from '../DateField.types';
 import { AircraftRatingIndex, getAircraftTypeRatingLabel } from '../../constants/aircraftTypeRatings';
-import { getLicenseRatingProductType, isUnusualCombination } from '../../utils/licenseCategoryProductType';
-import { AircraftTypeRatingCatalog, AuthorityCode, LicenseCode } from '../../types/catalog';
+import { individualTypeRatingScopeError } from '../../utils/individualTypeRatingScope';
+import { useEnginesCatalog } from '../../state/useEnginesCatalog';
+import { AircraftTypeRatingCatalog, AuthorityCode } from '../../types/catalog';
 import { credentialLabel } from '../../constants/licenses';
 import { HeldLicense, licensesForHabilitations, sortHeldLicenses } from '../../utils/profileLicenses';
 
@@ -54,34 +55,8 @@ interface Props {
   dateFieldPalette: DateFieldPalette;
 }
 
-// Fase 3b screen 2 — the technician-side counterpart to
-// TypeRatingRequirementsEditor/ApproximateFilterSection (Fase 3b screen 1):
-// same pattern — search-and-add via AircraftTypeRatingPicker, chips only
-// for the closed set of license categories, catalog displayName for every
-// label, categoryHint pre-filter with a "Show all" escape hatch (never a
-// hard block — see AircraftTypeRatingPicker/getLicenseRatingProductType).
-//
-// Two distinct, deliberately different behaviors for the same
-// license<->productType mismatch (confirmed with the user 2026-07-22):
-//   - NEW row: the picker's categoryHint hides incompatible ratings by
-//     default, so creating the mismatch takes an explicit "Show all" —
-//     prevents the casual/accidental case without ever hard-blocking a
-//     real one (e.g. a dual-rated technician).
-//   - EXISTING row: never hidden, edited, or auto-removed — just an
-//     "Unusual combination for <license>" badge alongside "Declared" /
-//     "Inactive catalog entry", using the SAME getLicenseRatingProductType()
-//     mapping (isUnusualCombination(), licenseCategoryProductType.ts) so
-//     las dos rutas de esta pantalla contestan a la misma pregunta con la
-//     misma tabla. Ojo: "la misma" es la del lado TÉCNICO. La tabla del
-//     lado oferta (getOfferProductTypeRestriction) es otra a propósito y no
-//     pinta nada aquí — ver la cabecera de licenseCategoryProductType.ts.
-//
-// Vigencia fields (Fase 3: issued/expires DateFields + Current/Not current
-// toggle) are unchanged from before this redesign — same fields, same
-// onChange shape, just relocated here. The row shape this emits via
-// onChange (HabilitationRow) is byte-for-byte what profile.tsx already fed
-// into technicianRepositoryV2.replaceHabilitations(), so the save path
-// needed no changes.
+// H3: new individual ratings must fit their credential. Existing rows stay
+// visible, without automatic removal. Migration 083 also guards direct writes.
 export function HabilitationsEditor({
   value,
   onChange,
@@ -96,11 +71,15 @@ export function HabilitationsEditor({
   const [newHabRating, setNewHabRating] = useState<string | null>(null);
   const [newHabExperienceYears, setNewHabExperienceYears] = useState('');
 
-  const categoryHint = useMemo(() => {
-    if (!newHabLicense) return undefined;
-    const productType = getLicenseRatingProductType(newHabLicense.code as LicenseCode);
-    return productType ? { productType, licenseCode: credentialLabel(newHabLicense.authority, newHabLicense.code) } : undefined;
-  }, [newHabLicense]);
+  const { engineIndex, state: engineState, retry: retryEngines } = useEnginesCatalog();
+  const activeLicense = newHabLicense && selectable.find(
+    (l) => l.authority === newHabLicense.authority && l.code === newHabLicense.code,
+  );
+  function isRatingAllowed(rating: AircraftTypeRatingCatalog): boolean {
+    return Boolean(activeLicense && !individualTypeRatingScopeError(activeLicense.authority, activeLicense.code, rating, engineIndex));
+  }
+  const selectedRating = newHabRating ? ratingsById.get(newHabRating) : undefined;
+  const canAdd = Boolean(selectedRating && isRatingAllowed(selectedRating));
 
   function selectCategory(license: HeldLicense) {
     setNewHabLicense(license);
@@ -108,7 +87,7 @@ export function HabilitationsEditor({
   }
 
   function addHabilitation() {
-    if (!newHabLicense || !newHabRating) return;
+    if (!activeLicense || !newHabRating || !canAdd) return;
     if (
       value.some(
         (h) => h.authority === newHabLicense.authority && h.licenseCode === newHabLicense.code && h.aircraftTypeRatingId === newHabRating,
@@ -142,7 +121,7 @@ export function HabilitationsEditor({
 
       {value.map((h, index) => {
         const rating = ratingsById.get(h.aircraftTypeRatingId);
-        const unusual = isUnusualCombination(h.licenseCode as LicenseCode, rating?.productType);
+        const scopeError = rating ? individualTypeRatingScopeError(h.authority, h.licenseCode, rating, engineIndex) : null;
         return (
           <View key={h.id ?? `new-${h.authority}-${h.licenseCode}-${h.aircraftTypeRatingId}`} style={styles.habItem}>
             <View style={styles.habTopRow}>
@@ -155,7 +134,7 @@ export function HabilitationsEditor({
                 <View style={styles.chipRow}>
                   <TechnicianBadge label="Declared" tone="cyan" small />
                   {rating?.isActive === false ? <TechnicianBadge label="Inactive catalog entry" tone="warning" small /> : null}
-                  {unusual ? <TechnicianBadge label={`Unusual combination for ${h.licenseCode}`} tone="warning" small /> : null}
+                  {scopeError && engineState === 'success' ? <TechnicianBadge label="Review licence / aircraft scope" tone="warning" small /> : null}
                 </View>
               </View>
               <TouchableOpacity onPress={() => removeHabilitation(index)} accessibilityRole="button">
@@ -197,7 +176,7 @@ export function HabilitationsEditor({
         <Text style={styles.emptyValue}>
           {heldLicenses.length === 0
             ? 'Add a license above first.'
-            : 'Your licences carry no aircraft type ratings (FAA certificates do not). Add a Part-66 licence first.'}
+            : 'Individual type ratings require a B1, B2 or C licence. Aircraft experience can be declared separately.'}
         </Text>
       ) : (
         <View style={styles.chipRow}>
@@ -214,13 +193,21 @@ export function HabilitationsEditor({
 
       <View style={styles.fieldGap} />
       <Text style={styles.fieldLabel}>Add habilitation — aircraft + engine rating</Text>
+      <Text style={styles.subtitle}>Only aircraft and propulsion covered by the selected licence are available.</Text>
+      {engineState === 'error' || engineState === 'empty' ? (
+        <View>
+          <Text accessibilityRole="alert" style={styles.emptyValue}>Engine catalog unavailable. B1 propulsion cannot be checked.</Text>
+          <TouchableOpacity onPress={retryEngines} accessibilityRole="button"><Text style={styles.linkText}>Retry engine catalog</Text></TouchableOpacity>
+        </View>
+      ) : null}
       <AircraftTypeRatingPicker
         value={newHabRating}
         onSelect={(r) => {
+          if (!isRatingAllowed(r)) return;
           setNewHabRating(r.id);
           onRatingResolved(r);
         }}
-        categoryHint={categoryHint}
+        isRatingAllowed={isRatingAllowed}
       />
 
       <View style={styles.fieldGap} />
@@ -236,9 +223,9 @@ export function HabilitationsEditor({
 
       <View style={styles.fieldGap} />
       <TouchableOpacity
-        style={[styles.addButton, (!newHabLicense || !newHabRating) && styles.addButtonDisabled]}
+        style={[styles.addButton, !canAdd && styles.addButtonDisabled]}
         onPress={addHabilitation}
-        disabled={!newHabLicense || !newHabRating}
+        disabled={!canAdd}
         activeOpacity={0.75}
       >
         <Text style={styles.addButtonText}>Add habilitation</Text>

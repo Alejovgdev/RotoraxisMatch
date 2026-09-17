@@ -11,7 +11,8 @@
 // que lo usa, pero las reglas —qué implica oficio, de qué credencial puede
 // colgar una habilitación— no son decisiones de pantalla.
 import { AuthorityCode, AuthorityLicenseCode } from '../types/catalog';
-import { AUTHORITIES, authorityHasTypeRatings } from '../constants/licenses';
+import { AUTHORITIES } from '../constants/licenses';
+import { licenseAllowsIndividualTypeRatings } from './individualTypeRatingScope';
 
 export interface HeldLicense {
   authority: AuthorityCode;
@@ -55,11 +56,11 @@ export function heldLicenseCodes(held: readonly HeldLicense[]): AuthorityLicense
 
 /**
  * Las credenciales de las que puede colgar una habilitación: las de una
- * autoridad que emite type ratings. Un A&P de la FAA no lleva ninguno
- * (authorities.has_type_ratings = false), así que no se ofrece.
+ * autoridad y categoría que emiten ratings individuales: B1.x, B2 y C.
+ * A, B2L, B3, L y los certificados FAA no se ofrecen.
  */
 export function licensesForHabilitations(held: readonly HeldLicense[]): HeldLicense[] {
-  return held.filter((l) => authorityHasTypeRatings(l.authority));
+  return held.filter((l) => licenseAllowsIndividualTypeRatings(l.authority, l.code));
 }
 
 /** Cuántas credenciales tiene bajo cada autoridad, para el selector. */

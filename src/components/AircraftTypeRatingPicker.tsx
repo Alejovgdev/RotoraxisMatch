@@ -40,6 +40,8 @@ interface Props {
   maxResults?: number;
   categoryHint?: AircraftTypeRatingPickerCategoryHint;
   lockedProductType?: AircraftTypeRatingPickerLockedProductType;
+  /** Hard scope restriction, applied before text search and the result limit. */
+  isRatingAllowed?: (rating: AircraftTypeRatingCatalog) => boolean;
 }
 
 // El vocabulario EASA ('Aeroplane') no es el que usa nadie al hablar; en
@@ -60,7 +62,7 @@ function productTypeNoun(productType: NonNullable<AircraftTypeRatingCatalog['pro
 // with a rating picker/filter goes through), which is plenty for a few
 // hundred rows. No web-only APIs: TextInput/ScrollView/TouchableOpacity/
 // ActivityIndicator all work the same on web, iOS and Android.
-export function AircraftTypeRatingPicker({ value, onSelect, placeholder, maxResults = 25, categoryHint, lockedProductType }: Props) {
+export function AircraftTypeRatingPicker({ value, onSelect, placeholder, maxResults = 25, categoryHint, lockedProductType, isRatingAllowed }: Props) {
   const { ratings, state, error, retry } = useAircraftTypeRatingsCatalog();
   const [query, setQuery] = useState('');
   // Escape hatch for categoryHint — "Show all" — resets whenever the hint
@@ -103,8 +105,8 @@ export function AircraftTypeRatingPicker({ value, onSelect, placeholder, maxResu
   // can be displayed (above) but never re-selected as a new relationship.
   const results = useMemo(() => {
     const pool = activeProductType ? getByProductType(ratings, activeProductType) : ratings;
-    return searchRatings(pool, query).slice(0, maxResults);
-  }, [ratings, query, maxResults, activeProductType]);
+    return searchRatings(isRatingAllowed ? pool.filter(isRatingAllowed) : pool, query).slice(0, maxResults);
+  }, [ratings, query, maxResults, activeProductType, isRatingAllowed]);
 
   return (
     <View style={styles.wrap}>
