@@ -389,7 +389,7 @@ export const offerRepository = {
     return mapOfferRow(data as any);
   },
 
-  async update(id: string, patch: Partial<Omit<Offer, 'id' | 'createdAt'>>): Promise<Offer | null> {
+  async update(id: string, patch: OfferPatch, habilitations?: { aircraftTypeRatingId: string; notes?: string }[]): Promise<Offer | null> {
     // Validate before any mutation, including replacing aircraft requirements.
     salaryColumns(patch.salary);
     const existing = await this.getWithRequirements(id);
@@ -401,59 +401,27 @@ export const offerRepository = {
     // estado resultante lo calcula resolveOfferPatch, la misma función de la
     // que offerPatchToDb escribe los grupos acoplados.
     const next = resolveOfferPatch(existing, patch);
+    if (habilitations !== undefined) next.requiredHabilitations = habilitations.map((h) => ({ ...h, offerId: id, createdAt: '' }));
     assertOfferWritable(next);
 
-    // Cambiar el producto de la oferta con requisitos exactos dentro es
-    // IMPOSIBLE en Postgres: `orh_matches_offer` (migración 047) ata cada fila
-    // de offer_required_habilitations al par (offer_id, product_type) de su
-    // oferta, y un UPDATE de esa columna con hijos vivos viola la FK. Las filas
-    // tienen que salir primero y la columna cambiar después — no hay otro
-    // orden posible.
-    //
-    // Borrarlas aquí no es una decisión silenciosa: son requisitos del
-    // producto contrario, ya inválidos, y la pantalla de edición hace
-    // confirmar el cambio antes de llegar a este punto (app/company/offers/
-    // edit.tsx). Acotado a un cambio REAL de producto: guardar sin tocar el
-    // selector no borra nada.
-    //
-    // Paso 5b: la misma retirada, antes del UPDATE y por el mismo motivo de
-    // orden, cuando la oferta deja de poder nombrar aeronaves — pasa a ser de
-    // motor (lo impiden los triggers de la 076) o a certificar bajo la FAA, que
-    // no emite type ratings. resolveOfferPatch ya las dejó fuera del estado
-    // resultante; aquí se borran de verdad.
-    const productChanges = patch.productType !== undefined && patch.productType !== existing.productType;
-    const losesAircraft = existing.requiredHabilitations.length > 0 && !offerCanRequireAircraft(next);
-    if (productChanges || losesAircraft) {
-      await this.replaceRequiredHabilitations(id, []);
-    }
-
-    // Fase 6 tanda E: apagar el interruptor YA NO BORRA LAS AERONAVES.
-    //
-    // Esta rama existía porque una oferta sin certificación tenía prohibido
-    // nombrar aeronaves. Al levantarse esa prohibición, borrarlas sería
-    // destruir justo lo que la oferta sigue queriendo decir: "el puesto es
-    // para el A320, sólo que no hace falta que puedas firmarlo".
-    //
-    // Lo único que se limpia al apagar es la LICENCIA, y lo hace el propio
-    // UPDATE de abajo en la misma sentencia — que es lo que exige
-    // chk_offers_license_matches_certification. Ver offerPatchToDb.
-
-    // Fase 7 F2c: ya no hay "localización controlada" que recalcular. El
-    // patch trae país y ciudad tal y como el selector los produjo, y
-    // `offerPatchToDb` escribe las cinco columnas juntas o ninguna.
-    const { data, error } = await supabase
-      .from('offers')
-      .update(offerPatchToDb(patch, next))
-      .eq('id', id)
-      .select(OFFER_COLUMNS)
-      .maybeSingle();
+    // 082 commits the offer and aircraft set in one transaction.
+    // NULL keeps requirements unless the product/kind change must clear them.
+    const { data, error } = await supabase.rpc('update_offer_with_habilitations', {
+      p_offer_id: id,
+      p_patch: offerPatchToDb(patch, next),
+      p_habilitations: habilitations === undefined ? null : habilitations.map((h) => ({
+        aircraft_type_rating_id: h.aircraftTypeRatingId, notes: h.notes ?? null,
+      })),
+    });
     throwIfError(error);
+    // PostgREST can represent a composite RPC result as a one-row array.
+    const saved = Array.isArray(data) ? data[0] : data;
     // Mismo motivo que updateStatus: app/company/offers/edit.tsx descarta el
     // retorno, así que sin esto un guardado bloqueado por RLS era invisible.
-    if (!data) {
+    if (!saved) {
       throw new Error('Could not save this offer — it may no longer exist, or you may not have permission.');
     }
-    return mapOfferRow(data as any);
+    return mapOfferRow(saved as any);
   },
 
   async create(data: {
@@ -620,41 +588,7 @@ export const offerRepository = {
     offerId: string,
     habilitations: { aircraftTypeRatingId: string; notes?: string }[],
   ): Promise<void> {
-    const { error: deleteError } = await supabase
-      .from('offer_required_habilitations')
-      .delete()
-      .eq('offer_id', offerId);
-    throwIfError(deleteError);
-
-    if (habilitations.length === 0) return;
-
-    // `product_type` se LEE de la oferta, nunca se recibe del llamante: es el
-    // valor que las FK compuestas de la migración 047 obligan a que coincida
-    // con el de la oferta Y con el del rating. Un parámetro sería una segunda
-    // oportunidad de equivocarse (y un llamante podría pasarlo desfasado
-    // respecto a lo que la oferta acaba de guardar); leerlo aquí hace que solo
-    // exista un valor posible. Si el rating es del otro producto, el insert
-    // falla en Postgres — que es exactamente lo que queremos.
-    const offer = await this.getById(offerId);
-    if (!offer) {
-      throw new Error('Could not save the type rating requirements — this offer no longer exists.');
-    }
-
-    const { data, error } = await supabase
-      .from('offer_required_habilitations')
-      .insert(
-        habilitations.map((h) => ({
-          offer_id: offerId,
-          product_type: offer.productType,
-          aircraft_type_rating_id: h.aircraftTypeRatingId,
-          notes: h.notes ?? null,
-        })),
-      )
-      .select('offer_id');
-    throwIfError(error);
-    // El delete ya se llevó los requisitos anteriores: si el insert no entra,
-    // la oferta se queda SIN requisitos exactos y el scoring cambia por
-    // completo, en silencio.
-    throwIfNoRows(data, 'Could not save the type rating requirements — you may not have permission to edit this offer.');
+    const offer = await this.update(offerId, {}, habilitations);
+    if (!offer) throw new Error('Could not save the type rating requirements — this offer no longer exists.');
   },
 };

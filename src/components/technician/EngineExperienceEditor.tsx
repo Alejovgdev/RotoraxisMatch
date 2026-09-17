@@ -36,11 +36,12 @@ export function EngineExperienceEditor({ value, onChange }: Props) {
   const [newYears, setNewYears] = useState('');
 
   const alreadyDeclared = newEngine !== null && value.some((e) => e.engineId === newEngine);
+  const invalidYears = newYears.trim() !== '' && (!Number.isFinite(Number(newYears)) || Number(newYears) < 0 || Number(newYears) > 70);
 
   function addEngine() {
     // UNIQUE (technician_id, engine_id) en la 068: se corta aquí para que el
     // duplicado no llegue como error al guardar.
-    if (!newEngine || alreadyDeclared) return;
+    if (!newEngine || alreadyDeclared || invalidYears) return;
     const trimmed = newYears.trim();
     onChange([...value, { engineId: newEngine, years: trimmed ? Number(trimmed) : undefined }]);
     setNewEngine(null);
@@ -89,12 +90,12 @@ export function EngineExperienceEditor({ value, onChange }: Props) {
         keyboardType="numeric"
         maxLength={2}
       />
-
+      {invalidYears ? <Text style={styles.warning}>Enter a number of years between 0 and 70.</Text> : null}
       <View style={styles.fieldGap} />
       <TouchableOpacity
-        style={[styles.addButton, (!newEngine || alreadyDeclared) && styles.addButtonDisabled]}
+        style={[styles.addButton, (!newEngine || alreadyDeclared || invalidYears) && styles.addButtonDisabled]}
         onPress={addEngine}
-        disabled={!newEngine || alreadyDeclared}
+        disabled={!newEngine || alreadyDeclared || invalidYears}
         activeOpacity={0.75}
         accessibilityRole="button"
       >

@@ -292,8 +292,7 @@ export default function EditOfferScreen() {
         minYearsExperience: form.minYearsExperience,
         status,
         visible: status === 'published',
-      });
-      await offerRepository.replaceRequiredHabilitations(id, form.requiredHabilitations);
+      }, form.requiredHabilitations);
       router.back();
     } catch (e: any) {
       notify('Error', e?.message ?? 'Could not save offer.');

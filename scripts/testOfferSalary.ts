@@ -52,6 +52,12 @@ async function main() {
   let mutations = 0;
   let rejectMutation = false;
   const fakeSupabase = {
+    async rpc(_name: string, args: { p_patch: Record<string, unknown> }) {
+      mutations++;
+      if (rejectMutation) return { data: null, error: null };
+      row = { ...row, ...args.p_patch };
+      return { data: { ...row }, error: null };
+    },
     from(table: string) {
       let selection = '*';
       let write: Record<string, unknown> | undefined;

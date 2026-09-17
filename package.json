@@ -8,6 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "ts": "tsc --noEmit",
+    "test:transactions": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-transactions scripts/testTransactionalWrites.ts && node .tmp-test-transactions/scripts/testTransactionalWrites.js",
+    "test:database": "node scripts/testDatabaseRegressions.cjs",
     "test:offer-salary": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-offer-salary scripts/testOfferSalary.ts && node .tmp-test-offer-salary/scripts/testOfferSalary.js",
     "test:url-validation": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-url-validation scripts/testUrlValidation.ts && node .tmp-test-url-validation/scripts/testUrlValidation.js",
     "test:offer-map-markers": "tsc --ignoreConfig --module Node16 --target es2020 --moduleResolution Node16 --esModuleInterop --skipLibCheck --types node --outDir .tmp-test-offer-map-markers scripts/testOfferMapMarkers.ts && node .tmp-test-offer-map-markers/scripts/testOfferMapMarkers.js",

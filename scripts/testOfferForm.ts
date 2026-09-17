@@ -171,7 +171,7 @@ async function main() {
 
   type Call = {
     table: string;
-    op: 'insert' | 'update' | 'delete' | 'select' | 'upsert';
+    op: 'insert' | 'update' | 'delete' | 'select' | 'upsert' | 'rpc';
     data?: Record<string, unknown>;
     inArgs?: [string, unknown[]];
     onConflict?: string;
@@ -188,6 +188,17 @@ async function main() {
   let applicationRejection: { code: string; message: string; details: string } | null = null;
 
   const fakeSupabase = {
+    async rpc(name: string, args: Record<string, any>) {
+      calls.push({ table: name, op: 'rpc', data: args });
+      if (name === 'update_offer_with_habilitations') {
+        const oldProduct = offerRow.product_type;
+        offerRow = { ...offerRow, ...args.p_patch };
+        if (args.p_habilitations !== null) habilitationRows = args.p_habilitations.map((h: any) => ({ ...h, offer_id: args.p_offer_id, product_type: offerRow.product_type }));
+        else if (oldProduct !== offerRow.product_type || offerRow.offer_kind === 'engine' || offerRow.license_authority === 'FAA') habilitationRows = [];
+        return { data: [{ ...offerRow }], error: null };
+      }
+      return { data: null, error: null };
+    },
     from(table: string) {
       let op: Call['op'] = 'select';
       let write: Record<string, unknown> | Record<string, unknown>[] | undefined;
@@ -267,7 +278,9 @@ async function main() {
     location: { country: { code: 'ES', name: 'Spain' }, city: null },
     minYearsExperience: 0,
   };
-  const lastWrite = (table: string, op: Call['op']) => [...calls].reverse().find((c) => c.table === table && c.op === op)?.data ?? {};
+  const lastWrite = (table: string, op: Call['op']) => table === 'offers' && op === 'update'
+    ? ([...calls].reverse().find((c) => c.table === 'update_offer_with_habilitations')?.data?.p_patch as Record<string, unknown> ?? {})
+    : [...calls].reverse().find((c) => c.table === table && c.op === op)?.data ?? {};
   const reset = () => { calls.length = 0; offerRow = {}; habilitationRows = []; };
 
   await test('Repositorio — una oferta FAA A&P se escribe con su autoridad, y sale igual al leerla', async () => {
@@ -335,7 +348,7 @@ async function main() {
     assert.equal(lastWrite('offers', 'insert').only_unlicensed, true);
   });
 
-  await test('Repositorio — pasar a motor borra las aeronaves ANTES del UPDATE y escribe clase y certificación juntas', async () => {
+  await test('Repositorio — pasar a motor guarda clase, certificación y aeronaves en una RPC', async () => {
     reset();
     await offerRepository.create({
       ...base,
@@ -354,9 +367,8 @@ async function main() {
       technicianType: 'engine_technician',
       requiresCertification: false,
     });
-    const borrado = calls.findIndex((c) => c.table === 'offer_required_habilitations' && c.op === 'delete');
-    const update = calls.findIndex((c) => c.table === 'offers' && c.op === 'update');
-    assert.ok(borrado !== -1 && update !== -1 && borrado < update, `orden: ${calls.map((c) => `${c.table}.${c.op}`).join(' → ')}`);
+    assert.deepEqual(calls.filter((c) => c.op !== 'select').map((c) => c.table), ['update_offer_with_habilitations']);
+    assert.equal(habilitationRows.length, 0);
     const escrito = lastWrite('offers', 'update');
     assert.equal(escrito.offer_kind, 'engine');
     assert.equal(escrito.required_engine_id, 'eng-cfm56-7b');
@@ -435,19 +447,19 @@ async function main() {
     assert.equal(licenseRows.length, 1);
   });
 
-  await test('Repositorio de técnico — replaceEngineExperience reemplaza (borra e inserta) y guarda los años como NULL si no hay', async () => {
+  await test('Repositorio de técnico — replaceEngineExperience usa una RPC y conserva NULL', async () => {
     calls.length = 0;
     await technicianRepositoryV2.replaceEngineExperience('tech-1', [{ engineId: 'eng-1', years: 6 }, { engineId: 'eng-2' }]);
-    const ops = calls.filter((c) => c.table === 'technician_engine_experience').map((c) => c.op);
-    assert.deepEqual(ops, ['delete', 'insert']);
-    const rows = calls.find((c) => c.table === 'technician_engine_experience' && c.op === 'insert')!.data!.rows as Record<string, unknown>[];
+    assert.deepEqual(calls.map((c) => c.table), ['replace_technician_engines']);
+    const rows = calls[0].data!.p_entries as Record<string, unknown>[];
     assert.deepEqual(rows, [
-      { technician_id: 'tech-1', engine_id: 'eng-1', years: 6 },
-      { technician_id: 'tech-1', engine_id: 'eng-2', years: null },
+      { engine_id: 'eng-1', years: 6 },
+      { engine_id: 'eng-2', years: null },
     ]);
     calls.length = 0;
     await technicianRepositoryV2.replaceEngineExperience('tech-1', []);
-    assert.deepEqual(calls.map((c) => c.op), ['delete'], 'sin motores sólo se borra');
+    assert.deepEqual(calls.map((c) => c.op), ['rpc']);
+    assert.deepEqual(calls[0].data!.p_entries, []);
   });
 
   // ── Candidaturas: el rechazo de la base llega como el texto de siempre ──

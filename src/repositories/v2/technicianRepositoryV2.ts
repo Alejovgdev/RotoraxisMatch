@@ -553,65 +553,19 @@ export const technicianRepositoryV2 = {
       isCurrent?: boolean;
     }[],
   ): Promise<void> {
-    // SIN comprobación de filas, a propósito: un técnico que aún no tiene
-    // ninguna habilitación borra CERO filas legítimamente, y es el caso normal
-    // del primer guardado. Exigir >= 1 aquí convertiría el primer guardado de
-    // todo técnico nuevo en un error. La red se pone en el INSERT de abajo,
-    // que sí sabe cuántas filas debe producir.
-    const { error: deleteError } = await supabase
-      .from('technician_habilitations')
-      .delete()
-      .eq('technician_id', technicianId);
-    throwIfError(deleteError);
-
-    if (entries.length === 0) return;
-
-    // Fase 10: la fila necesita el ID de la credencial, no su código. Se
-    // resuelve aquí, contra las licencias que el técnico tiene AHORA (el
-    // caller acaba de llamar a upsertLicenses, por eso el orden importa).
-    //
-    // Si el par autoridad+código no tiene licencia, se para ANTES de borrar
-    // nada: es exactamente la invariante de misma fila que protege CLAUDE.md
-    // —una habilitación no existe sin la licencia de la que cuelga— y la base
-    // la rechazaría igual, pero con un error de FK que no dice qué falta.
-    const { data: licenseRows, error: licenseError } = await supabase
-      .from('technician_licenses')
-      .select('id, authority, license_code')
-      .eq('technician_id', technicianId);
-    throwIfError(licenseError);
-    const licenseIdByKey = new Map<string, string>(
-      (licenseRows ?? []).map((r: any) => [`${r.authority}|${r.license_code}`, r.id as string]),
-    );
-    const resolved = entries.map((entry) => {
-      const authority = entry.authority;
-      const licenseId = licenseIdByKey.get(`${authority}|${entry.licenseCode}`);
-      if (!licenseId) {
-        throw new Error(
-          `Cannot save a ${entry.licenseCode} type rating: there is no ${authority} ${entry.licenseCode} licence on this profile. Add the licence first.`,
-        );
-      }
-      return { entry, licenseId };
+    const { error } = await supabase.rpc('replace_technician_habilitations', {
+      p_technician_id: technicianId,
+      p_entries: entries.map((entry) => ({
+        authority: entry.authority,
+        license_code: entry.licenseCode,
+        aircraft_type_rating_id: entry.aircraftTypeRatingId,
+        issued_at: entry.issuedAt ?? null,
+        expires_at: entry.expiresAt ?? null,
+        experience_years: entry.experienceYears ?? null,
+        is_current: entry.isCurrent ?? true,
+      })),
     });
-
-    const { data, error } = await supabase
-      .from('technician_habilitations')
-      .insert(
-        resolved.map(({ entry, licenseId }) => ({
-          technician_id: technicianId,
-          technician_license_id: licenseId,
-          license_code: entry.licenseCode,
-          aircraft_type_rating_id: entry.aircraftTypeRatingId,
-          issued_at: entry.issuedAt ?? null,
-          expires_at: entry.expiresAt ?? null,
-          experience_years: entry.experienceYears ?? null,
-          is_current: entry.isCurrent ?? true,
-        })),
-      )
-      .select('id');
     throwIfError(error);
-    // Aquí el delete ya se llevó las filas viejas: si el insert no entra, el
-    // técnico se queda SIN habilitaciones y la pantalla diría "guardado".
-    throwIfNoRows(data, 'Could not save your type ratings — your session may have expired. Sign in again and retry.');
   },
 
   /**
@@ -676,29 +630,11 @@ export const technicianRepositoryV2 = {
     technicianId: string,
     entries: { engineId: string; years?: number }[],
   ): Promise<void> {
-    // Sin comprobación de filas en el DELETE: el primer guardado borra cero.
-    const { error: deleteError } = await supabase
-      .from('technician_engine_experience')
-      .delete()
-      .eq('technician_id', technicianId);
-    throwIfError(deleteError);
-
-    if (entries.length === 0) return;
-    const { data, error } = await supabase
-      .from('technician_engine_experience')
-      .insert(
-        entries.map((entry) => ({
-          technician_id: technicianId,
-          engine_id: entry.engineId,
-          // NULL es "no declarado"; 0 sería una declaración.
-          years: entry.years ?? null,
-        })),
-      )
-      .select('id');
+    const { error } = await supabase.rpc('replace_technician_engines', {
+      p_technician_id: technicianId,
+      p_entries: entries.map((entry) => ({ engine_id: entry.engineId, years: entry.years ?? null })),
+    });
     throwIfError(error);
-    // El DELETE ya se llevó las filas viejas: si el INSERT no entra, el
-    // técnico se queda SIN motores y la pantalla diría "guardado".
-    throwIfNoRows(data, 'Could not save your engines — your session may have expired. Sign in again and retry.');
   },
 
   /** Deletes a single habilitation row by id. */
