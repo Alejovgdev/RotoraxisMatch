@@ -40,12 +40,12 @@ async function main() {
   if (rows.length !== 1 || result.cases < 300 || result.failures !== 0) throw new Error(JSON.stringify(rows));
   console.log(`PASS H3 ${baseline ? 'baseline reproduction' : installed ? 'installed migration' : 'migration rehearsal'}: ${result.cases} cases; rollback restored exact data, functions and triggers`);
   if (!baseline) {
-    for (const file of ['testApplicationSecurity.sql', 'testTransactionalWrites.sql']) {
+    for (const [file, expected] of [['testApplicationSecurity.sql', 13], ['testTransactionalWrites.sql', 16]]) {
       const suite = fs.readFileSync(path.join(__dirname, file), 'utf8');
       if (!/\bBEGIN;/.test(suite) || !/ROLLBACK;\s*$/.test(suite)) throw new Error(`Missing rollback: ${file}`);
       const body = suite.replace(/\bBEGIN;/, '').replace(/ROLLBACK;\s*$/, '');
       const checks = await query(`BEGIN;\n${migration}\n${body}\nROLLBACK;`);
-      if (checks.length !== 13 || checks.some(row => row.passed !== true)) throw new Error(`${file}: ${JSON.stringify(checks)}`);
+      if (checks.length !== expected || checks.some(row => row.passed !== true)) throw new Error(`${file}: ${JSON.stringify(checks)}`);
       console.log(`PASS 083 + ${file}: ${checks.length} regressions with rollback`);
     }
     if (JSON.stringify(before) !== JSON.stringify(await query(snapshotQuery))) throw new Error('Integration rollback changed data / schema');

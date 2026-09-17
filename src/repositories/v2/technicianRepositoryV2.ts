@@ -589,12 +589,18 @@ export const technicianRepositoryV2 = {
   /**
    * Reemplaza la experiencia declarada en aeronaves (Fase 6 tanda B).
    *
-   * Semántica de REEMPLAZO (borrar todo + insertar), igual que
-   * replaceHabilitations y por el mismo motivo estructural: la RLS de esta
-   * tabla es una copia de la de technician_habilitations, que NO TIENE
-   * política de UPDATE — un guardado diferencial que intentara actualizar los
-   * años en su sitio sería rechazado por RLS. Si algún día hace falta, la
-   * política se añade primero y el código después, nunca al revés.
+   * Semántica de REEMPLAZO, igual que replaceHabilitations y por el mismo
+   * motivo estructural: la RLS de esta tabla es una copia de la de
+   * technician_habilitations, que NO TIENE política de UPDATE — un guardado
+   * diferencial que intentara actualizar los años en su sitio sería rechazado
+   * por RLS. Si algún día hace falta, la política se añade primero y el código
+   * después, nunca al revés.
+   *
+   * 084: el reemplazo es UNA RPC, es decir una transacción. Antes eran dos
+   * sentencias, y el DELETE entraba solo: un INSERT que fallara después —años
+   * fuera de rango, rating inexistente, RLS, red— dejaba al técnico SIN
+   * experiencia mientras la pantalla decía "guardado". Era el último hueco de
+   * H1. La RPC valida la lista entera antes de borrar nada.
    *
    * `technician_habilitations` no se toca aquí. Son dos listas separadas: una
    * dice que el técnico está autorizado a firmar, ésta que sabe hacer el
@@ -606,33 +612,16 @@ export const technicianRepositoryV2 = {
     technicianId: string,
     entries: { aircraftTypeRatingId: string; years?: number }[],
   ): Promise<void> {
-    // Sin comprobación de filas en el DELETE, igual que replaceHabilitations:
-    // un técnico que aún no ha declarado nada borra CERO filas legítimamente,
-    // y es el caso normal del primer guardado. La red se pone en el INSERT,
-    // que sí sabe cuántas filas debe producir.
-    const { error: deleteError } = await supabase
-      .from('technician_aircraft_experience')
-      .delete()
-      .eq('technician_id', technicianId);
-    throwIfError(deleteError);
-
-    if (entries.length === 0) return;
-    const { data, error } = await supabase
-      .from('technician_aircraft_experience')
-      .insert(
-        entries.map((entry) => ({
-          technician_id: technicianId,
-          aircraft_type_rating_id: entry.aircraftTypeRatingId,
-          // `?? null` y no `?? 0`: NULL es "no declarado", 0 sería una
-          // declaración de "sin años", que no es lo mismo.
-          years: entry.years ?? null,
-        })),
-      )
-      .select('id');
+    const { error } = await supabase.rpc('replace_technician_aircraft_experience', {
+      p_technician_id: technicianId,
+      p_entries: entries.map((entry) => ({
+        aircraft_type_rating_id: entry.aircraftTypeRatingId,
+        // `?? null` y no `?? 0`: NULL es "no declarado", 0 sería una
+        // declaración de "sin años", que no es lo mismo.
+        years: entry.years ?? null,
+      })),
+    });
     throwIfError(error);
-    // El DELETE ya se llevó las filas viejas: si el INSERT no entra, el
-    // técnico se queda SIN experiencia y la pantalla diría "guardado".
-    throwIfNoRows(data, 'Could not save your aircraft experience — your session may have expired. Sign in again and retry.');
   },
 
   /**

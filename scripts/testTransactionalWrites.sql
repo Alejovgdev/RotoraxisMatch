@@ -44,12 +44,22 @@ BEGIN
   INSERT INTO transaction_results VALUES('cannot replace another technician ratings',failed);
   PERFORM replace_technician_engines(t,jsonb_build_array(jsonb_build_object('engine_id',engine,'years',0)));
   INSERT INTO transaction_results SELECT 'zero engine years preserved',years=0 FROM technician_engine_experience WHERE technician_id=t AND engine_id=engine;
+  -- 084: la experiencia en aeronaves, el último reemplazo que borraba desde el cliente.
+  PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating,'years',70)));
+  SELECT jsonb_agg(to_jsonb(a) ORDER BY id) INTO saved FROM technician_aircraft_experience a WHERE technician_id=t;
+  failed:=false;
+  BEGIN PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating,'years',71))); EXCEPTION WHEN OTHERS THEN failed:=SQLERRM LIKE '%between 0 and 70%'; END;
+  INSERT INTO transaction_results SELECT '71 aircraft experience years rejected without data loss',failed AND saved=(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM technician_aircraft_experience a WHERE technician_id=t);
+  failed:=false;
+  BEGIN PERFORM replace_technician_aircraft_experience(other_t,'[]'); EXCEPTION WHEN insufficient_privilege THEN failed:=true; END;
+  INSERT INTO transaction_results VALUES('cannot replace another technician aircraft experience',failed);
   RESET ROLE;
   -- Fail AFTER the delete in each RPC: the original rows must survive exactly.
   EXECUTE $fn$CREATE FUNCTION pg_temp.fail_insert() RETURNS trigger LANGUAGE plpgsql AS $body$
     BEGIN RAISE EXCEPTION 'INJECTED_INSERT_FAILURE'; END $body$$fn$;
   CREATE TRIGGER selftest_082_failure BEFORE INSERT ON technician_habilitations FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_insert();
   CREATE TRIGGER selftest_082_failure BEFORE INSERT ON technician_engine_experience FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_insert();
+  CREATE TRIGGER selftest_082_failure BEFORE INSERT ON technician_aircraft_experience FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_insert();
   SET LOCAL ROLE authenticated;
   SELECT jsonb_agg(to_jsonb(h) ORDER BY id) INTO saved FROM technician_habilitations h WHERE technician_id=t;
   failed:=false;
@@ -59,6 +69,10 @@ BEGIN
   failed:=false;
   BEGIN PERFORM replace_technician_engines(t,jsonb_build_array(jsonb_build_object('engine_id',engine))); EXCEPTION WHEN OTHERS THEN failed:=SQLERRM='INJECTED_INSERT_FAILURE'; END;
   INSERT INTO transaction_results SELECT 'engine insert failure rolls back delete',failed AND saved=(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM technician_engine_experience e WHERE technician_id=t);
+  SELECT jsonb_agg(to_jsonb(a) ORDER BY id) INTO saved FROM technician_aircraft_experience a WHERE technician_id=t;
+  failed:=false;
+  BEGIN PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating))); EXCEPTION WHEN OTHERS THEN failed:=SQLERRM='INJECTED_INSERT_FAILURE'; END;
+  INSERT INTO transaction_results SELECT 'aircraft experience insert failure rolls back delete',failed AND saved=(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM technician_aircraft_experience a WHERE technician_id=t);
   PERFORM replace_technician_habilitations(t,'[]');
   PERFORM replace_technician_engines(t,'[]');
   INSERT INTO transaction_results SELECT 'empty lists clear both sets',NOT EXISTS(SELECT 1 FROM technician_habilitations WHERE technician_id=t) AND NOT EXISTS(SELECT 1 FROM technician_engine_experience WHERE technician_id=t);

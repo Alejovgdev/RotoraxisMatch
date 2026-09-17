@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 // separately by testTransactionalWrites.sql on the real database with rollback.
 let ratings = [{ aircraft_type_rating_id: 'rating-old' }];
 let engines = [{ engine_id: 'engine-old', years: 5 }];
+let aircraftExperience = [{ aircraft_type_rating_id: 'rating-old', years: 5 }];
 let offerRatings = [{ offer_id: 'offer', aircraft_type_rating_id: 'rating-old', product_type: 'Aeroplane' }];
 const offer = { id: 'offer', company_id: 'company', product_type: 'Aeroplane', technician_type: 'mechanic',
   offer_kind: 'aircraft', requires_certification: true, license_code: 'B1.1', license_authority: 'EASA',
@@ -20,6 +21,7 @@ const fake = {
         if (op === 'delete') {
           if (table === 'technician_habilitations') ratings = [];
           if (table === 'technician_engine_experience') engines = [];
+          if (table === 'technician_aircraft_experience') aircraftExperience = [];
           if (table === 'offer_required_habilitations') offerRatings = [];
         }
         const data = table === 'offers' ? (one ? offer : [offer]) : table === 'offer_required_habilitations' ? offerRatings : [];
@@ -46,6 +48,10 @@ async function main() {
   await test('H1 failed engine replacement preserves existing engines', async () => {
     await assert.rejects(tech.replaceEngineExperience('tech', [{ engineId: 'engine-new', years: 71 }]));
     assert.equal(engines.length, 1);
+  });
+  await test('H1 failed aircraft experience replacement preserves existing rows', async () => {
+    await assert.rejects(tech.replaceAircraftExperience('tech', [{ aircraftTypeRatingId: 'rating-new', years: 71 }]));
+    assert.equal(aircraftExperience.length, 1);
   });
   await test('H1 failed offer product update preserves aircraft requirements', async () => {
     await assert.rejects(offers.update('offer', { productType: 'Helicopter' }));
