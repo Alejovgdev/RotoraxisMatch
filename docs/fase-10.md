@@ -27,9 +27,10 @@ Hallazgos corregidos:
   orden total.
 - **H13** — la búsqueda seguía sin filtrar si fallaba el matching: ahora error
   visible con reintento, nunca resultados sin comprobar.
-- **H14** — 064–080 documentadas como aplicación única.
+- **H14** — 064–085 documentadas como aplicación única.
 - **H15** — RLS de cualificaciones más amplia que la del perfil: licencias,
-  habilitaciones y motores alineados con visibilidad o relación existente (081).
+  habilitaciones y motores alineados con visibilidad o relación existente (081);
+  experiencia de aeronaves y tipos de perfil, lo mismo (085).
 - **H16** — documentación y textos alineados con el código.
 
 Migraciones aplicadas y registradas en `supabase_migrations.schema_migrations`:
@@ -41,6 +42,11 @@ Migraciones aplicadas y registradas en `supabase_migrations.schema_migrations`:
   transaccionales, SECURITY INVOKER.
 - **083** `20260917150705` — alcance de los type ratings individuales, con
   trigger sobre habilitaciones y sobre cambios de su credencial.
+- **084** `20260917173614` — `replace_technician_aircraft_experience`
+  transaccional, SECURITY INVOKER.
+- **085** `20260917173624` — las dos políticas de cualificación restantes
+  (`tae_select_company`, `tpt_select_company`) alineadas con visibilidad o
+  relación.
 
 Verificado en la revisión cruzada: los tests distinguen el arreglo del fallo
 (mutar el código compilado rompe el test correspondiente en H2, H3, H7 y H8);
@@ -50,16 +56,20 @@ sin datos por la RLS nueva.
 
 ## 2. Plan de cierre
 
-**Sesión 1** (hecha) — experiencia de aeronaves transaccional (084); H15 en
+**Sesión 1** (cerrada) — experiencia de aeronaves transaccional (084); H15 en
 `tae_select_company` y `tpt_select_company` (085); el perfil se guarda aunque
 falle el catálogo de motores; separar las suites de base del `npm test`
 general; textos de UI nuevos al inglés.
 
 Cierre de la sesión 1:
 
-- **084** y **085** están escritas y ensayadas con rollback, **sin aplicar**.
-  Las dos suites de base pasan con ellas puestas dentro de la transacción
-  (13 + 16 comprobaciones) y el snapshot antes/después es idéntico.
+- **084 y 085 aplicadas y registradas** (17 septiembre 2026), tras ensayarlas
+  con rollback y con confirmación explícita del usuario, mediante
+  `apply_migration`. Verificado después: la RPC es SECURITY INVOKER con
+  `search_path=public` y sin EXECUTE para `anon`; las dos políticas apuntan a
+  `company_can_read_technician_qualifications` para `authenticated`; los
+  recuentos de filas no cambiaron. `npm run test:db` pasa contra la base ya
+  migrada — 29 regresiones más 412 controles de alcance — y no deja rastro.
 - Reproducido antes de arreglar, en los dos casos: la experiencia en aeronaves
   se quedaba en cero tras un INSERT fallido, y sin la 085 un usuario de empresa
   leía 3 filas (1 experiencia de aeronave, 2 tipos de perfil) de un técnico
@@ -100,22 +110,21 @@ despliegue.
   `authority`), y `replaceHabilitations` borra y luego falla al insertar sin
   `technician_license_id`, dejando al técnico sin type ratings. No hace falta
   ninguna migración nueva: hace falta el despliegue.
-- **064–083 son de aplicación única, en orden.** Sus postcondiciones dependen
-  del estado de la primera aplicación. No reejecutarlas. No usar
-  `supabase db push` ni `supabase migration repair` con el historial actual:
-  los ficheros llevan prefijo numérico y el historial lleva timestamp, así que
-  la CLI no casa ninguno y trataría de aplicarlos todos.
+- **064–085 son de aplicación única, en orden, y ya están todas aplicadas.**
+  Sus postcondiciones dependen del estado de la primera aplicación. No
+  reejecutarlas. No usar `supabase db push` ni `supabase migration repair` con
+  el historial actual: los ficheros llevan prefijo numérico y el historial
+  lleva timestamp, así que la CLI no casa ninguno y trataría de aplicarlos
+  todos. Del lado del esquema no queda nada pendiente en esta fase; lo que
+  falta es el despliegue del cliente.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
   las suites que no escriben, más los dos validadores, que sólo leen.
-- **084 y 085 no están aplicadas.** El código de la sesión 1 ya las usa, así
-  que hay que aplicarlas antes de desplegar esta rama — junto con el despliegue
-  que arregla lo de arriba, no por separado.
 
 ## 5. Estado de las sesiones
 
-- Sesión 1: **hecha**. 084 y 085 pendientes de aplicar.
+- Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
 - Sesión 2: pendiente.
 - Sesión 3: pendiente.
 - Final: pendiente.
