@@ -52,7 +52,7 @@ import {
 } from '../../src/utils/profileLicenses';
 import { EngineExperienceEditor, EngineExperienceRow } from '../../src/components/technician/EngineExperienceEditor';
 import { useEnginesCatalog } from '../../src/state/useEnginesCatalog';
-import { isHabilitationScopeRejection, profileHabilitationProblems } from '../../src/utils/profileHabilitationValidation';
+import { blockingHabilitationIssues, isHabilitationScopeRejection, profileHabilitationIssues } from '../../src/utils/profileHabilitationValidation';
 import { AuthorityCode, AuthorityLicenseCode } from '../../src/types/catalog';
 import { TechnicianTypeSelector } from '../../src/components/TechnicianTypeSelector';
 import { useTechnicianTypes } from '../../src/auth/useCatalogOptions';
@@ -272,7 +272,12 @@ export default function TechnicianProfileScreen() {
   // instead of a bare UUID (see catalogRepository.getAircraftTypeRatingsByIds).
   const [ratingsById, setRatingsById] = useState<AircraftRatingIndex>(new Map());
   const { engineIndex, state: engineState, retry: retryEngines } = useEnginesCatalog();
-  const habilitationProblems = profileHabilitationProblems(habilitations, heldLicenses, ratingsById, engineIndex);
+  // Los problemas se calculan siempre; qué BLOQUEA el guardado depende de si
+  // esta acción va a reescribir las habilitaciones. Un catálogo de motores
+  // caído no puede dejar el perfil entero sin guardar (ver
+  // blockingHabilitationIssues).
+  const habilitationIssues = profileHabilitationIssues(habilitations, heldLicenses, ratingsById, engineIndex);
+  const blockingIssues = blockingHabilitationIssues(habilitationIssues, habDirty);
 
   const [requestPanelOpen, setRequestPanelOpen] = useState(false);
   const [requestLicense, setRequestLicense] = useState<string | null>(null);
@@ -710,8 +715,20 @@ export default function TechnicianProfileScreen() {
 
     // Warn before ANY profile write, including a deselected credential that
     // still supports an unchanged rating. Never move/delete ratings implicitly.
-    if (habilitationProblems.length > 0) {
-      setProfileError(habilitationProblems.join('\n'));
+    //
+    // `habDirty` decide qué cuenta: si esta acción no reescribe las
+    // habilitaciones, una que no se puede VERIFICAR —catálogo de motores o de
+    // aeronaves sin cargar— no se manda a la base y no puede ser rechazada,
+    // así que el resto del perfil se guarda igual. Un problema determinable
+    // (credencial deseleccionada, combinación incompatible) bloquea siempre.
+    if (blockingIssues.length > 0) {
+      const unverifiable = blockingIssues.some((issue) => issue.unverifiable);
+      setProfileError([
+        ...blockingIssues.map((issue) => issue.message),
+        ...(unverifiable
+          ? ['Your type ratings could not be checked, so they were not saved. Retry the catalog above, or undo your type-rating changes to save the rest of the profile.']
+          : []),
+      ].join('\n'));
       return;
     }
 
@@ -1253,9 +1270,12 @@ export default function TechnicianProfileScreen() {
             title="Licenses"
             subtitle="Pick the issuing authority, then every licence you hold from it. Leave empty if you hold none. Each one ticks the profile type it certifies — mechanical or avionics — and unticks it again if you remove it."
           />
-          {habilitationProblems.length > 0 ? (
+          {/* Sólo lo que de verdad impide guardar. Una habilitación que no se
+              puede verificar mientras el catálogo carga o falla no es un aviso
+              aquí: el editor de abajo ya ofrece reintentar el catálogo. */}
+          {blockingIssues.length > 0 ? (
             <View style={styles.warningBanner}>
-              <Text accessibilityRole="alert" style={styles.warningText}>{habilitationProblems.join('\n')}</Text>
+              <Text accessibilityRole="alert" style={styles.warningText}>{blockingIssues.map((issue) => issue.message).join('\n')}</Text>
             </View>
           ) : null}
           <TechnicianCard style={styles.sectionCard}>

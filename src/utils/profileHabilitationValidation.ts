@@ -27,17 +27,58 @@ export function habilitationScopeMessage(entry: HabilitationCredential, label: s
   return `${rating} cannot be saved under ${credential}: ${limitation}. Keep it under the licence that endorses it, or remove this habilitation before saving.`;
 }
 
-export function profileHabilitationProblems(
+export interface HabilitationIssue {
+  reason: HabilitationProblem;
+  message: string;
+  /** True when the verdict depends on a catalog that has not loaded, so it says
+   * "we cannot tell", not "this is wrong". Only blocks a save that actually
+   * rewrites the habilitations — see `blockingHabilitationIssues`. */
+  unverifiable: boolean;
+}
+
+export function profileHabilitationIssues(
   entries: readonly HabilitationCredential[], held: readonly HeldLicense[],
   ratings: AircraftRatingIndex, engines: ReadonlyMap<string, EngineCatalog>,
-): string[] {
+): HabilitationIssue[] {
   return entries.flatMap((entry, i) => {
     const rating = ratings.get(entry.aircraftTypeRatingId);
     const reason = !held.some((l) => l.authority === entry.authority && l.code === entry.licenseCode)
       ? 'missing_license' : !rating ? 'rating'
         : individualTypeRatingScopeError(entry.authority, entry.licenseCode, rating, engines);
-    return reason ? [habilitationScopeMessage(entry, rating?.displayName ?? `Habilitation ${i + 1}`, reason)] : [];
+    if (!reason) return [];
+    return [{
+      reason,
+      message: habilitationScopeMessage(entry, rating?.displayName ?? `Habilitation ${i + 1}`, reason),
+      // 'rating' and 'unknown_propulsion' both mean "a catalog did not answer":
+      // the aircraft catalog and the engine catalog respectively. Neither is
+      // evidence that the stored row is wrong.
+      unverifiable: reason === 'unknown_propulsion' || reason === 'rating',
+    }];
   });
+}
+
+/**
+ * Las que de verdad impiden guardar.
+ *
+ * Un fallo del catálogo de motores no puede bloquear el perfil ENTERO: el
+ * teléfono, la disponibilidad y los años no dependen de él. Mientras las
+ * habilitaciones no se reescriban (`willWriteHabilitations`), una habilitación
+ * que no se puede verificar no se manda a la base y por tanto no puede ser
+ * rechazada — no hay nada que impedir. Lo que sí bloquea siempre es un
+ * problema determinable: una credencial deseleccionada que aún sostiene una
+ * habilitación, o una combinación incompatible.
+ */
+export function blockingHabilitationIssues(
+  issues: readonly HabilitationIssue[], willWriteHabilitations: boolean,
+): HabilitationIssue[] {
+  return issues.filter((issue) => willWriteHabilitations || !issue.unverifiable);
+}
+
+export function profileHabilitationProblems(
+  entries: readonly HabilitationCredential[], held: readonly HeldLicense[],
+  ratings: AircraftRatingIndex, engines: ReadonlyMap<string, EngineCatalog>,
+): string[] {
+  return profileHabilitationIssues(entries, held, ratings, engines).map((issue) => issue.message);
 }
 
 export function isHabilitationScopeRejection(error: { code?: string; message?: string } | null): boolean {

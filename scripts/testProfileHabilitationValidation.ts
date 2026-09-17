@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { buildAircraftRatingIndex } from '../src/constants/aircraftTypeRatings';
 import { AircraftTypeRatingCatalog, EngineCatalog } from '../src/types/catalog';
-import { explainHabilitationScopeRejection, isHabilitationScopeRejection, profileHabilitationProblems } from '../src/utils/profileHabilitationValidation';
+import { blockingHabilitationIssues, explainHabilitationScopeRejection, isHabilitationScopeRejection, profileHabilitationIssues, profileHabilitationProblems } from '../src/utils/profileHabilitationValidation';
 
 const a320 = { id: 'a320', displayName: 'Airbus A320 — CFM56', productType: 'Aeroplane', engineId: 'cfm56' } as AircraftTypeRatingCatalog;
 const r44 = { id: 'r44', displayName: 'Robinson R44 — Lycoming', productType: 'Helicopter', engineId: 'lycoming' } as AircraftTypeRatingCatalog;
@@ -58,6 +58,20 @@ async function main() {
   assert.match(otherAuthority, /still linked to EASA B1\.1/);
   const unknown = profileHabilitationProblems([original], [b11], ratings, new Map()).join(' ');
   assert.match(unknown, /cannot confirm.*Airbus A320/);
+
+  // Sin catálogo de motores: "no se puede comprobar", no "está mal". Sólo
+  // bloquea el guardado que de verdad reescribe las habilitaciones.
+  const noEngines = profileHabilitationIssues([original], [b11], ratings, new Map());
+  assert.deepEqual(noEngines.map((i) => [i.reason, i.unverifiable]), [['unknown_propulsion', true]]);
+  assert.deepEqual(blockingHabilitationIssues(noEngines, false), [], 'a stale catalog never blocks an untouched rating list');
+  assert.equal(blockingHabilitationIssues(noEngines, true).length, 1, 'it does block when the ratings are being rewritten');
+  // Un problema determinable bloquea en los dos casos: no depende del catálogo.
+  const deselected = profileHabilitationIssues([original], [b12], ratings, new Map());
+  assert.equal(deselected[0].unverifiable, false);
+  assert.equal(blockingHabilitationIssues(deselected, false).length, 1, 'a deselected credential blocks even with no catalog');
+  // Y una aeronave que el catálogo de ratings no resuelve tampoco es un veredicto.
+  const noRating = profileHabilitationIssues([original], [b11], new Map(), engines);
+  assert.deepEqual(noRating.map((i) => [i.reason, i.unverifiable]), [['rating', true]]);
   assert.deepEqual(original, { authority: 'EASA', licenseCode: 'B1.1', aircraftTypeRatingId: 'a320' }, 'no implicit reassignment');
 
   assert.equal(isHabilitationScopeRejection(writeError), true);
@@ -85,12 +99,15 @@ async function main() {
   const handlerCode = ts.transpileModule(saveFunction.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   let visibleError: string | null = null;
   let profileWrites = 0;
+  let credentialRejects = true;
   const query = { update: () => query, eq: () => query, select: async () => ({ data: [{ id: 'tech' }], error: null }) };
   const context = {
     form: { fullName: 'Test Technician', email: 'test@example.invalid', availability: { contractTypes: [], status: 'open_to_offers' }, licenseCategories: ['B1.1'] },
     isDirty: true, techId: 'tech', typesLoaded: true, technicianTypes: ['mechanic'], yearsInput: '5',
     validateProfileYearsExperience: () => null,
-    habilitationProblems: [removal],
+    // Computed exactly as the screen does, with the real functions.
+    blockingIssues: blockingHabilitationIssues(profileHabilitationIssues([original], [b12], ratings, engines), false),
+    habDirty: false,
     setProfileError: (message: string | null) => { visibleError = message; },
     supabase: { from: () => { profileWrites++; return query; } },
     heldLicenses: [b11], habilitations: [original], ratingsById: ratings,
@@ -98,9 +115,15 @@ async function main() {
     SOCIAL_FIELDS: [], unknownSocialKeys: {}, persistedLocationFromValue: () => ({}), location: {},
     setSaving: () => {}, setLicenseRemovalWarning: () => {},
     isHabilitationScopeRejection,
+    setForm: () => {}, setIsDirty: () => {}, setHabDirty: () => {},
+    experienceDirty: false, enginesDirty: false, aircraftExperience: [], engines: [],
+    setExperienceDirty: () => {}, setEnginesDirty: () => {}, loadProfile: async () => {},
     technicianRepositoryV2: {
       replaceProfileTypes: async () => {},
-      upsertLicenses: async () => { throw new Error('Existing type rating is outside the new licence scope.'); },
+      upsertLicenses: async () => {
+        if (credentialRejects) throw new Error('Existing type rating is outside the new licence scope.');
+      },
+      removeUnreferencedLicenses: async () => ({ blocked: [] }),
       describeHabilitationScopeRejection: repository.describeHabilitationScopeRejection,
     },
   };
@@ -109,11 +132,37 @@ async function main() {
   await vm.runInContext('handleSave()', context);
   assert.equal(visibleError, removal);
   assert.equal(profileWrites, 0, 'incompatible removal stops before any profile write');
-  context.habilitationProblems = [mismatch];
+  context.blockingIssues = blockingHabilitationIssues(profileHabilitationIssues([incompatible], [b12], ratings, engines), false);
   await vm.runInContext('handleSave()', context);
   assert.equal(visibleError, mismatch);
   assert.equal(profileWrites, 0, 'bypassing the picker still stops before any write');
-  context.habilitationProblems = []; // simulate stale client facts; DB still rejects
+
+  // Catálogo de motores caído y habilitaciones SIN tocar: el resto del perfil
+  // se guarda. Era el bloqueo del perfil entero que encontró la revisión.
+  const staleEngines = profileHabilitationIssues([original], [b11], ratings, new Map());
+  context.blockingIssues = blockingHabilitationIssues(staleEngines, false);
+  context.habDirty = false;
+  visibleError = null;
+  credentialRejects = false;
+  await vm.runInContext('handleSave()', context);
+  assert.equal(visibleError, null, 'a failed engine catalog does not block an untouched rating list');
+  assert.ok(profileWrites > 0, 'the rest of the profile is saved');
+
+  // Mismo catálogo caído, pero el técnico SÍ tocó las habilitaciones: se para
+  // antes de escribir y se dice por qué y qué hacer.
+  profileWrites = 0;
+  context.blockingIssues = blockingHabilitationIssues(staleEngines, true);
+  context.habDirty = true;
+  await vm.runInContext('handleSave()', context);
+  assert.match(visibleError!, /cannot confirm.*Airbus A320/);
+  assert.match(visibleError!, /could not be checked, so they were not saved/);
+  assert.match(visibleError!, /undo your type-rating changes to save the rest/);
+  assert.equal(profileWrites, 0, 'an unverifiable rating change stops before any write');
+
+  profileWrites = 0;
+  context.habDirty = false;
+  credentialRejects = true;
+  context.blockingIssues = []; // simulate stale client facts; DB still rejects
   await vm.runInContext('handleSave()', context);
   assert.match(visibleError!, /Airbus A320/);
   assert.doesNotMatch(visibleError!, /outside the new licence scope/);
