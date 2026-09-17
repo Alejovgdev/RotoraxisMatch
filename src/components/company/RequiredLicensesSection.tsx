@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
 import { CompanyCard, CompanyCheckRow, CompanyChip, companyUi } from './CompanyUI';
 import { AuthorityCode, AuthorityLicenseCode } from '../../types/catalog';
-import { AUTHORITIES, authorityLabel, credentialLabel } from '../../constants/licenses';
+import { AUTHORITIES, authorityLabel, equivalentAuthorities, isValidAuthorityLicense } from '../../constants/licenses';
 import {
   OfferRequirementsForm,
   selectableAuthorities,
@@ -41,6 +41,9 @@ export function RequiredLicensesSection({
   const authorities = selectableAuthorities(form, AUTHORITIES.map((a) => a.code));
   const licenses = selectableLicenses(form);
   const authority = form.licenseAuthority;
+  const otherAuthorities = equivalentAuthorities(authority ?? '')
+    .filter((code) => !form.licenseCode || isValidAuthorityLicense(code, form.licenseCode))
+    .map(authorityLabel).join(', ');
 
   return (
     <CompanyCard style={styles.card}>
@@ -81,12 +84,8 @@ export function RequiredLicensesSection({
 
       {showsAcceptsEquivalent(form) ? (
         <CompanyCheckRow
-          label={`Also accept the same licence from another Part-66 authority`}
-          helper={
-            form.licenseCode
-              ? `A ${form.licenseCode} from UK CAA, CASA or UAE GCAA counts, ranked just below an exact ${credentialLabel(authority, form.licenseCode)}. FAA never counts as equivalent.`
-              : 'The same category from UK CAA, CASA or UAE GCAA counts, ranked just below an exact match. FAA never counts as equivalent.'
-          }
+          label="Considerar otras autoridades"
+          helper={`Also consider the same category from ${otherAuthorities}. This search preference does not imply automatic legal recognition. FAA is not included.`}
           checked={form.acceptsEquivalent}
           onChange={onChangeAcceptsEquivalent}
         />

@@ -39,8 +39,8 @@ export function OfferEngineSection({
     <CompanyCard style={styles.card}>
       <Text style={styles.title}>Engine</Text>
       <Text style={styles.subtitle}>
-        One engine per offer. Technicians rank by how close their experience is: the exact engine declared, the
-        same engine from a B1 type rating, the same family, then any other engine.
+        One engine per offer. Engine points reflect the exact engine declared, evidence from a B1 type rating,
+        the same family or another engine. The overall ranking also includes the other matching criteria.
       </Text>
       <EnginePicker value={value} onSelect={(engine) => onChange(engine.id)} />
       {error ? <Text style={styles.error}>{error}</Text> : null}

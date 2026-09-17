@@ -87,6 +87,63 @@ incluido `validate:application-eligibility`. Ejecución secuencial y parada ante
 fallo; las pruebas de base requieren credenciales de pruebas y usan rollback.
 TypeScript se comprueba por separado con `npm run ts`.
 
-## Estado
+## 9 — H16/H14: documentación y textos
 
-Punto 9 en curso. Ninguna migración de esta segunda parte aplicada en producción.
+CLAUDE.md refleja la edad retirada por 040, la evidencia de experiencia de
+aeronave desde Tanda E, la elección efectiva de credencial de H2, la cobertura
+B1→A y FAA A+P de H8, caducidad CASA/FAA, atomicidad 082 y seguridad 081.
+Distingue los dos filtros del núcleo de otros filtros de repositorios/RLS/UI,
+y el componente motor del ranking total. Describe 064–080 como aplicación
+única y explica sus postcondiciones incompatibles con una reejecución.
+
+El selector dice «Considerar otras autoridades» y calcula la lista de otras
+autoridades que emiten la categoría: excluye la elegida e incluye EASA cuando
+corresponde. La preferencia no promete reconocimiento legal automático.
+El texto de oferta de motor explica su componente de puntos y los demás
+criterios; se retira la promesa de prioridad absoluta del motor declarado.
+
+## Verificación final
+
+- `npm test`: PASS; once suites y ambos validadores, en secuencia.
+- Matching: 236 PASS; formulario: 20 PASS; transacciones: 3 PASS; base: 26 PASS;
+  ubicación: 45 PASS; salario, URL y mapa: PASS.
+- H3: 1.428 combinaciones TS PASS; 412 controles SQL PASS; 26 regresiones
+  anteriores con la 083 instalada temporalmente PASS; rollback exacto comprobado.
+- H13: fallo de ambos catálogos, resultado incompleto/ausente, reintento,
+  cambio de oferta/lote y carreras del hook real: PASS.
+- `npm run ts`: limpio; `git diff --check`: limpio.
+- `validate:authority-licenses`: 51 filas, 0 errores, PASS.
+- `validate:application-eligibility`: 386 casos, 0 divergencias, PASS.
+
+## Reproducción, discusión y límites
+
+H7 se reprodujo con la regresión antes del cambio. H3 se reprodujo por RPC e
+INSERT directo; **no** por UPDATE de técnico, ya bloqueado por RLS. El inventario
+de producción no encontró incompatibilidades existentes (0 de 8). H13 y H16/H14
+se confirmaron en los caminos de código y textos señalados. No se reejecutaron
+064–080 para probar sus postcondiciones históricas.
+
+No hay discrepancia que bloquee estas correcciones mínimas. Sí se mantiene
+explícita la distinción **inactivo ≠ genérico**: el scorer actual usa la actividad
+para negar crédito exacto; separar ambos conceptos requiere trabajo de catálogo
+y queda pendiente. H3 aplica al código L agregado actual; no incorpora ni decide
+el comportamiento de futuras subcategorías. La preferencia entre autoridades
+no certifica reconocimiento legal, ni una B1 acredita por sí sola autorización
+de taller de componentes.
+
+No se tocaron H6/H9/H10 (catálogos), H12 (paginación), licencia de ofertas de
+motor, FAA con aeronaves, reevaluación histórica de candidaturas ni ofertas
+directas. Tampoco se modificó la puntuación para forzar prioridad total del
+motor declarado. No se ha validado manualmente toda la UI web/Android/iOS.
+
+## Entrega y producción
+
+Cinco commits locales, uno por punto; sin push ni merge. Puntos 5–8:
+`1036ed1`, `b5ce377`, `0a4f8d0`, `2366802`; este cierre forma parte del commit
+del punto 9.
+
+**083 pendiente de confirmación del usuario antes de producción.** La única
+migración nueva es [083_individual_type_rating_scope.sql](../supabase/migrations/083_individual_type_rating_scope.sql).
+Sus funciones y triggers se probaron dentro de transacciones revertidas; no se
+registró ni se dejó instalada. H3 en servidor solo será efectivo en producción
+tras esa aplicación. No hay despliegue del cliente.
