@@ -46,6 +46,7 @@ import {
   showsCertificationQuestion,
   showsLicenseSection,
   showsOnlyUnlicensed,
+  toggleAcceptedAuthority,
 } from '../../../src/utils/offerFormRules';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
@@ -116,7 +117,7 @@ export default function NewOfferScreen() {
     // Paso 5b: lo mismo con la AUTORIDAD — nada de EASA por defecto.
     licenseAuthority: undefined,
     licenseCode: undefined,
-    acceptsEquivalent: false,
+    acceptedAuthorities: [],
     requiresAllAircraft: false,
     requiredHabilitations: [],
     // Las ofertas de siempre son de aeronave; la de motor se elige.
@@ -184,7 +185,7 @@ export default function NewOfferScreen() {
         requiresCertification: form.requiresCertification,
         licenseAuthority: form.licenseAuthority,
         licenseCode: form.licenseCode,
-        acceptsEquivalent: form.acceptsEquivalent,
+        acceptedAuthorities: form.acceptedAuthorities,
         requiresAllAircraft: form.requiresAllAircraft,
         requiredHabilitations: form.requiredHabilitations,
         offerKind: form.offerKind,
@@ -356,7 +357,7 @@ export default function NewOfferScreen() {
             form={form}
             onChangeAuthority={(next) => applyRequirement((prev) => selectAuthority(prev, next))}
             onChangeLicense={(next) => applyRequirement((prev) => selectLicense(prev, next))}
-            onChangeAcceptsEquivalent={(next) => set('acceptsEquivalent', next)}
+            onToggleAcceptedAuthority={(authority) => apply((prev) => toggleAcceptedAuthority(prev, authority))}
             authorityError={errors.authority}
             licenseError={errors.license}
           />

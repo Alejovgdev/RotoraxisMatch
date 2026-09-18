@@ -48,6 +48,7 @@ import {
   showsCertificationQuestion,
   showsLicenseSection,
   showsOnlyUnlicensed,
+  toggleAcceptedAuthority,
 } from '../../../src/utils/offerFormRules';
 import { OfferKind } from '../../../src/types/offer';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
@@ -123,7 +124,7 @@ export default function EditOfferScreen() {
           requiresCertification: o.requiresCertification,
           licenseAuthority: o.licenseAuthority,
           licenseCode: o.licenseCode,
-          acceptsEquivalent: o.acceptsEquivalent,
+          acceptedAuthorities: o.acceptedAuthorities,
           requiresAllAircraft: o.requiresAllAircraft,
           requiredHabilitations: o.requiredHabilitations.map((h) => ({
             aircraftTypeRatingId: h.aircraftTypeRatingId,
@@ -272,7 +273,7 @@ export default function EditOfferScreen() {
         technicianType: form.technicianType,
         licenseAuthority: form.licenseAuthority,
         licenseCode: form.licenseCode,
-        acceptsEquivalent: form.acceptsEquivalent,
+        acceptedAuthorities: form.acceptedAuthorities,
         requiresAllAircraft: form.requiresAllAircraft,
         // Paso 5b: clase y motor. El repositorio retira las aeronaves ANTES de
         // cambiar a motor (los triggers de la 076 lo exigen), igual que con el
@@ -468,7 +469,7 @@ export default function EditOfferScreen() {
             form={form}
             onChangeAuthority={onSelectAuthority}
             onChangeLicense={onSelectLicense}
-            onChangeAcceptsEquivalent={(next) => setField('acceptsEquivalent', next)}
+            onToggleAcceptedAuthority={(authority) => setForm((prev) => (prev ? toggleAcceptedAuthority(prev, authority) : prev))}
             authorityError={errors.authority}
             licenseError={errors.license}
           />

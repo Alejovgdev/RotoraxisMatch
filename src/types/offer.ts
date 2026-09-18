@@ -155,13 +155,15 @@ export interface Offer extends PersistedLocation {
    */
   offerKind: OfferKind;
   /**
-   * ¿Vale la misma categoría emitida por otra autoridad Part-66?
+   * Las OTRAS autoridades Part-66 cuya misma categoría vale (migración 088,
+   * sustituye al booleano `accepts_equivalent` de la 070).
    *
-   * Ensancha la AUTORIDAD, nunca el código: una B2 UK no cumple una B1.1
-   * EASA por marcarla. El equivalente puntúa por debajo del exacto, y la
-   * FAA no cruza con nadie. `false` por defecto (migración 070).
+   * Vacía = sólo la autoridad exacta. Ensancha la AUTORIDAD, nunca el código:
+   * una B2 UK no cumple una B1.1 EASA por aceptar UK CAA. El equivalente
+   * puntúa por debajo del exacto (87 frente a 100), y la FAA no cruza con
+   * nadie. Qué autoridades caben lo dice `equivalentAuthoritiesForLicense`.
    */
-  acceptsEquivalent: boolean;
+  acceptedAuthorities: AuthorityCode[];
   /** El motor que pide una oferta de motor. Presente sólo si `offerKind` es 'engine'. */
   requiredEngineId?: string;
   /**

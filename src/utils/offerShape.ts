@@ -14,13 +14,21 @@
 //   triggers de la 076                              motor ⇒ sin aeronaves
 //   chk_offers_aircraft_without_engine       (077)  aeronave ⇒ sin motor
 //   chk_offers_only_unlicensed_without_license (077) "sólo sin licencia" ⇒ no exige licencia
+//   chk_offers_accepted_authorities + trigger (088) aceptadas ⊆ otras Part-66 que emiten el código
 //
 // La usan offerRepository (antes de escribir, sobre el estado RESULTANTE) y los
 // fixtures de scripts/testMatching.ts (una oferta de test que la base no
 // aceptaría no debe llegar al scorer).
 import { OfferWithRequirements } from '../types/offer';
 import { AuthorityLicenseCode } from '../types/catalog';
-import { ENGINE_OFFER_LICENSE_CODES, authorityHasTypeRatings, isValidAuthorityLicense } from '../constants/licenses';
+import {
+  ENGINE_OFFER_LICENSE_CODES,
+  authorityHasTypeRatings,
+  authorityLabel,
+  credentialLabel,
+  equivalentAuthoritiesForLicense,
+  isValidAuthorityLicense,
+} from '../constants/licenses';
 
 /**
  * ¿Las aeronaves de esta oferta son EXPERIENCIA y no type ratings? (Fase 10, sesión 2)
@@ -41,7 +49,7 @@ export function offerAircraftAreExperience(
 
 export type OfferShape = Pick<
   OfferWithRequirements,
-  'offerKind' | 'requiresCertification' | 'licenseCode' | 'licenseAuthority' | 'requiredEngineId' | 'onlyUnlicensed'
+  'offerKind' | 'requiresCertification' | 'licenseCode' | 'licenseAuthority' | 'requiredEngineId' | 'onlyUnlicensed' | 'acceptedAuthorities'
 > & {
   requiredHabilitations: readonly unknown[];
 };
@@ -81,6 +89,20 @@ export function offerShapeViolations(offer: OfferShape): string[] {
 
   if (offer.onlyUnlicensed && (hasLicense || offer.requiresCertification)) {
     violations.push('"Only technicians without a licence" cannot be combined with a licence requirement.');
+  }
+
+  // Sesión 2 (088): las aceptadas son OTRAS autoridades Part-66 que emiten el
+  // mismo código. Ni la exigida, ni la FAA, ni ninguna sin licencia.
+  const accepted = offer.acceptedAuthorities;
+  if (new Set(accepted).size !== accepted.length) violations.push('An accepted authority is listed twice.');
+  const acceptable = equivalentAuthoritiesForLicense(offer.licenseAuthority, offer.licenseCode);
+  const outside = accepted.filter((a) => !acceptable.includes(a));
+  if (outside.length > 0) {
+    violations.push(
+      hasLicense
+        ? `${outside.map(authorityLabel).join(', ')} cannot be accepted as equivalent to ${credentialLabel(offer.licenseAuthority, offer.licenseCode as string)}.`
+        : 'Accepted authorities need a licence to be equivalent to.',
+    );
   }
 
   return violations;

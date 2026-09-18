@@ -6,7 +6,7 @@
 // una era la forma de que una dijera "B1.1" y otra "EASA B1.1".
 import { Offer } from '../types/offer';
 import { EngineIndex, getEngineLabel } from '../constants/engines';
-import { credentialLabel } from '../constants/licenses';
+import { authorityLabel, credentialLabel } from '../constants/licenses';
 import { technicianTypeLabel } from '../constants/technicianTypes';
 
 /** "EASA B1.1", "FAA A&P". null si la oferta no pide licencia. */
@@ -14,11 +14,13 @@ export function offerLicenseText(offer: Pick<Offer, 'licenseCode' | 'licenseAuth
   return offer.licenseCode ? credentialLabel(offer.licenseAuthority, offer.licenseCode) : null;
 }
 
-/** "EASA B1.1 — equivalent Part-66 authorities accepted". */
-export function offerLicenseDetailText(offer: Pick<Offer, 'licenseCode' | 'licenseAuthority' | 'acceptsEquivalent'>): string | null {
+/** "EASA B1.1 — also accepts UK CAA, CASA (Australia)". Sin aceptadas, sólo la credencial. */
+export function offerLicenseDetailText(offer: Pick<Offer, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>): string | null {
   const license = offerLicenseText(offer);
   if (!license) return null;
-  return offer.acceptsEquivalent ? `${license} — equivalent Part-66 authorities accepted` : license;
+  return offer.acceptedAuthorities.length > 0
+    ? `${license} — also accepts ${offer.acceptedAuthorities.map(authorityLabel).join(', ')}`
+    : license;
 }
 
 /** El motor pedido, o null si no es oferta de motor. Con el catálogo aún sin cargar, el id. */

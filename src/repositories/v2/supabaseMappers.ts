@@ -159,7 +159,10 @@ export function mapOfferRow(row: DbRow): Offer {
     // OFFER_COLUMNS, y si alguna saliera de ahí la oferta se puntuaría como de
     // aeronave sin avisar—.
     offerKind: (row.offer_kind as OfferKind | null) ?? 'aircraft',
-    acceptsEquivalent: Boolean(row.accepts_equivalent),
+    // Sesión 2 (088): la lista sustituye a `accepts_equivalent`, que ya no se
+    // lee. La columna es NOT NULL DEFAULT '{}': el `?? []` sólo cubriría un
+    // SELECT que la olvidara, y en la dirección segura (sin equivalencias).
+    acceptedAuthorities: (row.accepted_authorities as AuthorityCode[] | null) ?? [],
     requiredEngineId: row.required_engine_id ?? undefined,
     onlyUnlicensed: Boolean(row.only_unlicensed),
     locationCountry: row.location_country,

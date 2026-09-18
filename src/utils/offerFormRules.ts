@@ -15,8 +15,9 @@ import { OfferKind, OfferProductType } from '../types/offer';
 import { AuthorityCode, AuthorityLicenseCode, TechnicianTypeCode } from '../types/catalog';
 import { ENGINE_TECHNICIAN_TYPE_CODE, isLicensedTechnicianType } from '../constants/technicianTypes';
 import {
-  PART66_AUTHORITIES,
+  equivalentAuthoritiesForLicense,
   licensesSelectableForOffer,
+  retainApplicableAuthorities,
 } from '../constants/licenses';
 import { isLicenseCompatibleWithProductType } from './licenseCategoryProductType';
 import { offerAircraftAreExperience } from './offerShape';
@@ -29,7 +30,8 @@ export interface OfferRequirementsForm {
   requiresCertification: boolean;
   licenseAuthority?: AuthorityCode;
   licenseCode?: AuthorityLicenseCode;
-  acceptsEquivalent: boolean;
+  /** Sesión 2 (088): otras autoridades Part-66 aceptadas. Vacía = sólo la exacta. */
+  acceptedAuthorities: AuthorityCode[];
   onlyUnlicensed: boolean;
   requiresAllAircraft: boolean;
   requiredHabilitations: { aircraftTypeRatingId: string; notes?: string }[];
@@ -41,6 +43,20 @@ export interface OfferRequirementsForm {
 const DEFAULT_AIRCRAFT_TECHNICIAN_TYPE: TechnicianTypeCode = 'mechanic';
 
 const CLEARED_AIRCRAFT = { requiredHabilitations: [], requiresAllAircraft: false };
+
+// Sesión 2: "se limpian las que ya no apliquen". Toda transición que puede
+// mover la autoridad o el código termina aquí, así que ninguna puede olvidarse
+// de la lista: si la licencia se va, la lista se va con ella; si cambia, se
+// quedan las que siguen emitiendo ese código y no son la exigida.
+function withApplicableAuthorities<T extends OfferRequirementsForm>(form: T): T {
+  const acceptedAuthorities = form.requiresCertification
+    ? retainApplicableAuthorities(form.acceptedAuthorities, form.licenseAuthority, form.licenseCode)
+    : [];
+  return acceptedAuthorities.length === form.acceptedAuthorities.length &&
+    acceptedAuthorities.every((a, i) => a === form.acceptedAuthorities[i])
+    ? form
+    : { ...form, acceptedAuthorities };
+}
 
 // ── Qué se enseña ─────────────────────────────────────────────────────────
 
@@ -89,9 +105,18 @@ export function showsLicenseSection(form: OfferRequirementsForm): boolean {
   return form.requiresCertification && showsCertificationQuestion(form);
 }
 
-/** "Acepto equivalentes": sólo con una autoridad Part-66 elegida (la FAA no cruza con nadie). */
-export function showsAcceptsEquivalent(form: OfferRequirementsForm): boolean {
-  return showsLicenseSection(form) && Boolean(form.licenseAuthority) && PART66_AUTHORITIES.includes(form.licenseAuthority as AuthorityCode);
+/**
+ * Los chips de "Also accept licences from:" (sesión 2): las otras autoridades
+ * Part-66 que emiten la categoría elegida. Sin autoridad o sin código, ninguno;
+ * con una licencia FAA, ninguno (la FAA no cruza con nadie).
+ */
+export function acceptableAuthorities(form: OfferRequirementsForm): AuthorityCode[] {
+  return equivalentAuthoritiesForLicense(form.licenseAuthority, form.licenseCode);
+}
+
+/** La fila de chips sólo aparece si hay alguno que ofrecer. */
+export function showsAcceptedAuthorities(form: OfferRequirementsForm): boolean {
+  return showsLicenseSection(form) && acceptableAuthorities(form).length > 0;
 }
 
 /**
@@ -136,7 +161,7 @@ export function selectOfferKind<T extends OfferRequirementsForm>(form: T, kind: 
   // va con su autoridad y sus equivalencias, y la oferta queda sin licencia.
   const licenseStays = Boolean(form.licenseCode) && selectableLicenses(moved).includes(form.licenseCode as AuthorityLicenseCode);
   if (licenseStays) return moved;
-  return { ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined, acceptsEquivalent: false };
+  return withApplicableAuthorities({ ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
 }
 
 export function setRequiresCertification<T extends OfferRequirementsForm>(form: T, next: boolean): T {
@@ -148,24 +173,24 @@ export function setRequiresCertification<T extends OfferRequirementsForm>(form: 
   }
   // Fase 6 tanda E: apagar se lleva la LICENCIA (y ahora su autoridad y las
   // equivalencias) y nada más. Las aeronaves se quedan.
-  return { ...form, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined, acceptsEquivalent: false };
+  return withApplicableAuthorities({ ...form, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
 }
 
 export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, next: TechnicianTypeCode): T {
   if (next === form.technicianType) return form;
   if (!isLicensedTechnicianType(next)) {
-    return { ...form, technicianType: next, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined, acceptsEquivalent: false };
+    return withApplicableAuthorities({ ...form, technicianType: next, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
   }
   const moved = { ...form, technicianType: next };
   // La autoridad sobrevive si tiene algo que ofrecer al oficio nuevo (la FAA no
   // tiene nada para aviónica); la licencia, si ese oficio puede pedirla.
   const authorityStays = !form.licenseAuthority || licensesSelectableForOffer(moved, form.licenseAuthority).length > 0;
   const licenseStays = !form.licenseCode || (authorityStays && selectableLicenses(moved).includes(form.licenseCode));
-  return {
+  return withApplicableAuthorities({
     ...moved,
-    ...(authorityStays ? {} : { licenseAuthority: undefined, acceptsEquivalent: false }),
+    ...(authorityStays ? {} : { licenseAuthority: undefined }),
     ...(licenseStays ? {} : { licenseCode: undefined, ...CLEARED_AIRCRAFT }),
-  };
+  });
 }
 
 export function selectAuthority<T extends OfferRequirementsForm>(form: T, authority: AuthorityCode): T {
@@ -178,12 +203,12 @@ export function selectAuthority<T extends OfferRequirementsForm>(form: T, author
   // Sesión 2: pasar a la FAA ya no se lleva las aeronaves por sí solo. Si había
   // licencia Part-66 se va (la FAA no emite ningún código Part-66), y con ella
   // las aeronaves que colgaban de ella; sin licencia elegida se quedan y pasan
-  // a contar como experiencia.
-  return {
+  // a contar como experiencia. Las aceptadas se limpian: la nueva exigida sale
+  // de la lista, y con la FAA la lista entera.
+  return withApplicableAuthorities({
     ...moved,
-    acceptsEquivalent: PART66_AUTHORITIES.includes(authority) ? form.acceptsEquivalent : false,
     ...(licenseStays ? {} : { licenseCode: undefined, ...CLEARED_AIRCRAFT }),
-  };
+  });
 }
 
 export function selectLicense<T extends OfferRequirementsForm>(form: T, code: AuthorityLicenseCode): T {
@@ -191,20 +216,29 @@ export function selectLicense<T extends OfferRequirementsForm>(form: T, code: Au
   // Las aeronaves estaban puestas para cruzarse con la licencia anterior. Salvo
   // bajo la FAA (sesión 2): allí son experiencia, no cuelgan de la licencia, y
   // pasar de A a A&P no cambia en qué aviones hace falta haber trabajado.
-  if (offerAircraftAreExperience(form)) return { ...form, licenseCode: code };
-  return { ...form, licenseCode: code, ...CLEARED_AIRCRAFT };
+  // Las aceptadas que no emiten el código nuevo se van (CASA no emite B3).
+  if (offerAircraftAreExperience(form)) return withApplicableAuthorities({ ...form, licenseCode: code });
+  return withApplicableAuthorities({ ...form, licenseCode: code, ...CLEARED_AIRCRAFT });
+}
+
+/** Marca o desmarca una autoridad aceptada. Sólo las que ofrece el formulario, en su orden. */
+export function toggleAcceptedAuthority<T extends OfferRequirementsForm>(form: T, authority: AuthorityCode): T {
+  const next = form.acceptedAuthorities.includes(authority)
+    ? form.acceptedAuthorities.filter((a) => a !== authority)
+    : [...form.acceptedAuthorities, authority];
+  return { ...form, acceptedAuthorities: acceptableAuthorities(form).filter((a) => next.includes(a)) };
 }
 
 export function selectProductType<T extends OfferRequirementsForm>(form: T, productType: OfferProductType): T {
   if (productType === form.productType) return form;
-  return {
+  return withApplicableAuthorities({
     ...form,
     productType,
     // Los ratings son del producto anterior: las FK compuestas de la 047 los
     // rechazarían al guardar.
     ...CLEARED_AIRCRAFT,
     licenseCode: form.licenseCode && isLicenseCompatibleWithProductType(form.licenseCode, productType) ? form.licenseCode : undefined,
-  };
+  });
 }
 
 // ── Lo que una transición descarta (para que editar pueda preguntar) ─────

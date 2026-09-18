@@ -1,14 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
-import { CompanyCard, CompanyCheckRow, CompanyChip, companyUi } from './CompanyUI';
+import { CompanyCard, CompanyChip, companyUi } from './CompanyUI';
 import { AuthorityCode, AuthorityLicenseCode } from '../../types/catalog';
-import { AUTHORITIES, authorityLabel, equivalentAuthorities, isValidAuthorityLicense } from '../../constants/licenses';
+import { AUTHORITIES, authorityLabel } from '../../constants/licenses';
 import {
   OfferRequirementsForm,
+  acceptableAuthorities,
   selectableAuthorities,
   selectableLicenses,
-  showsAcceptsEquivalent,
+  showsAcceptedAuthorities,
 } from '../../utils/offerFormRules';
 
 interface Props {
@@ -18,7 +19,8 @@ interface Props {
   form: OfferRequirementsForm;
   onChangeAuthority: (next: AuthorityCode) => void;
   onChangeLicense: (next: AuthorityLicenseCode) => void;
-  onChangeAcceptsEquivalent: (next: boolean) => void;
+  // Sesión 2: marca o desmarca una autoridad aceptada (toggleAcceptedAuthority).
+  onToggleAcceptedAuthority: (authority: AuthorityCode) => void;
   authorityError?: string;
   licenseError?: string;
 }
@@ -34,16 +36,13 @@ export function RequiredLicensesSection({
   form,
   onChangeAuthority,
   onChangeLicense,
-  onChangeAcceptsEquivalent,
+  onToggleAcceptedAuthority,
   authorityError,
   licenseError,
 }: Props) {
   const authorities = selectableAuthorities(form, AUTHORITIES.map((a) => a.code));
   const licenses = selectableLicenses(form);
   const authority = form.licenseAuthority;
-  const otherAuthorities = equivalentAuthorities(authority ?? '')
-    .filter((code) => !form.licenseCode || isValidAuthorityLicense(code, form.licenseCode))
-    .map(authorityLabel).join(', ');
 
   return (
     <CompanyCard style={styles.card}>
@@ -86,13 +85,28 @@ export function RequiredLicensesSection({
         <Text style={styles.inlineHint}>Pick the authority first — the licences it issues appear here.</Text>
       )}
 
-      {showsAcceptsEquivalent(form) ? (
-        <CompanyCheckRow
-          label="Considerar otras autoridades"
-          helper={`Also consider the same category from ${otherAuthorities}. This search preference does not imply automatic legal recognition. FAA is not included.`}
-          checked={form.acceptsEquivalent}
-          onChange={onChangeAcceptsEquivalent}
-        />
+      {/* Sesión 2: sustituye a la casilla "Considerar otras autoridades". Sólo
+          las otras Part-66 que emiten esta categoría; la FAA nunca aparece. */}
+      {showsAcceptedAuthorities(form) && authority && form.licenseCode ? (
+        <>
+          <Text style={styles.fieldLabel}>Also accept licences from:</Text>
+          <View style={styles.chipRow}>
+            {acceptableAuthorities(form).map((code) => (
+              <CompanyChip
+                key={code}
+                label={authorityLabel(code)}
+                selected={form.acceptedAuthorities.includes(code)}
+                onPress={() => onToggleAcceptedAuthority(code)}
+              />
+            ))}
+          </View>
+          <Text style={styles.note}>
+            {form.acceptedAuthorities.length === 0
+              ? `None selected: only ${authorityLabel(authority)} ${form.licenseCode} counts.`
+              : `The same ${form.licenseCode} category from these authorities scores slightly below an exact ${authorityLabel(authority)} match.`}{' '}
+            This is a search preference, not legal recognition.
+          </Text>
+        </>
       ) : null}
     </CompanyCard>
   );

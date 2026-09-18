@@ -360,8 +360,8 @@ export function licensesSelectableForOffer(
 }
 
 /**
- * Las OTRAS autoridades cuyo mismo código vale cuando la oferta marca "acepto
- * equivalentes".
+ * Las OTRAS autoridades Part-66 que una oferta de esta autoridad puede aceptar
+ * como equivalentes.
  *
  * Nunca se incluye a sí misma —son las otras, y el caso exacto se decide
  * antes—, y la FAA no aparece en ninguna lista ni tiene la suya: un A&P no es
@@ -372,6 +372,35 @@ export function licensesSelectableForOffer(
 export function equivalentAuthorities(authority: string): AuthorityCode[] {
   if (!PART66_AUTHORITIES.includes(authority as AuthorityCode)) return [];
   return PART66_AUTHORITIES.filter((a) => a !== authority);
+}
+
+/**
+ * Las autoridades que una oferta que pide ESTE código a ESTA autoridad puede
+ * marcar en "Also accept licences from:" (sesión 2, migración 088): las otras
+ * Part-66 que emiten ese código, en el orden del catálogo. CASA no aparece para
+ * una B3; nadie aparece para una licencia FAA.
+ *
+ * Una sola respuesta para los chips del formulario, la limpieza al cambiar la
+ * licencia (formulario y repositorio) y el espejo de forma; en la base, el
+ * CHECK chk_offers_accepted_authorities y el trigger que lee authority_licenses.
+ */
+export function equivalentAuthoritiesForLicense(authority: string | undefined, code: string | undefined): AuthorityCode[] {
+  if (!authority || !code) return [];
+  return equivalentAuthorities(authority).filter((a) => isValidAuthorityLicense(a, code));
+}
+
+/**
+ * Las aceptadas que siguen valiendo para esta licencia, en el orden del
+ * catálogo y sin repetidas. Es "se limpian las que ya no apliquen" al cambiar
+ * la autoridad o el código: la exigida sale de la lista, y también la que no
+ * emite el código nuevo.
+ */
+export function retainApplicableAuthorities(
+  accepted: readonly string[],
+  authority: string | undefined,
+  code: string | undefined,
+): AuthorityCode[] {
+  return equivalentAuthoritiesForLicense(authority, code).filter((a) => accepted.includes(a));
 }
 
 /**
@@ -421,7 +450,8 @@ export type LicenseSatisfaction = 'exact' | 'equivalent';
  * ¿Responde ESTA credencial por lo que la oferta pide, y con qué exactitud?
  *
  *   'exact'      misma autoridad, con un código que satisface.
- *   'equivalent' otra autoridad Part-66, y sólo si la oferta marcó la casilla.
+ *   'equivalent' otra autoridad Part-66 que la oferta aceptó expresamente
+ *                (`acceptedAuthorities`, sesión 2: una lista, no una casilla).
  *   null         no responde.
  *
  * `required.authority` ausente = oferta anterior a la 075: se cae al código
@@ -432,14 +462,16 @@ export type LicenseSatisfaction = 'exact' | 'equivalent';
 export function licenseSatisfiesRequirement(
   held: { authority: string; licenseCode: string },
   required: { authority?: string; licenseCode: string },
-  acceptsEquivalent: boolean,
+  acceptedAuthorities: readonly string[],
 ): LicenseSatisfaction | null {
   if (!licenseCodeSatisfies(held.licenseCode, required.licenseCode)) return null;
   if (required.authority === undefined || held.authority === required.authority) return 'exact';
-  if (!acceptsEquivalent) return null;
+  if (!acceptedAuthorities.includes(held.authority)) return null;
   // B1 -> A is an inclusion within one authority, not an extra cross-authority
-  // equivalence. The checkbox continues to compare the same category abroad.
+  // equivalence. An accepted authority still compares the same category abroad.
   if (held.licenseCode !== required.licenseCode) return null;
+  // La lista la valida la base (088), pero el scorer no da por hecho lo que la
+  // base garantiza: la FAA, o la propia autoridad, nunca cuentan como equivalentes.
   return equivalentAuthorities(required.authority).includes(held.authority as AuthorityCode)
     ? 'equivalent'
     : null;

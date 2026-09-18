@@ -6,7 +6,7 @@ import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCo
 // una licencia sin autoridad ya no se completa en silencio, falla a la vista
 // (offerShapeViolations, y detrás el CHECK de emparejamiento de la 075).
 import { OfferStatus } from '../../types/enums';
-import { credentialLabel, licensesSelectableForOffer } from '../../constants/licenses';
+import { credentialLabel, licensesSelectableForOffer, retainApplicableAuthorities } from '../../constants/licenses';
 import { assertOfferShape } from '../../utils/offerShape';
 import { isLicensedTechnicianType, technicianTypeLabel } from '../../constants/technicianTypes';
 import { LocationValue, PersistedLocation } from '../../types/location';
@@ -46,7 +46,7 @@ import {
 // verificado). En cuanto hubiera una oferta, el scorer estaría puntuando su
 // licencia como si no existiera.
 const OFFER_COLUMNS =
-  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepts_equivalent, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
+  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepted_authorities, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
 
 /**
  * La localización de una oferta, tal y como la produce el selector.
@@ -77,7 +77,7 @@ export function offerLocationFromValue(value: LocationValue): OfferLocationWrite
 
 export type OfferPatch = Partial<Omit<Offer, 'id' | 'createdAt'>>;
 
-const CERTIFICATION_KEYS = ['requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptsEquivalent', 'onlyUnlicensed'] as const;
+const CERTIFICATION_KEYS = ['requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptedAuthorities', 'onlyUnlicensed'] as const;
 const KIND_KEYS = ['offerKind', 'requiredEngineId'] as const;
 
 function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolean {
@@ -93,9 +93,12 @@ function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolea
  * que se escribe.
  *
  * Los acoplamientos son SÓLO los que tienen un único valor admisible:
- *   - no certificar -> sin licencia, sin autoridad, sin equivalencias (053/075);
+ *   - no certificar -> sin licencia, sin autoridad, sin equivalencias (053/075/088);
  *   - certificar -> sin "sólo sin licencia" (077), salvo que el patch lo pida
  *     explícitamente, que entonces es una contradicción y la guarda lanza;
+ *   - cambiar la autoridad o el código sin mandar la lista de aceptadas ->
+ *     se quedan sólo las que siguen aplicando (sesión 2, 088). Si el patch
+ *     manda la lista, se valida tal cual y la guarda lanza si no cabe;
  *   - oferta de aeronave -> sin motor (077), con la misma salvedad;
  *   - motor -> sin aeronaves (076). Esas filas se borran en la misma RPC del
  *     UPDATE (ver update()); la pantalla de edición confirma antes. Sesión 2:
@@ -110,9 +113,12 @@ export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferP
   if (!next.requiresCertification) {
     next.licenseCode = undefined;
     next.licenseAuthority = undefined;
-    next.acceptsEquivalent = false;
-  } else if (patch.onlyUnlicensed === undefined) {
-    next.onlyUnlicensed = false;
+    next.acceptedAuthorities = [];
+  } else {
+    if (patch.onlyUnlicensed === undefined) next.onlyUnlicensed = false;
+    if (patch.acceptedAuthorities === undefined) {
+      next.acceptedAuthorities = retainApplicableAuthorities(next.acceptedAuthorities, next.licenseAuthority, next.licenseCode);
+    }
   }
   if (next.offerKind !== 'engine' && patch.requiredEngineId === undefined) {
     next.requiredEngineId = undefined;
@@ -166,7 +172,7 @@ function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown>
           requires_certification: next.requiresCertification,
           license_code: next.licenseCode ?? null,
           license_authority: next.licenseAuthority ?? null,
-          accepts_equivalent: next.acceptsEquivalent,
+          accepted_authorities: next.acceptedAuthorities,
           only_unlicensed: next.onlyUnlicensed,
         }
       : {}),
@@ -440,7 +446,8 @@ export const offerRepository = {
     licenseCode?: AuthorityLicenseCode;
     /** Paso 5b: obligatoria si hay licencia, y sin valor por defecto. */
     licenseAuthority?: AuthorityCode;
-    acceptsEquivalent?: boolean;
+    /** Sesión 2 (088): las otras autoridades Part-66 aceptadas. Vacía si no se dice. */
+    acceptedAuthorities?: AuthorityCode[];
     requiresAllAircraft?: boolean;
     requiredHabilitations?: { aircraftTypeRatingId: string; notes?: string }[];
     /** Fase 10: 'aircraft' si no se dice. */
@@ -459,7 +466,7 @@ export const offerRepository = {
       requiresCertification: data.requiresCertification,
       licenseCode: data.licenseCode,
       licenseAuthority: data.licenseAuthority,
-      acceptsEquivalent: data.acceptsEquivalent ?? false,
+      acceptedAuthorities: data.acceptedAuthorities ?? [],
       requiredEngineId: data.requiredEngineId,
       onlyUnlicensed: data.onlyUnlicensed ?? false,
       requiredHabilitations: habilitationRows,
@@ -483,7 +490,7 @@ export const offerRepository = {
         // columnas estén o falten JUNTAS. Paso 5b: la autoridad la manda el
         // formulario; sin ella assertOfferWritable ya ha lanzado.
         license_authority: data.licenseAuthority ?? null,
-        accepts_equivalent: data.acceptsEquivalent ?? false,
+        accepted_authorities: data.acceptedAuthorities ?? [],
         requires_all_aircraft: data.requiresAllAircraft ?? false,
         offer_kind: data.offerKind ?? 'aircraft',
         required_engine_id: data.requiredEngineId ?? null,

@@ -303,7 +303,8 @@ const VIGENCIA_DEGRADATION_FRACTION = 0.1;
 
 // Fase 10 — equivalencia de autoridad: el mismo recorte multiplicativo, sobre
 // el mismo sitio, cuando la credencial que responde por la oferta viene de
-// OTRA autoridad Part-66 y la empresa marcó "acepto equivalentes".
+// OTRA autoridad Part-66 que la empresa aceptó (sesión 2: la eligió en la lista
+// "Also accept licences from:", migración 088; antes era una sola casilla).
 //
 // Multiplicador y NO un tier nuevo, a propósito: la equivalencia es
 // ortogonal a lo bien que el técnico cubre la aeronave. Un tier mezclaría las
@@ -540,7 +541,7 @@ function selectLicenseForOffer(
   const evidence = aircraftEvidenceFor(offer);
   const candidates = credentials.flatMap((license) => {
     const satisfaction = licenseSatisfiesRequirement(
-      license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptsEquivalent,
+      license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptedAuthorities,
     );
     if (!satisfaction) return [];
     const candidate = { license, satisfaction };
@@ -1110,8 +1111,8 @@ function scoreWithSelectedLicense(
     // menos. Antes se comparaba el código a mano contra las licencias Y contra
     // las habilitaciones, y eso ignoraba la autoridad: una B1.1 UK CAA cobraba
     // los 20 puntos de una oferta EASA sin equivalencias. La pregunta la
-    // contesta selectLicenseForOffer, que sí mira código, autoridad, casilla
-    // de equivalencias y el A&P de la FAA.
+    // contesta selectLicenseForOffer, que sí mira código, autoridad, autoridades
+    // aceptadas y el A&P de la FAA.
     const licenseHeld = selectedLicense != null;
 
     // `everyAircraftExact` sólo degrada el nivel cuando la oferta EXIGE todas
