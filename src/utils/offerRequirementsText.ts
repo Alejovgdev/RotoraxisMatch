@@ -30,6 +30,15 @@ export function offerEngineText(offer: Pick<Offer, 'offerKind' | 'requiredEngine
 export const ONLY_UNLICENSED_TEXT = 'Only technicians without a licence';
 
 /**
+ * La fila "Certified work". En una oferta de motor la licencia es opcional y
+ * sólo puntúa (sesión 2): "required" prometería un filtro que no existe.
+ */
+export function offerCertificationText(offer: Pick<Offer, 'offerKind' | 'requiresCertification'>): string {
+  if (!offer.requiresCertification) return 'No licence needed';
+  return offer.offerKind === 'engine' ? 'Licence preferred' : 'Licence required';
+}
+
+/**
  * La tira corta de requisitos de una tarjeta, en orden de importancia. En una
  * oferta de motor el oficio no se dice: no puntúa ni filtra, y ponerlo delante
  * del motor contaría algo que la oferta no pide.

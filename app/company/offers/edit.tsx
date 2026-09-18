@@ -34,6 +34,7 @@ import { authorityLabel } from '../../../src/constants/licenses';
 import { TechnicianTypeCode, ContractTypeCode, AuthorityCode, AuthorityLicenseCode } from '../../../src/types/catalog';
 import {
   OfferRequirementsForm,
+  certificationQuestionCopy,
   describeDropped,
   droppedByTransition,
   requirementsErrors,
@@ -186,7 +187,7 @@ export default function EditOfferScreen() {
     void applyTransition(selectOfferKind(form, kind), {
       title: kind === 'engine' ? 'Make this an engine offer?' : 'Make this an aircraft offer?',
       why: kind === 'engine'
-        ? 'An engine offer asks for one engine and nothing else — no licence and no aircraft.'
+        ? 'An engine offer names one engine and no aircraft. A licence is optional there, and only a Part-66 B1 or an FAA P or A&P.'
         : 'An aircraft offer does not name an engine.',
     });
   }
@@ -363,15 +364,11 @@ export default function EditOfferScreen() {
             la pantalla de creación. */}
         {showsCertificationQuestion(form) && (
           <ChoiceSection
-            title="Does this job need certified work?"
-            helper={
-              requiresCertification
-                ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.'
-                : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.'
-            }
+            title={certificationQuestionCopy(form).title}
+            helper={certificationQuestionCopy(form).helper}
           >
-            <CompanyChip label="Yes, licence required" selected={requiresCertification} onPress={() => onToggleCertification(true)} />
-            <CompanyChip label="No licence needed" selected={!requiresCertification} onPress={() => onToggleCertification(false)} />
+            <CompanyChip label={certificationQuestionCopy(form).yes} selected={requiresCertification} onPress={() => onToggleCertification(true)} />
+            <CompanyChip label={certificationQuestionCopy(form).no} selected={!requiresCertification} onPress={() => onToggleCertification(false)} />
           </ChoiceSection>
         )}
 

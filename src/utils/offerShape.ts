@@ -9,7 +9,8 @@
 //   chk_offers_license_matches_certification (053)  certificar ⇔ licencia
 //   chk_offers_license_authority_pairing     (075)  licencia ⇔ autoridad
 //   FK a authority_licenses                  (075)  el par existe
-//   chk_offers_engine_kind_shape             (076)  motor ⇒ sin licencia, con motor
+//   chk_offers_engine_kind_shape       (076, 087)  motor ⇒ con motor; licencia
+//                                                  opcional, sólo B1.x, P o A&P
 //   triggers de la 076                              motor ⇒ sin aeronaves
 //   chk_offers_aircraft_without_engine       (077)  aeronave ⇒ sin motor
 //   chk_offers_only_unlicensed_without_license (077) "sólo sin licencia" ⇒ no exige licencia
@@ -18,7 +19,8 @@
 // fixtures de scripts/testMatching.ts (una oferta de test que la base no
 // aceptaría no debe llegar al scorer).
 import { OfferWithRequirements } from '../types/offer';
-import { authorityHasTypeRatings, isValidAuthorityLicense } from '../constants/licenses';
+import { AuthorityLicenseCode } from '../types/catalog';
+import { ENGINE_OFFER_LICENSE_CODES, authorityHasTypeRatings, isValidAuthorityLicense } from '../constants/licenses';
 
 /**
  * ¿Las aeronaves de esta oferta son EXPERIENCIA y no type ratings? (Fase 10, sesión 2)
@@ -66,7 +68,11 @@ export function offerShapeViolations(offer: OfferShape): string[] {
   }
 
   if (offer.offerKind === 'engine') {
-    if (hasLicense || offer.requiresCertification) violations.push('An engine offer cannot require a licence.');
+    // Sesión 2 (087): la licencia es opcional, pero sólo una que certifique el
+    // motor. Que la autoridad emita el código lo dice la comprobación de arriba.
+    if (hasLicense && !ENGINE_OFFER_LICENSE_CODES.includes(offer.licenseCode as AuthorityLicenseCode)) {
+      violations.push('An engine offer can only ask for a Part-66 B1 licence or an FAA P or A&P.');
+    }
     if (!hasEngine) violations.push('An engine offer must name the engine.');
     if (offer.requiredHabilitations.length > 0) violations.push('An engine offer cannot require aircraft type ratings.');
   } else if (hasEngine) {

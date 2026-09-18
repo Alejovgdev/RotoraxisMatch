@@ -43,7 +43,7 @@ import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, ma
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { MatchScore } from '../../../src/types/matching';
@@ -362,7 +362,7 @@ export default function OfferDetailScreen() {
             )}
             <ReqRow
               label="Certified work"
-              items={[offer.requiresCertification ? 'Licence required' : 'No licence needed']}
+              items={[offerCertificationText(offer)]}
             />
             {offer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(offer)!]} />}
             {offer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}

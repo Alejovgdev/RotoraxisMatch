@@ -71,8 +71,10 @@ async function main() {
     assert.equal(showsOnlyUnlicensed(baseForm()), false, 'licencia requerida: no aparece');
     const sinLicencia = setRequiresCertification(baseForm(), false);
     assert.equal(showsOnlyUnlicensed(sinLicencia), true, 'aeronave sin licencia: aparece');
-    const motor = selectOfferKind(baseForm(), 'engine');
-    assert.equal(showsOnlyUnlicensed(motor), true, 'motor: aparece');
+    const motor = selectOfferKind(sinLicencia, 'engine');
+    assert.equal(showsOnlyUnlicensed(motor), true, 'motor sin licencia: aparece');
+    // Sesión 2: un motor que pide licencia no puede ser "sólo sin licencia" (077).
+    assert.equal(showsOnlyUnlicensed(selectOfferKind(baseForm(), 'engine')), false, 'motor con B1.1: no aparece');
   });
 
   await test('Formulario — volver a "Yes, licence required" desmarca "sólo sin licencia"', () => {
@@ -84,8 +86,10 @@ async function main() {
     assert.equal(setRequiresCertification(baseForm(), false).onlyUnlicensed, false);
   });
 
-  await test('Formulario — pasar a motor limpia licencia, autoridad, equivalencias y aeronaves, y nombra el oficio de motor', () => {
-    const motor = selectOfferKind(baseForm({ acceptsEquivalent: true }), 'engine');
+  await test('Formulario — pasar a motor limpia aeronaves y una licencia que no certifica motor, y nombra el oficio de motor', () => {
+    // Una B2 no vale para motor: se va con su autoridad y sus equivalencias.
+    const avionico = baseForm({ technicianType: 'avionic', licenseCode: 'B2', acceptsEquivalent: true });
+    const motor = selectOfferKind(avionico, 'engine');
     assert.equal(motor.offerKind, 'engine');
     assert.equal(motor.requiresCertification, false);
     assert.equal(motor.licenseAuthority, undefined);
@@ -94,13 +98,35 @@ async function main() {
     assert.deepEqual(motor.requiredHabilitations, []);
     assert.equal(motor.technicianType, 'engine_technician');
     assert.equal(showsAircraftEditor(motor), false);
-    assert.equal(showsLicenseSection(motor), false);
-    assert.equal(showsCertificationQuestion(motor), false);
-    assert.equal(describeDropped(droppedByTransition(baseForm(), motor)), 'the B1.1 licence requirement and 1 aircraft requirement', 'editar tiene qué preguntar');
+    assert.equal(showsLicenseSection(motor), false, 'sin licencia elegida no hay sección');
+    assert.equal(showsCertificationQuestion(motor), true, 'sesión 2: en motor la pregunta existe (licencia opcional)');
+    assert.equal(describeDropped(droppedByTransition(avionico, motor)), 'the B2 licence requirement and 1 aircraft requirement', 'editar tiene qué preguntar');
+
+    // Sesión 2: una B1.1 sí certifica motor y se queda; sólo se van las aeronaves.
+    const conB11 = selectOfferKind(baseForm(), 'engine');
+    assert.equal(conB11.licenseCode, 'B1.1');
+    assert.equal(conB11.requiresCertification, true);
+    assert.deepEqual(conB11.requiredHabilitations, []);
+    assert.equal(describeDropped(droppedByTransition(baseForm(), conB11)), '1 aircraft requirement');
 
     const vuelta = selectOfferKind({ ...motor, requiredEngineId: 'eng-1' }, 'aircraft');
     assert.equal(vuelta.requiredEngineId, undefined, 'una oferta de aeronave no nombra motor');
     assert.equal(vuelta.technicianType, 'mechanic', 'el oficio de motor no se queda en una oferta de aeronave');
+  });
+
+  await test('Formulario — motor: la licencia es opcional y los chips sólo ofrecen B1.x, P y A&P', () => {
+    const motor = selectOfferKind(baseForm({ requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined }), 'engine');
+    assert.equal(showsLicenseSection(motor), false);
+    const pide = setRequiresCertification(motor, true);
+    assert.equal(showsLicenseSection(pide), true);
+    assert.equal(requirementsErrors({ ...pide, requiredEngineId: 'eng-1' }).license, 'Select the licence this role certifies under.');
+    assert.deepEqual(selectableLicenses({ ...pide, licenseAuthority: 'FAA' }), ['P', 'A&P']);
+    assert.deepEqual(selectableLicenses({ ...pide, licenseAuthority: 'EASA' }), ['B1.1', 'B1.2'], 'aviones');
+    assert.deepEqual(selectableLicenses({ ...pide, licenseAuthority: 'UK_CAA', productType: 'Helicopter' }), ['B1.3', 'B1.4'], 'helicópteros');
+    assert.deepEqual(selectableAuthorities(pide, AUTHORITIES.map((a) => a.code)), ['EASA', 'UK_CAA', 'CASA', 'GCAA', 'FAA']);
+    // Un motor FAA P que vuelve a aeronave conserva la P: la pide un mecánico.
+    const faaP = selectLicense(selectAuthority(pide, 'FAA'), 'P');
+    assert.equal(selectOfferKind(faaP, 'aircraft').licenseCode, 'P');
   });
 
   await test('Formulario — sin autoridad no hay licencias que elegir, y el error pide la autoridad', () => {
@@ -166,7 +192,7 @@ async function main() {
       for (const { code: authority } of AUTHORITIES) {
         for (const productType of ['Aeroplane', 'Helicopter'] as const) {
           const form = baseForm({ technicianType, licenseAuthority: authority, productType, licenseCode: undefined });
-          const guard = licensesSelectableForOffer(technicianType, authority);
+          const guard = licensesSelectableForOffer({ offerKind: 'aircraft', technicianType }, authority);
           for (const code of selectableLicenses(form)) {
             assert.ok(guard.includes(code), `${technicianType} ${authority} ${productType}: el chip ${code} lo rechazaría el repositorio`);
           }
@@ -360,6 +386,28 @@ async function main() {
     assert.equal(creada.offerKind, 'engine');
 
     await assert.rejects(offerRepository.create({ ...base, technicianType: 'engine_technician', requiresCertification: false, offerKind: 'engine' }), /must name the engine/);
+    // Sesión 2: licencia opcional en motor, sólo B1.x, P o A&P.
+    await offerRepository.create({
+      ...base, technicianType: 'engine_technician', offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b',
+      requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P',
+    });
+    const conLicencia = lastWrite('offers', 'insert');
+    assert.equal(conLicencia.license_code, 'A&P');
+    assert.equal(conLicencia.requires_certification, true);
+    await offerRepository.create({
+      ...base, technicianType: 'engine_technician', offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b',
+      requiresCertification: true, licenseAuthority: 'EASA', licenseCode: 'B1.1',
+    });
+    for (const [licenseAuthority, licenseCode] of [['EASA', 'B2'], ['EASA', 'C'], ['FAA', 'A']] as const) {
+      await assert.rejects(
+        offerRepository.create({
+          ...base, technicianType: 'engine_technician', offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b',
+          requiresCertification: true, licenseAuthority, licenseCode,
+        }),
+        /Part-66 B1 licence or an FAA P or A&P/,
+        `${licenseAuthority} ${licenseCode}`,
+      );
+    }
     await assert.rejects(
       offerRepository.create({ ...base, technicianType: 'engine_technician', requiresCertification: false, offerKind: 'engine', requiredEngineId: 'e', requiredHabilitations: [A320] }),
       /cannot require aircraft/,

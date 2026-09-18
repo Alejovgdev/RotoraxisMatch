@@ -168,11 +168,24 @@ const NO_REQUIREMENTS_WEIGHTS = { verified: 30, habilitation: 0, license: 0, con
 // exige papel, así que el eje que pide se lleva el bloque entero de
 // cualificación (65). Ni escala nueva ni pesos inventados.
 //
-// `habilitation` y `license` son 0 AQUÍ Y SIEMPRE en esta rama: la licencia
-// no suma en una oferta de motor (un B2 con el CFM56 no supera a un técnico
-// sin licencia con el mismo CFM56), y las habilitaciones sólo entran como
-// FUENTE del motor implícito, nunca como puntos propios.
+// `habilitation` y `license` son 0 AQUÍ Y SIEMPRE en esta tabla: sin licencia
+// pedida, la licencia no suma en una oferta de motor (un B2 con el CFM56 no
+// supera a un técnico sin licencia con el mismo CFM56), y las habilitaciones
+// sólo entran como FUENTE del motor implícito, nunca como puntos propios. La
+// oferta de motor que sí pide licencia usa la tabla siguiente.
 const ENGINE_WEIGHTS = { verified: 15, habilitation: 0, license: 0, contractFit: 15, location: 5, engine: 65 } as const;
+
+// Fase 10, sesión 2 — la oferta de motor que ADEMÁS pide licencia (opcional:
+// Part-66 B1.x o FAA P / A&P). El bloque de 65 se parte como en
+// QUALIFICATION_WEIGHTS —45 para lo concreto, 20 para la licencia— con el
+// motor en el sitio de la aeronave, así que el motor sigue siendo el eje que
+// más pesa.
+//
+// La licencia PUNTÚA Y NO TOPA: el eje que topa a 39 sigue siendo el motor. Con
+// este reparto el motor exacto sin licencia (80) queda por encima de la
+// licencia con un motor sin relación (69 como mucho, mismo tipo de motor), que
+// es el orden que se pidió: saber del motor vale más que el papel.
+const ENGINE_WITH_LICENSE_WEIGHTS = { verified: 15, habilitation: 0, license: 20, contractFit: 15, location: 5, engine: 45 } as const;
 
 export interface MatchScoreWeights {
   verified: number;
@@ -204,9 +217,10 @@ export function getMatchScoreWeights(offer: OfferWithRequirements): MatchScoreWe
   // Fase 9: cuatro. La que faltaba es la simétrica de la anterior — exige
   // licencia y no nombra aeronave.
   // Fase 10: PRIMERA rama, antes que ninguna otra. Una oferta de motor no
-  // tiene licencia ni aeronaves, así que todas las preguntas de abajo
-  // responderían "no pide nada" sobre una oferta que sí pide.
-  if (offer.offerKind === 'engine') return ENGINE_WEIGHTS;
+  // tiene aeronaves (y hasta la sesión 2 tampoco licencia), así que las
+  // preguntas de abajo responderían sobre algo que la oferta no pide.
+  // Sesión 2: con licencia (opcional) el motor cede 20 a la licencia.
+  if (offer.offerKind === 'engine') return offer.licenseCode != null ? ENGINE_WITH_LICENSE_WEIGHTS : ENGINE_WEIGHTS;
   if (!offerAsksForQualification(offer)) return NO_REQUIREMENTS_WEIGHTS;
   if (!offer.requiresCertification) return NO_CERTIFICATION_WEIGHTS;
   // `licenseCode != null` no es redundante con requiresCertification: el CHECK
@@ -975,11 +989,11 @@ function scoreWithSelectedLicense(
 
   if (offer.offerKind === 'engine') {
     // ── Oferta de motor ────────────────────────────────────────────────
-    // Ni licencia ni aeronaves: un solo eje, y con el bloque de cualificación
-    // entero (ENGINE_WEIGHTS). `habilitation` y `license` se quedan en 0 —no
-    // por no haberlos calculado, sino porque su peso es 0 en esta rama— y eso
-    // es lo que hace que un B2 con el motor pedido no supere a un técnico sin
-    // licencia con el mismo motor.
+    // Sin aeronaves: el motor es el eje, con el bloque de cualificación entero
+    // (ENGINE_WEIGHTS) o, si la oferta pide licencia, con 45 de 65
+    // (ENGINE_WITH_LICENSE_WEIGHTS). `habilitation` se queda en 0 siempre, y
+    // `license` también cuando la oferta no pide licencia: por eso un B2 con el
+    // motor pedido no supera a un técnico sin licencia con el mismo motor.
     const outcome = evaluateEngineRequirement(offer.requiredEngineId, technician, ratingIndex, engineIndex);
     engine = Math.round(weights.engine * ENGINE_TIER_FRACTIONS[outcome.tier]);
     level = ENGINE_TIER_LEVEL[outcome.tier];
@@ -988,6 +1002,26 @@ function scoreWithSelectedLicense(
     // Sin missingRequirements: no tener el motor pedido baja la nota, no es un
     // requisito incumplido que nombrar. La oferta pide un motor y el eje
     // siempre contesta algo — incluso "ninguno", que puntúa poco pero cuenta.
+
+    // Sesión 2 — la licencia opcional. Se evalúa como en la rama de sólo
+    // licencia (misma función, caducidad y equivalencias incluidas), pero su
+    // ausencia va a clarifications y NO a missingRequirements: allí dispararía
+    // INCOMPLETE_AIRCRAFT_SET_CAP (59) y la licencia topa, cuando aquí sólo
+    // puntúa. Tampoco toca el nivel, que es el del motor.
+    if (offer.licenseCode) {
+      const axis = evaluateLicenseAxis(offer, selectedLicense?.license, today);
+      if (axis.held) {
+        license = Math.round(weights.license * equivalenceFraction);
+        if (axis.matchText) matches.push(axis.matchText);
+      } else {
+        clarifications.push(
+          axis.vigenciaNotice
+            ? `${offer.licenseCode} expired. On an engine offer the licence adds to the score; it never excludes.`
+            : `The offer also asks for ${offer.licenseCode}; not present in the profile. On an engine offer the licence adds to the score; it never excludes.`,
+        );
+        if (axis.vigenciaNotice) vigenciaNotices.push(axis.vigenciaNotice);
+      }
+    }
   } else if (offer.requiredHabilitations.length > 0) {
     // Fase 6 tanda E — LA FUENTE DE EVIDENCIA LA ELIGE LA OFERTA.
     //
@@ -1344,7 +1378,8 @@ export function ineligibilityReasonText(reason: IneligibilityReason): string {
 // ══════════════════════════════════════════════════════════════════════
 // EL EJE DE MOTORES (Fase 10)
 //
-// Una oferta de motor no pide licencia ni aeronaves: pide UN MOTOR. Hasta esta
+// Una oferta de motor no pide aeronaves: pide UN MOTOR (y, desde la sesión 2,
+// opcionalmente una licencia que puntúa sin topar). Hasta esta
 // fase el scorer no sabía que ese eje existía, y las tres consecuencias
 // hundían al candidato bueno — caía en la escala de 75, se comía el tope de
 // cero cualificación por no tener ni habilitación ni licencia, y el oficio le

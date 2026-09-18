@@ -38,7 +38,7 @@ import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, ma
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
 import { technicianTypeLabel } from '../../../src/constants/technicianTypes';
 import { OfferRequest } from '../../../src/types/offerRequest';
@@ -333,7 +333,7 @@ export default function DirectOfferDetailScreen() {
                 )}
                 <ReqRow
                   label="Certified work"
-                  items={[visibleOffer.requiresCertification ? 'Licence required' : 'No licence needed']}
+                  items={[offerCertificationText(visibleOffer)]}
                 />
                 {visibleOffer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(visibleOffer)!]} />}
                 {visibleOffer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}

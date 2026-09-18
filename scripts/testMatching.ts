@@ -3689,8 +3689,8 @@ async function main() {
   });
 
   await test('Sesión 2 · Aviónica FAA — una oferta de aviónica puede pedir A o A&P, y los dos puntúan', () => {
-    assert.deepEqual(licensesSelectableForOffer('avionic', 'FAA'), ['A', 'A&P']);
-    assert.deepEqual(licensesSelectableForOffer('mechanic', 'FAA'), ['A', 'P', 'A&P'], 'mecánico no cambia');
+    assert.deepEqual(licensesSelectableForOffer({ offerKind: 'aircraft', technicianType: 'avionic' }, 'FAA'), ['A', 'A&P']);
+    assert.deepEqual(licensesSelectableForOffer({ offerKind: 'aircraft', technicianType: 'mechanic' }, 'FAA'), ['A', 'P', 'A&P'], 'mecánico no cambia');
     // Pedir no es implicar: tener un A&P sigue haciendo mecánico, no aviónico.
     assert.deepEqual(typesImpliedByLicenses(['A&P']), ['mechanic']);
     assert.deepEqual(typesImpliedByLicenses(['A']), ['mechanic']);
@@ -4234,9 +4234,18 @@ async function main() {
     assert.deepEqual(offerShapeViolations({ ...formaBase, offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b', onlyUnlicensed: true }), [], 'motor + filtro');
   });
 
-  await test('Paso 5b · Forma — motor con licencia o con aeronaves, y autoridad que no emite el código: rechazadas', () => {
+  await test('Paso 5b · Forma — motor con aeronaves o con licencia que no certifica motor, y autoridad que no emite el código: rechazadas', () => {
     const motor = { ...formaBase, offerKind: 'engine' as const, requiredEngineId: 'eng-cfm56-7b' };
-    assert.ok(offerShapeViolations({ ...motor, requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA' }).length > 0, '076: motor con licencia');
+    // Sesión 2 (087): la licencia es opcional en motor, pero sólo B1.x, P o A&P.
+    for (const [authority, code] of [['FAA', 'A&P'], ['FAA', 'P'], ['EASA', 'B1.1'], ['UK_CAA', 'B1.3']] as const) {
+      assert.deepEqual(offerShapeViolations({ ...motor, requiresCertification: true, licenseCode: code, licenseAuthority: authority }), [], `motor + ${authority} ${code}`);
+    }
+    for (const [authority, code] of [['EASA', 'B2'], ['EASA', 'C'], ['FAA', 'A']] as const) {
+      assert.ok(
+        offerShapeViolations({ ...motor, requiresCertification: true, licenseCode: code, licenseAuthority: authority }).some((v) => v.includes('Part-66 B1 licence or an FAA P or A&P')),
+        `087: motor + ${authority} ${code}`,
+      );
+    }
     assert.ok(offerShapeViolations({ ...motor, requiredHabilitations: [{}] }).length > 0, '076: motor con aeronaves');
     assert.ok(offerShapeViolations({ ...motor, requiredEngineId: undefined }).length > 0, '076: motor sin motor');
     const faa = { ...formaBase, requiresCertification: true, licenseCode: 'A&P' as const, licenseAuthority: 'FAA' as const };
@@ -4280,6 +4289,64 @@ async function main() {
     assert.deepEqual(licensesForHabilitations([{ authority: 'FAA', code: 'A&P' }]), []);
     assert.equal(heldCountByAuthority(held).FAA, 1);
     assert.equal(heldCountByAuthority(held).UK_CAA, 0);
+  });
+
+  // ── Sesión 2: licencia opcional en ofertas de motor ───────────────────
+
+  await test('Sesión 2 · Motor con licencia — FAA P/A&P y Part-66 B1.x se pueden pedir; B2, C y FAA A no', () => {
+    const motor = { offerKind: 'engine' as const, technicianType: 'engine_technician' };
+    assert.deepEqual(licensesSelectableForOffer(motor, 'FAA'), ['P', 'A&P']);
+    for (const authority of PART66_AUTHORITIES) {
+      assert.deepEqual(licensesSelectableForOffer(motor, authority), ['B1.1', 'B1.2', 'B1.3', 'B1.4'], authority);
+    }
+    // Sin licencia sigue siendo válida, y la de aeronave no cambia.
+    assert.doesNotThrow(() => makeEngineOffer('eng-cfm56-7b'));
+    assert.doesNotThrow(() => makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: 'A&P', licenseAuthority: 'FAA' }));
+    assert.doesNotThrow(() => makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA' }));
+    for (const [authority, code] of [['EASA', 'B2'], ['EASA', 'C'], ['FAA', 'A']] as const) {
+      assert.throws(() => makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: code, licenseAuthority: authority }), /Part-66 B1 licence/, `${authority} ${code}`);
+    }
+  });
+
+  await test('Sesión 2 · Motor con licencia — el motor sigue pesando más; la licencia puntúa y no topa', () => {
+    const conLicencia = makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: 'A&P', licenseAuthority: 'FAA' });
+    const pesos = getMatchScoreWeights(conLicencia);
+    assert.deepEqual(pesos, { verified: 15, habilitation: 0, license: 20, contractFit: 15, location: 5, engine: 45 });
+    assert.equal(sumaPesos(pesos), 100);
+    assert.ok(pesos.engine > pesos.license, 'el motor es el eje con más peso');
+    assert.deepEqual(getMatchScoreWeights(makeEngineOffer('eng-cfm56-7b')).engine, 65, 'sin licencia, igual que antes');
+
+    const aYp = () => makeLicense('A&P', { authority: 'FAA' });
+    const todo = puntuar(conLicencia, makeTechnician({ ...PERFIL_MOTOR, licenses: [aYp()], engines: [makeEngineDeclaration('eng-cfm56-7b')] }));
+    assert.equal(todo.total, 100, 'motor exacto y licencia');
+
+    const motorSinLicencia = makeTechnician({ ...PERFIL_MOTOR, id: 'motor-sin-licencia', engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    const r = puntuar(conLicencia, motorSinLicencia);
+    assert.equal(r.total, 80, 'sin licencia no hay tope: 100 - 20');
+    assert.deepEqual(r.missingRequirements, [], 'la licencia de un motor no es un requisito incumplido');
+    assert.ok(r.clarifications.some((c) => c.includes('never excludes')), JSON.stringify(r.clarifications));
+    assert.equal(elegible(conLicencia, motorSinLicencia), true, 'puntúa, no excluye');
+
+    // Y la licencia no abre la puerta: un A&P sin nada de motor sigue fuera.
+    assert.equal(elegible(conLicencia, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [aYp()] })), false);
+  });
+
+  await test('Sesión 2 · Motor con licencia — motor exacto sin licencia queda por encima de licencia con motor sin relación', () => {
+    for (const [authority, code] of [['FAA', 'A&P'], ['EASA', 'B1.1']] as const) {
+      const oferta = makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: code, licenseAuthority: authority });
+      const motorExacto = makeTechnician({ ...PERFIL_MOTOR, id: 'a-motor-exacto', engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+      const licencia = makeLicense(code, { authority });
+      // Los dos "motor sin relación" de la escalera: otro turbofán y un turboeje.
+      for (const otro of ['eng-v2500-a5', 'eng-pt6c-67c']) {
+        const licenciaYOtroMotor = makeTechnician({ ...PERFIL_MOTOR, id: 'b-licencia', licenses: [licencia], engines: [makeEngineDeclaration(otro)] });
+        const a = puntuar(oferta, motorExacto);
+        const b = puntuar(oferta, licenciaYOtroMotor);
+        assert.ok(b.breakdown.license > 0, `${authority} ${code}: la licencia cuenta (${b.breakdown.license})`);
+        assert.ok(a.total > b.total, `${authority} ${code} / ${otro}: motor exacto (${a.total}) > licencia + motor sin relación (${b.total})`);
+        const ranking = rankTechniciansForOffer(oferta, [licenciaYOtroMotor, motorExacto], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+        assert.deepEqual(ranking.map((s) => s.technicianId), ['a-motor-exacto', 'b-licencia']);
+      }
+    }
   });
 
   await test('Paso 5b · Escalera — B1 con 737NG queda por encima de quien declara un motor sin relación', () => {

@@ -61,7 +61,7 @@ import { technicianTypeLabel, technicianTypeLabels } from '../../../src/constant
 import { getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
 import { credentialLabel } from '../../../src/constants/licenses';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
@@ -515,7 +515,7 @@ export default function OfferDetailScreen() {
               "No licence needed" es información, no ausencia de requisito. */}
           <RequirementRow
             label="Certified work"
-            items={[offer.requiresCertification ? 'Licence required' : 'No licence needed']}
+            items={[offerCertificationText(offer)]}
           />
           {offer.licenseCode ? <RequirementRow label="Licence" items={[offerLicenseDetailText(offer)!]} /> : null}
           {offer.onlyUnlicensed ? <RequirementRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} /> : null}

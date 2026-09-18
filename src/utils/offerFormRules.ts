@@ -44,9 +44,39 @@ const CLEARED_AIRCRAFT = { requiredHabilitations: [], requiresAllAircraft: false
 
 // ── Qué se enseña ─────────────────────────────────────────────────────────
 
-/** La pregunta "¿hace falta certificar?" sólo existe en ofertas de aeronave de un oficio con licencias. */
+/**
+ * La pregunta de la licencia: en ofertas de aeronave de un oficio con
+ * licencias y, desde la sesión 2, en toda oferta de motor, donde es opcional
+ * (el oficio de una oferta de motor no dice nada de lo que pide).
+ */
 export function showsCertificationQuestion(form: OfferRequirementsForm): boolean {
-  return form.offerKind === 'aircraft' && isLicensedTechnicianType(form.technicianType);
+  return form.offerKind === 'engine' || isLicensedTechnicianType(form.technicianType);
+}
+
+/**
+ * El texto de esa pregunta, para las dos pantallas. En motor la licencia es
+ * opcional y sólo puntúa (sesión 2), y decir "licence required" allí sería
+ * prometer un filtro que no existe.
+ */
+export function certificationQuestionCopy(form: OfferRequirementsForm): { title: string; helper: string; yes: string; no: string } {
+  if (form.offerKind === 'engine') {
+    return {
+      title: 'Should candidates hold a licence?',
+      helper: form.requiresCertification
+        ? 'Optional on engine work: a Part-66 B1 licence or an FAA P or A&P. Holding it adds to the score, the engine still counts most, and nobody is excluded for lacking it.'
+        : 'No licence asked for. Candidates are matched on the engine.',
+      yes: 'Yes, ask for a licence',
+      no: 'No licence needed',
+    };
+  }
+  return {
+    title: 'Does this job need certified work?',
+    helper: form.requiresCertification
+      ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.'
+      : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.',
+    yes: 'Yes, licence required',
+    no: 'No licence needed',
+  };
 }
 
 /** "Sólo técnicos sin licencia": aparece cuando la oferta NO exige licencia, en aeronave y en motor. */
@@ -54,9 +84,9 @@ export function showsOnlyUnlicensed(form: OfferRequirementsForm): boolean {
   return !form.requiresCertification;
 }
 
-/** Autoridad y licencia: sólo si la oferta exige certificar. */
+/** Autoridad y licencia: sólo si la oferta pide licencia (y, en aeronave, si su oficio las tiene). */
 export function showsLicenseSection(form: OfferRequirementsForm): boolean {
-  return form.offerKind === 'aircraft' && form.requiresCertification && isLicensedTechnicianType(form.technicianType);
+  return form.requiresCertification && showsCertificationQuestion(form);
 }
 
 /** "Acepto equivalentes": sólo con una autoridad Part-66 elegida (la FAA no cruza con nadie). */
@@ -72,10 +102,10 @@ export function showsAircraftEditor(form: OfferRequirementsForm): boolean {
   return form.offerKind !== 'engine';
 }
 
-/** Las licencias que ofrecen los chips: oficio, autoridad y producto. Sin autoridad, ninguna. */
+/** Las licencias que ofrecen los chips: clase, oficio, autoridad y producto. Sin autoridad, ninguna. */
 export function selectableLicenses(form: OfferRequirementsForm): AuthorityLicenseCode[] {
   if (!form.licenseAuthority) return [];
-  return licensesSelectableForOffer(form.technicianType, form.licenseAuthority).filter((code) =>
+  return licensesSelectableForOffer(form, form.licenseAuthority).filter((code) =>
     isLicenseCompatibleWithProductType(code, form.productType),
   );
 }
@@ -89,26 +119,24 @@ export function selectableAuthorities(form: OfferRequirementsForm, all: readonly
 
 export function selectOfferKind<T extends OfferRequirementsForm>(form: T, kind: OfferKind): T {
   if (kind === form.offerKind) return form;
-  if (kind === 'engine') {
-    // Una oferta de motor pide UN motor y nada más (076). El oficio no puntúa
-    // en ella, pero la columna es NOT NULL: se nombra el oficio de motor.
-    return {
-      ...form,
-      offerKind: 'engine',
-      technicianType: ENGINE_TECHNICIAN_TYPE_CODE,
-      requiresCertification: false,
-      licenseAuthority: undefined,
-      licenseCode: undefined,
-      acceptsEquivalent: false,
-      ...CLEARED_AIRCRAFT,
-    };
-  }
-  return {
-    ...form,
-    offerKind: 'aircraft',
-    requiredEngineId: undefined,
-    technicianType: form.technicianType === ENGINE_TECHNICIAN_TYPE_CODE ? DEFAULT_AIRCRAFT_TECHNICIAN_TYPE : form.technicianType,
-  };
+  // Una oferta de motor pide UN motor y ninguna aeronave (076). El oficio no
+  // puntúa en ella, pero la columna es NOT NULL: se nombra el oficio de motor.
+  // Una oferta de aeronave no nombra motor (077), y el oficio de motor no se
+  // queda en ella.
+  const moved: T = kind === 'engine'
+    ? { ...form, offerKind: 'engine', technicianType: ENGINE_TECHNICIAN_TYPE_CODE, ...CLEARED_AIRCRAFT }
+    : {
+        ...form,
+        offerKind: 'aircraft',
+        requiredEngineId: undefined,
+        technicianType: form.technicianType === ENGINE_TECHNICIAN_TYPE_CODE ? DEFAULT_AIRCRAFT_TECHNICIAN_TYPE : form.technicianType,
+      };
+  // Sesión 2: la licencia sobrevive al cambio de clase si la clase nueva puede
+  // pedirla (una B1.1 vale para las dos; una B2 no vale para motor). Si no, se
+  // va con su autoridad y sus equivalencias, y la oferta queda sin licencia.
+  const licenseStays = Boolean(form.licenseCode) && selectableLicenses(moved).includes(form.licenseCode as AuthorityLicenseCode);
+  if (licenseStays) return moved;
+  return { ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined, acceptsEquivalent: false };
 }
 
 export function setRequiresCertification<T extends OfferRequirementsForm>(form: T, next: boolean): T {
@@ -131,7 +159,7 @@ export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, n
   const moved = { ...form, technicianType: next };
   // La autoridad sobrevive si tiene algo que ofrecer al oficio nuevo (la FAA no
   // tiene nada para aviónica); la licencia, si ese oficio puede pedirla.
-  const authorityStays = !form.licenseAuthority || licensesSelectableForOffer(next, form.licenseAuthority).length > 0;
+  const authorityStays = !form.licenseAuthority || licensesSelectableForOffer(moved, form.licenseAuthority).length > 0;
   const licenseStays = !form.licenseCode || (authorityStays && selectableLicenses(moved).includes(form.licenseCode));
   return {
     ...moved,

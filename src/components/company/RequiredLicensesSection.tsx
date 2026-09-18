@@ -49,8 +49,9 @@ export function RequiredLicensesSection({
     <CompanyCard style={styles.card}>
       <Text style={styles.title}>Licence</Text>
       <Text style={styles.subtitle}>
-        One per offer. Every aircraft you add below is required under this licence — two licences would be two
-        different jobs.
+        {form.offerKind === 'engine'
+          ? 'Optional, one per offer, and only a licence that certifies engine work: a Part-66 B1 or an FAA P or A&P.'
+          : 'One per offer. Every aircraft you add below is required under this licence — two licences would be two different jobs.'}
       </Text>
 
       <Text style={styles.fieldLabel}>Issuing authority</Text>

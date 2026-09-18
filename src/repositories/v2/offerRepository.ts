@@ -263,12 +263,14 @@ export function isOfferOpenForTechnicians(offer: Pick<Offer, 'status' | 'visible
  * fichero evita en todas partes.
  */
 function assertLicenseMatchesTechnicianType(
-  technicianType: TechnicianTypeCode,
-  requiresCertification: boolean,
-  licenseAuthority: AuthorityCode | undefined,
-  licenseCode: AuthorityLicenseCode | undefined,
+  offer: Pick<Offer, 'offerKind' | 'technicianType' | 'requiresCertification' | 'licenseAuthority' | 'licenseCode'>,
 ): void {
-  if (!isLicensedTechnicianType(technicianType)) {
+  const { offerKind, technicianType, requiresCertification, licenseAuthority, licenseCode } = offer;
+  // Sesión 2: en una oferta de motor el oficio no dice nada de lo que pide
+  // (siempre es engine_technician, que no tiene licencias), así que la
+  // contradicción 2 no existe ahí. Qué licencia puede pedir la decide la
+  // clase, abajo.
+  if (offerKind !== 'engine' && !isLicensedTechnicianType(technicianType)) {
     if (requiresCertification || licenseCode) {
       throw new Error(
         `A ${technicianTypeLabel(technicianType).toLowerCase()} role holds no licence, so this offer cannot require certified work. Switch off the licence requirement, or change the profile type.`,
@@ -286,9 +288,11 @@ function assertLicenseMatchesTechnicianType(
   //
   // Sin autoridad no hay nada que cruzar aquí: la ausencia la rechaza antes
   // assertOfferShape (licencia sin autoridad, CHECK de la 075).
-  if (licenseCode && licenseAuthority && !licensesSelectableForOffer(technicianType, licenseAuthority).includes(licenseCode)) {
+  if (licenseCode && licenseAuthority && !licensesSelectableForOffer(offer, licenseAuthority).includes(licenseCode)) {
     throw new Error(
-      `${credentialLabel(licenseAuthority, licenseCode)} is not a licence ${technicianTypeLabel(technicianType).toLowerCase()} work can require, so this offer cannot ask for it. Pick another licence or authority, or change the profile type.`,
+      offerKind === 'engine'
+        ? `${credentialLabel(licenseAuthority, licenseCode)} does not certify engine work, so an engine offer cannot ask for it. Pick a Part-66 B1 licence or an FAA P or A&P.`
+        : `${credentialLabel(licenseAuthority, licenseCode)} is not a licence ${technicianTypeLabel(technicianType).toLowerCase()} work can require, so this offer cannot ask for it. Pick another licence or authority, or change the profile type.`,
     );
   }
 }
@@ -300,7 +304,7 @@ function assertLicenseMatchesTechnicianType(
  */
 function assertOfferWritable(offer: OfferWithRequirements): void {
   assertOfferShape(offer);
-  assertLicenseMatchesTechnicianType(offer.technicianType, offer.requiresCertification, offer.licenseAuthority, offer.licenseCode);
+  assertLicenseMatchesTechnicianType(offer);
   if (!offerCanRequireAircraft(offer) && offer.requiredHabilitations.length > 0) {
     throw new Error('An engine offer cannot require aircraft type ratings.');
   }

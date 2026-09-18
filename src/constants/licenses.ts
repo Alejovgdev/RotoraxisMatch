@@ -1,5 +1,6 @@
 import { isLicensedTechnicianType } from './technicianTypes';
 import { AuthorityCode, AuthorityLicenseCode, FaaLicenseCode } from '../types/catalog';
+import type { OfferKind } from '../types/offer';
 
 // V2 — Full EASA Part-66 license list
 export const LICENSE_CATEGORIES = [
@@ -320,11 +321,23 @@ const FAA_LICENSES_SELECTABLE_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[
 };
 
 /**
- * Las licencias que una OFERTA de este oficio puede exigir A ESTA AUTORIDAD
- * (Fase 10, paso 5b). La única respuesta: la usan los chips del formulario de
- * oferta y la guarda de offerRepository, así que lo que se ofrece y lo que se
- * acepta no pueden divergir.
+ * Las licencias que puede pedir una oferta de MOTOR (sesión 2): las que
+ * certifican el motor, y ninguna más. Part-66 B1.1–B1.4 (la rama mecánica,
+ * célula y motor) y FAA P o A&P (Powerplant). No B2, C ni FAA A: ninguna dice
+ * nada del motor. Mismo conjunto que el CHECK chk_offers_engine_kind_shape de
+ * la 087; qué autoridad emite cada código lo sigue diciendo la FK compuesta.
+ */
+export const ENGINE_OFFER_LICENSE_CODES: AuthorityLicenseCode[] = [...B1_LICENSE_CODES, 'P', 'A&P'];
+
+/**
+ * Las licencias que una OFERTA puede exigir A ESTA AUTORIDAD (Fase 10, paso
+ * 5b). La única respuesta: la usan los chips del formulario de oferta y la
+ * guarda de offerRepository, así que lo que se ofrece y lo que se acepta no
+ * pueden divergir.
  *
+ *   Motor:   ENGINE_OFFER_LICENSE_CODES que emita la autoridad, sea cual sea
+ *            el oficio (sesión 2: la licencia es opcional y el oficio de una
+ *            oferta de motor no describe nada de lo que pide).
  *   Part-66: la rama del oficio (licensesSelectableForOfferType) recortada a
  *            lo que esa autoridad emite (CASA sin B2L/B3/L, GCAA sin B2L).
  *   FAA:     A, P y A&P para mecánico; A y A&P para aviónico (sesión 2).
@@ -333,7 +346,12 @@ const FAA_LICENSES_SELECTABLE_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[
  * -> todo lo que emite la autoridad, misma dirección de fallo que
  * `licensesSelectableForOfferType`.
  */
-export function licensesSelectableForOffer(technicianType: string, authority: string): AuthorityLicenseCode[] {
+export function licensesSelectableForOffer(
+  offer: { offerKind: OfferKind; technicianType: string },
+  authority: string,
+): AuthorityLicenseCode[] {
+  if (offer.offerKind === 'engine') return ENGINE_OFFER_LICENSE_CODES.filter((code) => isValidAuthorityLicense(authority, code));
+  const technicianType = offer.technicianType;
   if (!isLicensedTechnicianType(technicianType)) return [];
   if (authority === 'FAA') {
     return FAA_LICENSES_SELECTABLE_BY_TECHNICIAN_TYPE[technicianType] ?? [...FAA_LICENSE_CODES];

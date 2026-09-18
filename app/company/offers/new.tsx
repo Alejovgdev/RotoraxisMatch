@@ -34,6 +34,7 @@ import { TechnicianTypeCode, ContractTypeCode } from '../../../src/types/catalog
 import { OfferProductType } from '../../../src/types/offer';
 import {
   OfferRequirementsForm,
+  certificationQuestionCopy,
   requirementsErrors,
   selectAuthority,
   selectLicense,
@@ -131,6 +132,8 @@ export default function NewOfferScreen() {
   // empresa marca, no el tipo de perfil buscado. offerRepository impone la
   // misma regla al escribir — esconder una sección no es una garantía.
   const requiresCertification = form.requiresCertification;
+  // Sesión 2: en motor la pregunta existe y la licencia es opcional.
+  const certificationCopy = certificationQuestionCopy(form);
 
   // Paso 5b: cada transición es una función de offerFormRules, la misma que
   // usa la pantalla de edición. Creando se aplica SOBRE LA MARCHA y sin aviso
@@ -215,7 +218,7 @@ export default function NewOfferScreen() {
         {/* Paso 5b: 0) aeronave o motor, antes que nada — decide qué pasos
             existen. Después el orden de la Fase 6 tanda C: 1) tipo de perfil,
             2) ¿certificar?, 3) avión o helicóptero, 4) licencia, 5) aeronaves.
-            En una oferta de motor no hay 1, 2, 4 ni 5: hay motor. */}
+            En una oferta de motor no hay 1 ni 5: hay motor, y 2 y 4 son opcionales (sesión 2). */}
         <OfferKindSection value={form.offerKind} onChange={(kind) => applyRequirement((prev) => selectOfferKind(prev, kind))} />
 
         {form.offerKind === 'aircraft' && (
@@ -236,18 +239,15 @@ export default function NewOfferScreen() {
 
         {/* La pregunta sólo existe para los oficios que tienen licencia. Para
             chapa, pintura y composite no hay eje Part-66 que abrir, así que
-            no se pregunta ni se pinta nada de lo que cuelga de ella. */}
+            no se pregunta ni se pinta nada de lo que cuelga de ella. Sesión 2:
+            y en toda oferta de motor, donde la licencia es opcional. */}
         {showsCertificationQuestion(form) && (
           <ChoiceSection
-            title="Does this job need certified work?"
-            helper={
-              requiresCertification
-                ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.'
-                : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.'
-            }
+            title={certificationCopy.title}
+            helper={certificationCopy.helper}
           >
-            <CompanyChip label="Yes, licence required" selected={requiresCertification} onPress={() => applyRequirement((prev) => setRequiresCertification(prev, true))} />
-            <CompanyChip label="No licence needed" selected={!requiresCertification} onPress={() => applyRequirement((prev) => setRequiresCertification(prev, false))} />
+            <CompanyChip label={certificationCopy.yes} selected={requiresCertification} onPress={() => applyRequirement((prev) => setRequiresCertification(prev, true))} />
+            <CompanyChip label={certificationCopy.no} selected={!requiresCertification} onPress={() => applyRequirement((prev) => setRequiresCertification(prev, false))} />
           </ChoiceSection>
         )}
 

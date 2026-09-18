@@ -26,7 +26,7 @@ import type { OfferWithRequirements } from '../../src/types/offer';
 import type { OfferStatus } from '../../src/types/enums';
 import { technicianTypeLabel } from '../../src/constants/technicianTypes';
 import { useEnginesCatalog } from '../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../src/utils/offerRequirementsText';
+import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../src/utils/offerRequirementsText';
 import {
   AdminBadge,
   AdminCard,
@@ -231,7 +231,7 @@ function OfferCard({
     // El moderador necesita ver el interruptor SIEMPRE, en los dos sentidos:
     // aquí se revisa si la oferta es coherente, y "exige licencia" es tan
     // revisable como "no la exige".
-    offer.requiresCertification ? 'Licence required' : 'No licence needed',
+    offerCertificationText(offer),
     ...(offer.licenseCode ? [offerLicenseDetailText(offer)!] : []),
     ...(offer.onlyUnlicensed ? [ONLY_UNLICENSED_TEXT] : []),
     // Fase 6 tanda D: si la oferta exige TODAS las aeronaves, el moderador
