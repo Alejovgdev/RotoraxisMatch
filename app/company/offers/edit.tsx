@@ -49,6 +49,7 @@ import {
   showsOnlyUnlicensed,
 } from '../../../src/utils/offerFormRules';
 import { OfferKind } from '../../../src/types/offer';
+import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
 import { OfferProductType, OfferWithRequirements } from '../../../src/types/offer';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -216,7 +217,7 @@ export default function EditOfferScreen() {
     void applyTransition(selectAuthority(form, next), {
       title: `Switch the authority to ${authorityLabel(next)}?`,
       why: next === 'FAA'
-        ? 'FAA certificates carry no aircraft type ratings, and the licence has to be one the FAA issues.'
+        ? 'The licence has to be one the FAA issues, and the aircraft were added under the previous licence. On an FAA offer, aircraft count as declared experience.'
         : `The licence has to be one ${authorityLabel(next)} issues.`,
     });
   }
@@ -485,13 +486,15 @@ export default function EditOfferScreen() {
         )}
 
         {/* Fase 6 tanda E: las AERONAVES se piden certifique o no. Paso 5b:
-            salvo en una oferta de motor, o certificando bajo la FAA. */}
+            salvo en una oferta de motor. Sesión 2: bajo la FAA, como
+            experiencia. */}
         {showsAircraftEditor(form) && (
           <TypeRatingRequirementsEditor
             value={form.requiredHabilitations}
             onChange={(next) => setField('requiredHabilitations', next)}
             productType={form.productType}
             licenseCode={form.licenseCode}
+            asExperience={offerAircraftAreExperience(form)}
             requiresAll={form.requiresAllAircraft}
             onChangeRequiresAll={(next) => setField('requiresAllAircraft', next)}
           />

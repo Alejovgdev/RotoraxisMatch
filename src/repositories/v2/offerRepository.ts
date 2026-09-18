@@ -6,7 +6,7 @@ import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCo
 // una licencia sin autoridad ya no se completa en silencio, falla a la vista
 // (offerShapeViolations, y detrás el CHECK de emparejamiento de la 075).
 import { OfferStatus } from '../../types/enums';
-import { authorityHasTypeRatings, credentialLabel, licensesSelectableForOffer } from '../../constants/licenses';
+import { credentialLabel, licensesSelectableForOffer } from '../../constants/licenses';
 import { assertOfferShape } from '../../utils/offerShape';
 import { isLicensedTechnicianType, technicianTypeLabel } from '../../constants/technicianTypes';
 import { LocationValue, PersistedLocation } from '../../types/location';
@@ -97,9 +97,9 @@ function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolea
  *   - certificar -> sin "sólo sin licencia" (077), salvo que el patch lo pida
  *     explícitamente, que entonces es una contradicción y la guarda lanza;
  *   - oferta de aeronave -> sin motor (077), con la misma salvedad;
- *   - motor, o licencia de una autoridad sin type ratings (FAA) -> sin
- *     aeronaves (076 y authorities.has_type_ratings). Esas filas se borran
- *     antes del UPDATE (ver update()); la pantalla de edición confirma antes.
+ *   - motor -> sin aeronaves (076). Esas filas se borran en la misma RPC del
+ *     UPDATE (ver update()); la pantalla de edición confirma antes. Sesión 2:
+ *     certificar bajo la FAA ya no se las lleva — allí son experiencia.
  * Lo demás no se corrige: lanza.
  */
 export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferPatch): OfferWithRequirements {
@@ -124,13 +124,13 @@ export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferP
   return next;
 }
 
-/** ¿Puede esta oferta nombrar aeronaves? No si es de motor, ni si certifica bajo una autoridad sin type ratings. */
-export function offerCanRequireAircraft(
-  offer: Pick<Offer, 'offerKind' | 'requiresCertification' | 'licenseAuthority'>,
-): boolean {
-  if (offer.offerKind === 'engine') return false;
-  if (offer.requiresCertification && offer.licenseAuthority && !authorityHasTypeRatings(offer.licenseAuthority)) return false;
-  return true;
+/**
+ * ¿Puede esta oferta nombrar aeronaves? No si es de motor. Sesión 2: bajo una
+ * autoridad sin type ratings (FAA) sí, como experiencia —ver
+ * offerAircraftAreExperience—; hasta entonces se prohibían.
+ */
+export function offerCanRequireAircraft(offer: Pick<Offer, 'offerKind'>): boolean {
+  return offer.offerKind !== 'engine';
 }
 
 function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown> {
@@ -302,11 +302,7 @@ function assertOfferWritable(offer: OfferWithRequirements): void {
   assertOfferShape(offer);
   assertLicenseMatchesTechnicianType(offer.technicianType, offer.requiresCertification, offer.licenseAuthority, offer.licenseCode);
   if (!offerCanRequireAircraft(offer) && offer.requiredHabilitations.length > 0) {
-    throw new Error(
-      offer.offerKind === 'engine'
-        ? 'An engine offer cannot require aircraft type ratings.'
-        : `${credentialLabel(offer.licenseAuthority, offer.licenseCode ?? '')} carries no aircraft type ratings, so this offer cannot require aircraft. Remove them, or pick another authority.`,
-    );
+    throw new Error('An engine offer cannot require aircraft type ratings.');
   }
 }
 

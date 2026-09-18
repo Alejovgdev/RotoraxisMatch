@@ -94,6 +94,14 @@ BEGIN
   failed:=false;
   BEGIN PERFORM update_offer_with_habilitations(o,'{"title":"changed"}',payload); EXCEPTION WHEN OTHERS THEN failed:=SQLERRM='INJECTED_INSERT_FAILURE'; END;
   INSERT INTO transaction_results SELECT 'aircraft insert failure rolls back offer and delete',failed AND saved=(SELECT jsonb_agg(to_jsonb(h)) FROM offer_required_habilitations h WHERE offer_id=o) AND (SELECT title='selftest-082' FROM offers WHERE id=o);
+  -- 086: certificar bajo la FAA ya no vacía las aeronaves (son experiencia).
+  -- NULL a propósito: es el caso que la 082 vaciaba en silencio, y el trigger
+  -- de fallo inyectado sigue puesto, así que ninguna fila se reinserta.
+  PERFORM update_offer_with_habilitations(o,'{"requires_certification":true,"license_code":"A&P","license_authority":"FAA"}',NULL);
+  PERFORM update_offer_with_habilitations(o,'{"title":"faa-renamed"}',NULL);
+  INSERT INTO transaction_results SELECT 'FAA offer keeps aircraft as experience',
+    EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT license_authority='FAA' FROM offers WHERE id=o);
+  PERFORM update_offer_with_habilitations(o,'{"requires_certification":false,"license_code":null,"license_authority":null}',NULL);
   PERFORM update_offer_with_habilitations(o,jsonb_build_object('offer_kind','engine','required_engine_id',engine),NULL);
   INSERT INTO transaction_results SELECT 'engine transition clears aircraft atomically',NOT EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT offer_kind='engine' FROM offers WHERE id=o);
   RESET ROLE;

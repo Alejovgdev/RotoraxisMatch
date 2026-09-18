@@ -90,6 +90,7 @@ import {
   licenseSatisfiesRequirement,
   equivalentAuthorities,
   isValidAuthorityLicense,
+  licensesSelectableForOffer,
   licensesSelectableForOfferType,
   typesAfterLicenseChange,
   typesImpliedByLicenses,
@@ -3614,6 +3615,91 @@ async function main() {
     for (const code of ['A&P', 'P']) {
       const r = puntuar(makeOffer({ licenseCode: code, licenseAuthority: 'FAA' }), tecnico, sinCatalogo);
       assert.equal(r.total, 100, `A&P frente a ${code} con el catálogo vacío`);
+    }
+  });
+
+  // ── Sesión 2: FAA con aeronaves como experiencia ──────────────────────
+
+  const ofertaFaa737 = (extra: OfferOverrides = {}) =>
+    makeOffer({ licenseCode: 'A&P', licenseAuthority: 'FAA', requiredHabilitations: [makeHabReq('fx-b737ng-cfm56-7b')], ...extra });
+
+  await test('Sesión 2 · FAA + 737 — quien declara experiencia en el 737 puntúa más, y quien no la tiene sigue dentro', () => {
+    const oferta = ofertaFaa737();
+    assert.deepEqual(
+      getMatchScoreWeights(oferta),
+      { verified: 15, habilitation: 25, license: 40, contractFit: 15, location: 5, engine: 0 },
+      'licencia 40 + experiencia 25',
+    );
+    const aYp = () => makeLicense('A&P', { authority: 'FAA' });
+    const con737 = makeTechnician({ ...PERFIL_A_FAVOR, id: 'faa-con-737', licenses: [aYp()], aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 6)] });
+    const sin737 = makeTechnician({ ...PERFIL_A_FAVOR, id: 'faa-sin-737', licenses: [aYp()], aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 6)] });
+
+    const r1 = puntuar(oferta, con737);
+    const r2 = puntuar(oferta, sin737);
+    assert.equal(r1.total, 100);
+    assert.equal(r1.level, 'exact');
+    assert.equal(r2.total, 75, 'con la licencia y sin el 737: por debajo de Excellent, nunca el tope de 39');
+    assert.deepEqual(r2.missingRequirements, [], 'no tener el 737 no es un requisito incumplido');
+
+    // Puntúa, no excluye: los dos son elegibles y los dos salen en la lista.
+    assert.equal(elegible(oferta, sin737), true);
+    const ranking = rankTechniciansForOffer(oferta, [sin737, con737], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    assert.deepEqual(ranking.map((s) => s.technicianId), ['faa-con-737', 'faa-sin-737']);
+  });
+
+  await test('Sesión 2 · FAA + 737 — se compara con la experiencia declarada, no con habilitaciones', () => {
+    const oferta = ofertaFaa737();
+    const aYp = makeLicense('A&P', { authority: 'FAA' });
+    const easa = makeLicense('B1.1', { authority: 'EASA' });
+    // El 737NG como type rating EASA, sin declararlo como experiencia.
+    const conHabilitacion = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [aYp, easa],
+      habilitations: [makeHabOn(easa, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })],
+    });
+    const r = puntuar(oferta, conHabilitacion);
+    assert.equal(r.breakdown.habilitation, 0, 'una habilitación no es experiencia declarada en una oferta FAA');
+    assert.equal(r.total, 75);
+
+    // Contraste: la misma habilitación SÍ cuenta en una oferta sin certificar,
+    // que une las dos fuentes. Sin esto el test pasaría con un evaluador que no
+    // mirase habilitaciones en ninguna rama.
+    const sinCertificar = makeOffer({ requiresCertification: false, licenseCode: undefined, requiredHabilitations: [makeHabReq('fx-b737ng-cfm56-7b')] });
+    assert.ok(puntuar(sinCertificar, conHabilitacion).breakdown.habilitation > 0);
+  });
+
+  await test('Sesión 2 · FAA + 737 — sin la licencia FAA la experiencia no basta; las ofertas Part-66 no cambian', () => {
+    const oferta = ofertaFaa737();
+    const soloExperiencia = makeTechnician({ ...PERFIL_A_FAVOR, aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 12)] });
+    const r = puntuar(oferta, soloExperiencia);
+    assert.equal(r.breakdown.license, 0);
+    assert.ok(r.breakdown.habilitation > 0, 'la experiencia se ve en el desglose');
+    assert.ok(r.total <= ZERO_QUALIFICATION_CAP, `la licencia es el eje pedido: tope de 39, got ${r.total}`);
+    assert.equal(r.level, 'not_met');
+    assert.deepEqual(r.missingRequirements, ['Required license: A&P']);
+
+    // Part-66: la misma experiencia declarada sigue sin valer en una oferta que
+    // certifica con type rating.
+    const b11 = makeLicense('B1.1', { authority: 'EASA' });
+    const easa737 = makeOffer({ licenseAuthority: 'EASA', requiredHabilitations: [makeHabReq('fx-b737ng-cfm56-7b')] });
+    assert.deepEqual(getMatchScoreWeights(easa737), { verified: 15, habilitation: 45, license: 20, contractFit: 15, location: 5, engine: 0 });
+    const part66 = puntuar(easa737, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [b11], aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 12)] }));
+    assert.equal(part66.breakdown.habilitation, 0);
+    assert.ok(part66.total <= ZERO_QUALIFICATION_CAP, `got ${part66.total}`);
+  });
+
+  await test('Sesión 2 · Aviónica FAA — una oferta de aviónica puede pedir A o A&P, y los dos puntúan', () => {
+    assert.deepEqual(licensesSelectableForOffer('avionic', 'FAA'), ['A', 'A&P']);
+    assert.deepEqual(licensesSelectableForOffer('mechanic', 'FAA'), ['A', 'P', 'A&P'], 'mecánico no cambia');
+    // Pedir no es implicar: tener un A&P sigue haciendo mecánico, no aviónico.
+    assert.deepEqual(typesImpliedByLicenses(['A&P']), ['mechanic']);
+    assert.deepEqual(typesImpliedByLicenses(['A']), ['mechanic']);
+
+    const avionico = { ...PERFIL_A_FAVOR, technicianTypes: ['avionic'] as TechnicianTypeCode[] };
+    for (const code of ['A', 'A&P'] as const) {
+      const oferta = makeOffer({ technicianType: 'avionic', licenseCode: code, licenseAuthority: 'FAA' });
+      assert.equal(puntuar(oferta, makeTechnician({ ...avionico, licenses: [makeLicense('A&P', { authority: 'FAA' })] })).total, 100, `A&P frente a ${code}`);
+      assert.equal(puntuar(oferta, makeTechnician({ ...avionico, licenses: [makeLicense('A', { authority: 'FAA' })] })).total, code === 'A' ? 100 : 35, `A frente a ${code}: la mitad del certificado no cuenta`);
     }
   });
 

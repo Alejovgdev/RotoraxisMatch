@@ -62,6 +62,7 @@ import { getOfferProductTypeLabel } from '../../../src/constants/offerProductTyp
 import { credentialLabel } from '../../../src/constants/licenses';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
 import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
 
@@ -521,7 +522,7 @@ export default function OfferDetailScreen() {
           {offer.requiredHabilitations.length > 0 ? (
             <TypeRatingRequirementsRow
               habilitations={offer.requiredHabilitations}
-              licenseCode={offer.licenseCode}
+              licenseCode={offerAircraftAreExperience(offer) ? undefined : offer.licenseCode}
               requiresAll={offer.requiresAllAircraft}
               ratingIndex={ratingIndex}
             />

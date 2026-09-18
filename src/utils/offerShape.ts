@@ -18,7 +18,24 @@
 // fixtures de scripts/testMatching.ts (una oferta de test que la base no
 // aceptaría no debe llegar al scorer).
 import { OfferWithRequirements } from '../types/offer';
-import { isValidAuthorityLicense } from '../constants/licenses';
+import { authorityHasTypeRatings, isValidAuthorityLicense } from '../constants/licenses';
+
+/**
+ * ¿Las aeronaves de esta oferta son EXPERIENCIA y no type ratings? (Fase 10, sesión 2)
+ *
+ * Sí cuando certifica bajo una autoridad que no emite type ratings (hoy sólo la
+ * FAA, `authorities.has_type_ratings = false`). Allí no hay habilitación que
+ * pedir, así que la aeronave se compara con la experiencia declarada: puntúa y
+ * no excluye. La usan el scorer, el formulario, el repositorio y las pantallas
+ * que etiquetan "A&P + 737" frente a "737", para que las cuatro digan lo mismo.
+ *
+ * Sin autoridad (oferta anterior a la 075) no se deduce nada: false.
+ */
+export function offerAircraftAreExperience(
+  offer: Pick<OfferWithRequirements, 'requiresCertification' | 'licenseAuthority'>,
+): boolean {
+  return offer.requiresCertification && offer.licenseAuthority != null && !authorityHasTypeRatings(offer.licenseAuthority);
+}
 
 export type OfferShape = Pick<
   OfferWithRequirements,

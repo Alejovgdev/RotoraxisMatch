@@ -46,6 +46,7 @@ import {
   showsLicenseSection,
   showsOnlyUnlicensed,
 } from '../../../src/utils/offerFormRules';
+import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
 import { CountryCityPicker } from '../../../src/components/CountryCityPicker';
 import { EMPTY_LOCATION, LocationValue } from '../../../src/types/location';
@@ -371,14 +372,15 @@ export default function NewOfferScreen() {
 
         {/* Fase 6 tanda E: las AERONAVES se piden certifique o no —
             "ayudante para el A320" tiene que poder decir A320. Paso 5b: salvo
-            en una oferta de motor, o certificando bajo la FAA, que no emite
-            type ratings. */}
+            en una oferta de motor. Sesión 2: bajo la FAA, que no emite type
+            ratings, se piden como experiencia. */}
         {showsAircraftEditor(form) && (
           <TypeRatingRequirementsEditor
             value={form.requiredHabilitations}
             onChange={(next) => set('requiredHabilitations', next)}
             productType={form.productType}
             licenseCode={form.licenseCode}
+            asExperience={offerAircraftAreExperience(form)}
             requiresAll={form.requiresAllAircraft}
             onChangeRequiresAll={(next) => set('requiresAllAircraft', next)}
           />

@@ -301,12 +301,22 @@ export function isValidAuthorityLicense(authority: string, code: string): boolea
   return AUTHORITY_LICENSE_PAIRS.has(authority + '|' + code);
 }
 
-// Qué certificados FAA puede pedir un puesto de cada oficio. El A&P es un
-// certificado de MECÁNICO (14 CFR 65 subparte D): la FAA no emite uno de
-// aviónica, así que un puesto de aviónico no tiene nada FAA que pedir.
+// Qué oficio IMPLICA cada certificado FAA. El A&P es un certificado de
+// MECÁNICO (14 CFR 65 subparte D): la FAA no emite uno de aviónica, así que
+// ningún certificado FAA implica aviónico.
 const FAA_LICENSES_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
   mechanic: [...FAA_LICENSE_CODES],
   avionic: [],
+};
+
+// Qué certificados FAA puede PEDIR un puesto de cada oficio (sesión 2). Otra
+// pregunta que la de arriba, igual que la `C` Part-66: la aviónica de un avión
+// FAA se firma con la habilitación Airframe, así que un puesto de aviónico
+// puede pedir A o A&P sin que tenerlos convierta a nadie en aviónico. P no:
+// Powerplant no cubre los sistemas del avión.
+const FAA_LICENSES_SELECTABLE_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
+  mechanic: [...FAA_LICENSE_CODES],
+  avionic: ['A', 'A&P'],
 };
 
 /**
@@ -317,7 +327,7 @@ const FAA_LICENSES_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
  *
  *   Part-66: la rama del oficio (licensesSelectableForOfferType) recortada a
  *            lo que esa autoridad emite (CASA sin B2L/B3/L, GCAA sin B2L).
- *   FAA:     A, P y A&P para mecánico; nada para aviónico.
+ *   FAA:     A, P y A&P para mecánico; A y A&P para aviónico (sesión 2).
  *
  * Oficio sin licencias -> []. Oficio licenciado sin rama declarada (`pilot`)
  * -> todo lo que emite la autoridad, misma dirección de fallo que
@@ -326,7 +336,7 @@ const FAA_LICENSES_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
 export function licensesSelectableForOffer(technicianType: string, authority: string): AuthorityLicenseCode[] {
   if (!isLicensedTechnicianType(technicianType)) return [];
   if (authority === 'FAA') {
-    return FAA_LICENSES_BY_TECHNICIAN_TYPE[technicianType] ?? [...FAA_LICENSE_CODES];
+    return FAA_LICENSES_SELECTABLE_BY_TECHNICIAN_TYPE[technicianType] ?? [...FAA_LICENSE_CODES];
   }
   return licensesSelectableForOfferType(technicianType).filter((code) => isValidAuthorityLicense(authority, code));
 }

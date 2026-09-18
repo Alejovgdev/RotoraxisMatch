@@ -113,24 +113,38 @@ async function main() {
     assert.ok(requirementsErrors(selectOfferKind(baseForm(), 'engine')).engine, 'motor sin motor elegido');
   });
 
-  await test('Formulario — FAA: mecánico ve A, P y A&P; aviónico no ve la FAA; las aeronaves y las equivalencias desaparecen', () => {
+  await test('Formulario — FAA: mecánico ve A, P y A&P; aviónico ve A y A&P; las equivalencias desaparecen', () => {
     const faa = selectAuthority(baseForm({ acceptsEquivalent: true }), 'FAA');
     assert.equal(faa.licenseCode, undefined, 'B1.1 no existe en la FAA');
-    assert.deepEqual(faa.requiredHabilitations, [], 'la FAA no emite type ratings');
+    assert.deepEqual(faa.requiredHabilitations, [], 'las aeronaves colgaban de la B1.1 que se fue');
     assert.equal(faa.acceptsEquivalent, false, 'la FAA no cruza con nadie');
-    assert.equal(showsAircraftEditor(faa), false);
     assert.equal(showsAcceptsEquivalent(faa), false);
     assert.deepEqual(selectableLicenses(faa), ['A', 'P', 'A&P']);
 
     const conAyP = selectLicense(faa, 'A&P');
     assert.equal(conAyP.licenseCode, 'A&P');
 
+    // Sesión 2: aviónica puede pedir A o A&P a la FAA; P no.
     const avionico = baseForm({ technicianType: 'avionic', licenseCode: 'B2' });
-    assert.ok(!selectableAuthorities(avionico, AUTHORITIES.map((a) => a.code)).includes('FAA'));
-    // Cambiar un mecánico FAA a aviónico se lleva la autoridad y la licencia.
+    assert.ok(selectableAuthorities(avionico, AUTHORITIES.map((a) => a.code)).includes('FAA'));
+    assert.deepEqual(selectableLicenses({ ...avionico, licenseAuthority: 'FAA', licenseCode: undefined }), ['A', 'A&P']);
+    // Un mecánico FAA A&P que pasa a aviónico conserva autoridad y licencia;
+    // con P, la licencia se va.
     const aAvionico = selectTechnicianType(conAyP, 'avionic');
-    assert.equal(aAvionico.licenseAuthority, undefined);
-    assert.equal(aAvionico.licenseCode, undefined);
+    assert.equal(aAvionico.licenseAuthority, 'FAA');
+    assert.equal(aAvionico.licenseCode, 'A&P');
+    assert.equal(selectTechnicianType(selectLicense(faa, 'P'), 'avionic').licenseCode, undefined);
+  });
+
+  await test('Formulario — FAA con aeronaves: el editor aparece y cambiar A por A&P no se lleva la experiencia', () => {
+    const faa = baseForm({ licenseAuthority: 'FAA', licenseCode: 'A', requiredHabilitations: [A320] });
+    assert.equal(showsAircraftEditor(faa), true, 'sesión 2: las aeronaves se piden como experiencia');
+    assert.deepEqual(selectLicense(faa, 'A&P').requiredHabilitations, [A320], 'no cuelgan de la licencia');
+    // Part-66 no cambia: cambiar de licencia sigue limpiando las aeronaves.
+    assert.deepEqual(selectLicense(baseForm(), 'B1.2').requiredHabilitations, []);
+    // Sin licencia elegida, pasar de EASA a la FAA conserva las aeronaves.
+    const sinLicencia = baseForm({ licenseCode: undefined });
+    assert.deepEqual(selectAuthority(sinLicencia, 'FAA').requiredHabilitations, [A320]);
   });
 
   await test('Formulario — cambiar entre Part-66 conserva la licencia y sus aeronaves si existe; CASA se lleva la B3', () => {
@@ -194,7 +208,7 @@ async function main() {
         const oldProduct = offerRow.product_type;
         offerRow = { ...offerRow, ...args.p_patch };
         if (args.p_habilitations !== null) habilitationRows = args.p_habilitations.map((h: any) => ({ ...h, offer_id: args.p_offer_id, product_type: offerRow.product_type }));
-        else if (oldProduct !== offerRow.product_type || offerRow.offer_kind === 'engine' || offerRow.license_authority === 'FAA') habilitationRows = [];
+        else if (oldProduct !== offerRow.product_type || offerRow.offer_kind === 'engine') habilitationRows = [];
         return { data: [{ ...offerRow }], error: null };
       }
       return { data: null, error: null };
@@ -303,17 +317,28 @@ async function main() {
     assert.equal(creada.licenseCode, 'A&P');
   });
 
-  await test('Repositorio — rechaza lo que el formulario no ofrece: FAA en aviónica, licencia sin autoridad, B1.1 FAA, FAA con aeronaves', async () => {
+  await test('Repositorio — rechaza lo que el formulario no ofrece: P FAA en aviónica, licencia sin autoridad, B1.1 FAA', async () => {
     reset();
     const certifica = { ...base, requiresCertification: true };
-    await assert.rejects(offerRepository.create({ ...certifica, technicianType: 'avionic', licenseAuthority: 'FAA', licenseCode: 'A&P' }), /not a licence/);
+    await assert.rejects(offerRepository.create({ ...certifica, technicianType: 'avionic', licenseAuthority: 'FAA', licenseCode: 'P' }), /not a licence/);
     await assert.rejects(offerRepository.create({ ...certifica, technicianType: 'mechanic', licenseCode: 'B1.1' }), /authority/);
     await assert.rejects(offerRepository.create({ ...certifica, technicianType: 'mechanic', licenseAuthority: 'FAA', licenseCode: 'B1.1' }), /does not issue/);
-    await assert.rejects(
-      offerRepository.create({ ...certifica, technicianType: 'mechanic', licenseAuthority: 'FAA', licenseCode: 'A&P', requiredHabilitations: [A320] }),
-      /no aircraft type ratings/,
-    );
     assert.equal(calls.filter((c) => c.op !== 'select').length, 0, 'nada se escribió');
+  });
+
+  await test('Repositorio — sesión 2: aviónica FAA A&P y una oferta FAA con aeronaves se escriben', async () => {
+    reset();
+    await offerRepository.create({ ...base, technicianType: 'avionic', requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P' });
+    assert.equal(lastWrite('offers', 'insert').technician_type, 'avionic');
+
+    reset();
+    await offerRepository.create({
+      ...base, technicianType: 'mechanic', requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P', requiredHabilitations: [A320],
+    });
+    assert.deepEqual(habilitationRows.map((h) => h.aircraft_type_rating_id), ['rating-a320'], 'las aeronaves llegan a la RPC');
+    // Un patch posterior sin lista nueva no las vacía (la 086 quita la cláusula FAA).
+    await offerRepository.update('offer-1', { title: 'Renamed' });
+    assert.equal(habilitationRows.length, 1);
   });
 
   await test('Repositorio — oferta de motor con "sólo sin licencia": offer_kind, motor y filtro en la fila; sin licencia', async () => {

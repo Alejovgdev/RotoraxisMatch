@@ -16,10 +16,10 @@ import { AuthorityCode, AuthorityLicenseCode, TechnicianTypeCode } from '../type
 import { ENGINE_TECHNICIAN_TYPE_CODE, isLicensedTechnicianType } from '../constants/technicianTypes';
 import {
   PART66_AUTHORITIES,
-  authorityHasTypeRatings,
   licensesSelectableForOffer,
 } from '../constants/licenses';
 import { isLicenseCompatibleWithProductType } from './licenseCategoryProductType';
+import { offerAircraftAreExperience } from './offerShape';
 
 export interface OfferRequirementsForm {
   offerKind: OfferKind;
@@ -64,11 +64,12 @@ export function showsAcceptsEquivalent(form: OfferRequirementsForm): boolean {
   return showsLicenseSection(form) && Boolean(form.licenseAuthority) && PART66_AUTHORITIES.includes(form.licenseAuthority as AuthorityCode);
 }
 
-/** Las aeronaves: nunca en motor, ni certificando bajo una autoridad sin type ratings (FAA). */
+/**
+ * Las aeronaves: nunca en motor. Certificando bajo la FAA sí desde la sesión 2,
+ * como experiencia y no como type ratings (offerAircraftAreExperience).
+ */
 export function showsAircraftEditor(form: OfferRequirementsForm): boolean {
-  if (form.offerKind === 'engine') return false;
-  if (form.requiresCertification && form.licenseAuthority && !authorityHasTypeRatings(form.licenseAuthority)) return false;
-  return true;
+  return form.offerKind !== 'engine';
 }
 
 /** Las licencias que ofrecen los chips: oficio, autoridad y producto. Sin autoridad, ninguna. */
@@ -146,17 +147,23 @@ export function selectAuthority<T extends OfferRequirementsForm>(form: T, author
   // valiendo: las cuatro Part-66 comparten catálogo. Si el código no existe en
   // la autoridad nueva se va, con las aeronaves que colgaban de él.
   const licenseStays = !form.licenseCode || selectableLicenses(moved).includes(form.licenseCode);
+  // Sesión 2: pasar a la FAA ya no se lleva las aeronaves por sí solo. Si había
+  // licencia Part-66 se va (la FAA no emite ningún código Part-66), y con ella
+  // las aeronaves que colgaban de ella; sin licencia elegida se quedan y pasan
+  // a contar como experiencia.
   return {
     ...moved,
     acceptsEquivalent: PART66_AUTHORITIES.includes(authority) ? form.acceptsEquivalent : false,
     ...(licenseStays ? {} : { licenseCode: undefined, ...CLEARED_AIRCRAFT }),
-    ...(authorityHasTypeRatings(authority) ? {} : CLEARED_AIRCRAFT),
   };
 }
 
 export function selectLicense<T extends OfferRequirementsForm>(form: T, code: AuthorityLicenseCode): T {
   if (code === form.licenseCode) return form;
-  // Las aeronaves estaban puestas para cruzarse con la licencia anterior.
+  // Las aeronaves estaban puestas para cruzarse con la licencia anterior. Salvo
+  // bajo la FAA (sesión 2): allí son experiencia, no cuelgan de la licencia, y
+  // pasar de A a A&P no cambia en qué aviones hace falta haber trabajado.
+  if (offerAircraftAreExperience(form)) return { ...form, licenseCode: code };
   return { ...form, licenseCode: code, ...CLEARED_AIRCRAFT };
 }
 

@@ -75,7 +75,10 @@ export function RequiredLicensesSection({
             <Text style={styles.inlineHint}>Pick the licence this role certifies under.</Text>
           ) : null}
           {authority === 'FAA' ? (
-            <Text style={styles.note}>FAA certificates carry no aircraft type ratings, so an FAA offer cannot require aircraft.</Text>
+            <Text style={styles.note}>
+              FAA certificates carry no aircraft type ratings. Any aircraft you add below are matched against the
+              technician's declared experience: they raise the score, and nobody is excluded for lacking them.
+            </Text>
           ) : null}
         </>
       ) : (

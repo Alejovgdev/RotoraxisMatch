@@ -18,7 +18,7 @@ async function main() {
   const host = new URL(url).hostname;
   if (!/^[a-z0-9]+\.supabase\.co$/.test(host)) throw new Error('Expected a hosted Supabase project URL');
   const ref = host.split('.')[0];
-  for (const [file, expected] of [['testApplicationSecurity.sql', 13], ['testTransactionalWrites.sql', 16]]) {
+  for (const [file, expected] of [['testApplicationSecurity.sql', 13], ['testTransactionalWrites.sql', 17]]) {
     const query = fs.readFileSync(path.join(__dirname, file), 'utf8');
     if (!/\bBEGIN;/.test(query) || !/ROLLBACK;\s*$/.test(query)) throw new Error(`Missing rollback wrapper: ${file}`);
     const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {

@@ -28,6 +28,10 @@ interface Props {
   // La licencia de la oferta, sólo para etiquetar las filas: cada aeronave se
   // cruza con ella. El selector de licencia vive en el formulario, no aquí.
   licenseCode?: AuthorityLicenseCode;
+  // Sesión 2: bajo la FAA las aeronaves son experiencia, no type ratings de la
+  // licencia (offerAircraftAreExperience). Cambia el texto y quita el prefijo
+  // "A&P + " de las filas, que prometería un rating que la FAA no emite.
+  asExperience?: boolean;
   // ¿Basta con una de las aeronaves, o hacen falta todas? La casilla vive
   // BAJO la lista (paso 6 del formulario), no como un paso propio.
   requiresAll: boolean;
@@ -58,9 +62,11 @@ export function TypeRatingRequirementsEditor({
   onChange,
   productType,
   licenseCode,
+  asExperience = false,
   requiresAll,
   onChangeRequiresAll,
 }: Props) {
+  const rowLicense = asExperience ? undefined : licenseCode;
   const { ratingIndex: activeRatingIndex } = useAircraftTypeRatingsCatalog();
   const [resolvedIndex, setResolvedIndex] = useState<AircraftRatingIndex>(new Map());
 
@@ -113,8 +119,10 @@ export function TypeRatingRequirementsEditor({
     <CompanyCard style={styles.card}>
       <Text style={styles.title}>Aircraft</Text>
       <Text style={styles.subtitle}>
-        {licenseCode
-          ? `Search and add the aircraft this role works on. All of them count against the offer's ${licenseCode} licence. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`
+        {asExperience
+          ? `Search and add the aircraft this role works on. They are matched against declared aircraft experience, not type ratings. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`
+          : rowLicense
+          ? `Search and add the aircraft this role works on. All of them count against the offer's ${rowLicense} licence. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`
           : `Search and add the aircraft this role works on. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`}
       </Text>
 
@@ -122,7 +130,7 @@ export function TypeRatingRequirementsEditor({
         <View key={h.aircraftTypeRatingId} style={styles.row}>
           <View style={styles.rowInfo}>
             <Text style={styles.rowText}>
-              {licenseCode ? `${licenseCode} + ` : ''}
+              {rowLicense ? `${rowLicense} + ` : ''}
               {getAircraftTypeRatingLabel(h.aircraftTypeRatingId, labelIndex)}
             </Text>
             {h.notes ? <Text style={styles.rowNotes}>{h.notes}</Text> : null}
