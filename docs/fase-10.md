@@ -82,9 +82,38 @@ Cierre de la sesión 1:
   para la sesión 2 junto con las equivalencias. Todo lo demás que parecía
   castellano eran comentarios, que van en castellano por convención.
 
-**Sesión 2** — ofertas FAA con aeronaves como experiencia; licencia opcional en
-ofertas de motor (FAA P o A&P, Part-66 B1.x); equivalencias por autoridad
-elegidas por la empresa.
+**Sesión 2** (cerrada, migraciones pendientes de confirmación) — ofertas FAA con
+aeronaves como experiencia; licencia opcional en ofertas de motor (FAA P o A&P,
+Part-66 B1.x); equivalencias por autoridad elegidas por la empresa.
+
+Cierre de la sesión 2 (18 septiembre 2026), un commit por punto:
+
+- **Punto 1, FAA con aeronaves** (`25b7ff2`, migración 086). Bajo la FAA la
+  aeronave se compara sólo con la experiencia declarada, nunca con
+  habilitaciones (mismo evaluador que las ofertas sin certificar, con una
+  fuente menos). Puntúa y no excluye. Pesos nuevos
+  `LICENSE_WITH_EXPERIENCE_WEIGHTS`: licencia 40 + experiencia 25; con la
+  licencia y sin la aeronave, 75. El eje que topa a 39 es la licencia. Aviónica
+  puede pedir FAA A o A&P. Las ofertas Part-66 no cambian. La 086 quita de
+  `update_offer_with_habilitations` la cláusula que vaciaba las aeronaves FAA.
+- **Punto 2, licencia opcional en motor** (`dd88b21`, migración 087). Sólo
+  Part-66 B1.1–B1.4 o FAA P / A&P; B2, C y FAA A se rechazan en UI,
+  repositorio, espejo y base. Pesos nuevos `ENGINE_WITH_LICENSE_WEIGHTS`: motor
+  45 + licencia 20. La licencia puntúa y no topa: motor exacto sin licencia 80,
+  licencia con motor sin relación 69 como mucho. La elegibilidad no cambia, así
+  que el núcleo SQL de la 080 y su validador siguen igual.
+- **Punto 3, equivalencias en lista** (`274b3f5`, migración 088).
+  `offers.accepted_authorities` sustituye a `accepts_equivalent`. "Also accept
+  licences from:" con las otras Part-66 que emiten la categoría; la FAA nunca
+  aparece. Exacta 100, equivalente aceptada 87, no aceptada 35. Al cambiar la
+  autoridad o el código se limpian las que ya no aplican. Sustituye también al
+  último literal de UI en castellano («Considerar otras autoridades»).
+- **086, 087 y 088 escritas y ensayadas con rollback**, en orden, sin aplicar:
+  sus autocomprobaciones pasan, `testTransactionalWrites.sql` da 17/17 (la
+  regresión nueva de la 086 falla sin ella), 13 pruebas extra de RPC y forma
+  pasan, y el backfill de la 088 se probó marcando las 4 ofertas EASA. Después
+  de cada ensayo, producción sin rastro (misma RPC, mismo CHECK de la 076, sin
+  columna nueva, última migración registrada la 085).
 
 **Sesión 3** — separar CFM56 en variantes y V2500 con fuente oficial; separar
 «genérico» de «inactivo» en el catálogo de motores.
@@ -101,6 +130,11 @@ despliegue.
 - Resto del catálogo de motores.
 - Catálogo de licencias: B1.E, subcategorías L, B2L (H9).
 - IA y Repairman de la FAA.
+- Retirar `offers.accepts_equivalent` y su clave en
+  `update_offer_with_habilitations` cuando el cliente de esta rama esté
+  desplegado (fase contract de la 088; hoy no la lee ni la escribe nadie).
+- El desglose del match rotula "Habilitation" una fila que en ofertas FAA y sin
+  certificar mide experiencia declarada, no type ratings.
 
 ## 4. Avisos
 
@@ -115,8 +149,13 @@ despliegue.
   reejecutarlas. No usar `supabase db push` ni `supabase migration repair` con
   el historial actual: los ficheros llevan prefijo numérico y el historial
   lleva timestamp, así que la CLI no casa ninguno y trataría de aplicarlos
-  todos. Del lado del esquema no queda nada pendiente en esta fase; lo que
-  falta es el despliegue del cliente.
+  todos.
+- **086, 087 y 088 están pendientes de confirmación**, y también son de
+  aplicación única, en ese orden (la 088 reemplaza la RPC sobre el cuerpo de la
+  086). El código de la sesión 2 las necesita: pide `accepted_authorities` en
+  todos los SELECT de ofertas, así que hasta aplicar la 088 esta rama no lee
+  ofertas contra la base. `npm run test:db` espera la regresión nueva de la 086
+  y falla hasta aplicarla.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
@@ -125,6 +164,7 @@ despliegue.
 ## 5. Estado de las sesiones
 
 - Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
-- Sesión 2: pendiente.
+- Sesión 2: **hecha**. 086, 087 y 088 ensayadas, pendientes de confirmación
+  para aplicarlas.
 - Sesión 3: pendiente.
 - Final: pendiente.
