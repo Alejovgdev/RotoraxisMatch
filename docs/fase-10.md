@@ -125,7 +125,7 @@ Cierre de la sesión 2 (18 septiembre 2026), un commit por punto:
   transaccionales; se corrigió a 17 (la de la 086). Backfill de la 088: las 8
   ofertas quedan con `accepted_authorities` vacía; ninguna tenía la casilla.
 
-**Sesión 3** (cerrada; migraciones pendientes de confirmación) — separar
+**Sesión 3** (cerrada, migraciones aplicadas el 21 septiembre 2026) — separar
 «genérico» de «inactivo» en el catálogo de motores; CFM56 y V2500 en variantes
 con fuente oficial.
 
@@ -152,9 +152,13 @@ Cierre de la sesión 3 (21 septiembre 2026), un commit por punto:
   `testApplicationSecurity` 13/13, `testTransactionalWrites` 17/17 y H3
   412/412. Después, producción sin rastro (164 motores, sin columna nueva,
   737NG en CFM56, última migración la 088).
-- El código de la rama ya pide `engines.is_generic`:
-  `validate:application-eligibility`, último paso de `npm test`, falla hasta
-  aplicar la 089. Todo lo anterior de `npm test` y `npm run ts` en verde.
+- **089 y 090 aplicadas el 21 septiembre 2026**, en orden, tras confirmación
+  explícita, con `apply_migration`. Registradas como `20260921103422` y
+  `20260921103512`; el md5 de `statements` coincide byte a byte con cada
+  fichero. Sus autocomprobaciones pasaron al aplicarse. Después: 174 motores,
+  19 genéricos, 17 inactivos, el 737NG en CFM56-7B; `npm test` en verde (el
+  validador de elegibilidad elige ya una genérica activa, V2500, como
+  fixture) y los demás validadores en PASS.
 
 **Final** — pruebas manuales, ajustes sólo de los fallos encontrados, merge y
 despliegue.
@@ -197,10 +201,9 @@ despliegue.
   aplicación única: no reejecutarlas. La base ya tiene `accepted_authorities`,
   así que esta rama lee ofertas contra ella. El cliente de `main` no la pide y
   sigue funcionando: la 088 no retira `accepts_equivalent`.
-- **089 y 090 sin aplicar** (21 septiembre 2026): esperan confirmación
-  explícita. Aplicar en orden, con `apply_migration`, y comprobar el md5 de
-  `statements`. Son de aplicación única: sus post-condiciones cuentan el
-  estado actual (17 genéricas, 164 motores, siete ratings en las agregadas).
+- **089 y 090 están aplicadas** (21 septiembre 2026) y también son de
+  aplicación única: sus post-condiciones cuentan el estado previo (17
+  genéricas, 164 motores, siete ratings en las agregadas). No reejecutarlas.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
@@ -210,5 +213,5 @@ despliegue.
 
 - Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
 - Sesión 2: **cerrada**. 086, 087 y 088 aplicadas y registradas.
-- Sesión 3: **cerrada**. 089 y 090 escritas y ensayadas; pendientes de aplicar.
+- Sesión 3: **cerrada**. 089 y 090 aplicadas y registradas.
 - Final: pendiente.
