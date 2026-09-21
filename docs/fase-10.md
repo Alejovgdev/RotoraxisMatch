@@ -125,8 +125,36 @@ Cierre de la sesión 2 (18 septiembre 2026), un commit por punto:
   transaccionales; se corrigió a 17 (la de la 086). Backfill de la 088: las 8
   ofertas quedan con `accepted_authorities` vacía; ninguna tenía la casilla.
 
-**Sesión 3** — separar CFM56 en variantes y V2500 con fuente oficial; separar
-«genérico» de «inactivo» en el catálogo de motores.
+**Sesión 3** (cerrada; migraciones pendientes de confirmación) — separar
+«genérico» de «inactivo» en el catálogo de motores; CFM56 y V2500 en variantes
+con fuente oficial.
+
+Cierre de la sesión 3 (21 septiembre 2026), un commit por punto:
+
+- **Punto 1, genérico ≠ inactivo** (`5a3d698`, migración 089).
+  `engines.is_generic`; las 17 «(model not specified)» pasan a genéricas y
+  siguen inactivas. El scorer niega el motor exacto por `isGeneric`, nunca por
+  `isActive`: desactivar un modelo concreto ya no rebaja a familia a quien lo
+  tiene. `searchEngines` filtra las dos banderas. La elegibilidad no cambia
+  (exacto y familia admiten los dos), así que el núcleo SQL de la 080 sigue
+  igual. Mutar el scorer de vuelta a `isActive` rompe el test nuevo.
+- **Punto 2, CFM56 y V2500 en variantes** (`1b3f4c3`, migración 090).
+  CFM56-2/-3/-5A/-5B/-5C/-7B y V2500-A1/-A5/-D5/-E5, una fila por serie de
+  TCDS de EASA (E.066, E.067, E.003, E.004, IM.E.069; el V2500-A1 por A.064).
+  `CFM56` y `V2500` pasan a genéricas activas. Ratings de una sola variante
+  enlazados a ella: 737NG → -7B, 737 Classic → -3, A340 → -5C, DC-8 → -2,
+  MD-90 → -D5. A320 CFM y A320 IAE se quedan en la genérica (familia).
+  Motores declarados y ofertas en CFM56/V2500: 0 y 0 (tampoco hay motores
+  declarados ni ofertas de motor en toda la base); no se reasignan.
+- **089 y 090 escritas y ensayadas con rollback**, en orden, sin aplicar:
+  autocomprobaciones en verde; dos controles negativos (un rating sin mover,
+  una genérica de más) fallan como deben; sobre ellas pasan
+  `testApplicationSecurity` 13/13, `testTransactionalWrites` 17/17 y H3
+  412/412. Después, producción sin rastro (164 motores, sin columna nueva,
+  737NG en CFM56, última migración la 088).
+- El código de la rama ya pide `engines.is_generic`:
+  `validate:application-eligibility`, último paso de `npm test`, falla hasta
+  aplicar la 089. Todo lo anterior de `npm test` y `npm run ts` en verde.
 
 **Final** — pruebas manuales, ajustes sólo de los fallos encontrados, merge y
 despliegue.
@@ -137,7 +165,12 @@ despliegue.
 - Rendimiento de la búsqueda.
 - Paginación de relaciones (H12).
 - Guardado del perfil completo en una sola transacción.
-- Resto del catálogo de motores.
+- Resto del catálogo de motores en variantes (sólo CFM56 y V2500 lo están).
+- Relación rating ↔ varios motores: el A320 CFM (-5A/-5B) y el A320 IAE
+  (-A1/-A5) sólo dan familia porque un rating tiene un único `engine_id`.
+- La base no impide declarar ni pedir un motor genérico; sólo lo filtra el
+  selector (`searchEngines`). Una oferta sobre una genérica no da exacto a
+  nadie.
 - Catálogo de licencias: B1.E, subcategorías L, B2L (H9).
 - IA y Repairman de la FAA.
 - Retirar `offers.accepts_equivalent` y su clave en
@@ -164,6 +197,10 @@ despliegue.
   aplicación única: no reejecutarlas. La base ya tiene `accepted_authorities`,
   así que esta rama lee ofertas contra ella. El cliente de `main` no la pide y
   sigue funcionando: la 088 no retira `accepts_equivalent`.
+- **089 y 090 sin aplicar** (21 septiembre 2026): esperan confirmación
+  explícita. Aplicar en orden, con `apply_migration`, y comprobar el md5 de
+  `statements`. Son de aplicación única: sus post-condiciones cuentan el
+  estado actual (17 genéricas, 164 motores, siete ratings en las agregadas).
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
@@ -173,5 +210,5 @@ despliegue.
 
 - Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
 - Sesión 2: **cerrada**. 086, 087 y 088 aplicadas y registradas.
-- Sesión 3: pendiente.
+- Sesión 3: **cerrada**. 089 y 090 escritas y ensayadas; pendientes de aplicar.
 - Final: pendiente.
