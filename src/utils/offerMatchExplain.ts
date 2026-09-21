@@ -1416,10 +1416,12 @@ export function ineligibilityReasonText(reason: IneligibilityReason): string {
 //     (technician_license_id, license_code) de la 074 no deja que difieran.
 //     No es cruzar por código, es leer el de la fila a la que ya apunta.
 //
-//  2. Un rating enlazado a un motor GENÉRICO (`isActive: false`, las 17 filas
-//     "<fabricante> (model not specified)" del seed de la 071) da crédito de
-//     FAMILIA y nunca de motor exacto: una genérica no dice qué motor es, sólo
-//     de quién.
+//  2. Un rating enlazado a un motor GENÉRICO (`isGeneric`, migración 089: las
+//     17 filas "<fabricante> (model not specified)" del seed de la 071) da
+//     crédito de FAMILIA y nunca de motor exacto: una genérica no dice qué
+//     motor es, sólo de quién. Se mira `isGeneric` y NUNCA `isActive`:
+//     desactivar un modelo concreto lo quita de los selectores, no convierte
+//     en familia el exacto de quien ya lo tiene.
 //
 //  3. `none` PUNTÚA, poco pero no cero. El eje arranca vacío para todos los
 //     perfiles, así que un cero aquí sería castigar por un campo que nadie ha
@@ -1508,12 +1510,13 @@ function matchEngineEvidence(
 ): { tier: EngineTier; exact?: EngineEvidence; held?: EngineCatalog } {
   if (evidence.length === 0) return { tier: 'none' };
 
-  // Exacto: por id, y sólo si la fila del motor está ACTIVA. Una genérica
-  // nunca puede ser el motor exacto de nadie (regla 2 de la cabecera). Un id
-  // que no esté en el índice —catálogo a medio cargar— sí cuenta: la igualdad
-  // de id es evidencia por sí sola, y desconocer la fila no la desmiente.
+  // Exacto: por id, y sólo si la fila del motor NO es genérica. Una genérica
+  // nunca puede ser el motor exacto de nadie (regla 2 de la cabecera); un
+  // modelo concreto desactivado sí. Un id que no esté en el índice —catálogo a
+  // medio cargar— cuenta: la igualdad de id es evidencia por sí sola, y
+  // desconocer la fila no la desmiente.
   const exact = evidence.find(
-    (ev) => ev.engineId === requiredEngineId && engineIndex.get(ev.engineId)?.isActive !== false,
+    (ev) => ev.engineId === requiredEngineId && engineIndex.get(ev.engineId)?.isGeneric !== true,
   );
   if (exact) return { tier: exact.source === 'declared' ? 'declared_exact' : 'implicit_exact', exact };
 

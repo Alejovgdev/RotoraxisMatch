@@ -6,7 +6,7 @@ import { EngineIndex, buildEngineIndex } from '../constants/engines';
 export type EnginesLoadState = 'loading' | 'success' | 'empty' | 'error';
 
 interface UseEnginesCatalogReturn {
-  /** El catálogo ENTERO, inactivos incluidos. Un selector filtra `isActive`. */
+  /** El catálogo ENTERO, inactivos y genéricos incluidos. Un selector filtra con `searchEngines`. */
   engines: EngineCatalog[];
   engineIndex: EngineIndex;
   state: EnginesLoadState;

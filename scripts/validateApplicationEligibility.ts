@@ -60,7 +60,7 @@ async function loadActiveRatings(): Promise<AircraftTypeRatingCatalog[]> {
 }
 
 async function loadEngines(): Promise<EngineCatalog[]> {
-  const { data, error } = await supabase.from('engines').select('id, manufacturer, family, engine_type, display_name, is_active').order('id');
+  const { data, error } = await supabase.from('engines').select('id, manufacturer, family, engine_type, display_name, is_active, is_generic').order('id');
   if (error) throw new Error(`engines: ${error.message}`);
   return ((data ?? []) as unknown as EngineRow[]).map(mapEngineRow);
 }
@@ -88,13 +88,16 @@ async function main() {
     if (!r.engineId) continue;
     ratingsByEngine.set(r.engineId, [...(ratingsByEngine.get(r.engineId) ?? []), r]);
   }
-  const activeWithRatings = engines.filter((e) => e.isActive && ratingsByEngine.has(e.id));
-  // E: motor activo con ratings y con un HERMANO de familia activo que también tenga ratings.
+  // Lo que una oferta puede pedir: activo y no genérico (lo que ofrece el selector).
+  const requestable = (e: EngineCatalog) => e.isActive && !e.isGeneric;
+  const activeWithRatings = engines.filter((e) => requestable(e) && ratingsByEngine.has(e.id));
+  // E: motor pedible con ratings y con un HERMANO de familia pedible que también tenga ratings.
   const required = activeWithRatings.find((e) => activeWithRatings.some((f) => f.id !== e.id && f.family === e.family));
   const sibling = required && activeWithRatings.find((f) => f.id !== required.id && f.family === required.family);
   const unrelated = required && activeWithRatings.find((u) => u.family !== required.family);
-  const generic = engines.find((e) => !e.isActive && ratingsByEngine.has(e.id) && engines.some((a) => a.isActive && a.family === e.family));
-  const genericFamilyEngine = generic && engines.find((a) => a.isActive && a.family === generic.family);
+  // Genérico por `isGeneric` (089), no por `isActive`: son banderas distintas.
+  const generic = engines.find((e) => e.isGeneric && ratingsByEngine.has(e.id) && engines.some((a) => requestable(a) && a.family === e.family));
+  const genericFamilyEngine = generic && engines.find((a) => requestable(a) && a.family === generic.family);
   const noEngineRating = ratings.find((r) => !r.engineId);
 
   if (!required || !sibling || !unrelated || !generic || !genericFamilyEngine) {
@@ -152,7 +155,7 @@ async function main() {
       }
     }
   }
-  // Genérico inactivo: B1.2 sobre un rating colgado de "<fabricante> (model not specified)".
+  // Genérico (isGeneric): B1.2 sobre un rating colgado de una fila sin modelo.
   for (const typeCodes of [['mechanic'], ['avionic']]) {
     cases.push({
       name: `motor de la familia del genérico | ${typeCodes.join('+')} | B1.2 + rating genérico`,

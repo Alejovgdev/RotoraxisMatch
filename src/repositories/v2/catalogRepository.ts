@@ -197,7 +197,7 @@ const locationCountriesCache = createLocationCountriesCache({ fetchActive: fetch
 // sólo crece por migración. Aun así `count: 'exact'` y aserción dura, por el
 // mismo motivo que en ratings: un catálogo truncado degrada escalones del
 // matching sin ningún error visible.
-const ENGINES_SELECT = 'id, manufacturer, family, engine_type, display_name, is_active';
+const ENGINES_SELECT = 'id, manufacturer, family, engine_type, display_name, is_active, is_generic';
 
 async function fetchAllEngines(): Promise<EngineCatalog[]> {
   const { data, error, count } = await supabase
@@ -321,7 +321,8 @@ export const catalogRepository = {
 
   /**
    * El catálogo de motores ENTERO, inactivos incluidos: es lo que necesita
-   * `buildEngineIndex` para el matching. Un selector filtra `isActive`.
+   * `buildEngineIndex` para el matching. Un selector filtra con
+   * `searchEngines` (activos y no genéricos).
    */
   async getEngines(options: { forceRefresh?: boolean } = {}): Promise<EngineCatalog[]> {
     return enginesCache.getEngines(options);

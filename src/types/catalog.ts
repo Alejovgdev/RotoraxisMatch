@@ -61,10 +61,13 @@ export type EngineType = 'turbofan' | 'turbojet' | 'turboprop' | 'turboshaft' | 
  * = mismo tipo. Por eso `family` se repite entre filas y la clave natural es
  * (manufacturer, displayName), no (manufacturer, family).
  *
- * `isActive = false` marca las genéricas ("<fabricante> (model not
- * specified)", 17 filas del seed de la 071): nadie puede declararlas ni
- * pedirlas, y el matching NUNCA les da crédito de motor exacto — sólo de
- * familia, que es lo único que una genérica sabe decir.
+ * Dos banderas distintas desde la migración 089:
+ *   - `isGeneric`: la fila no nombra un modelo ("<fabricante> (model not
+ *     specified)"). El matching NUNCA le da crédito de motor exacto — sólo de
+ *     familia, que es lo único que una genérica sabe decir — y ningún selector
+ *     la ofrece.
+ *   - `isActive`: la fila se ofrece en los selectores. Desactivar un modelo
+ *     concreto no cambia la puntuación de quien ya lo tiene.
  */
 export interface EngineCatalog {
   id: string;
@@ -73,6 +76,7 @@ export interface EngineCatalog {
   engineType: EngineType;
   displayName: string;
   isActive: boolean;
+  isGeneric: boolean;
 }
 
 export type ContractTypeCode = 'permanent' | 'long_term' | 'short_term';

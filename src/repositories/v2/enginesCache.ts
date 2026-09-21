@@ -13,7 +13,10 @@ import { EngineCatalog } from '../../types/catalog';
 // cuelgan 268 type ratings (medido el 2026-09-16). El matching les da crédito
 // de FAMILIA, y para eso necesita leer su `family` en el índice: una caché de
 // sólo activas haría que esos 268 ratings puntuaran como "tipo distinto" sin
-// ningún error visible. Quien pinte un selector filtra `isActive` al pintar.
+// ningún error visible. Desde la 089 hay otra razón: un modelo concreto
+// desactivado sigue dando motor exacto a quien ya lo tiene, y sólo lo puede
+// hacer si está en el índice. Quien pinte un selector filtra al pintar, con
+// `searchEngines` (activos y no genéricos).
 //
 // Sin mapa por id: con el catálogo entero en memoria no hay nada que resolver
 // aparte.

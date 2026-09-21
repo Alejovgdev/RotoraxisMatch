@@ -6,7 +6,11 @@ import { engineTypeLabel, searchEngines } from '../constants/engines';
 import { useEnginesCatalog } from '../state/useEnginesCatalog';
 
 interface Props {
-  /** Motor elegido. Puede ser una fila inactiva (un motor desactivado después de elegirlo): se pinta, no se vuelve a ofrecer. */
+  /**
+   * Motor elegido. Puede ser una fila inactiva (un motor desactivado después
+   * de elegirlo) o genérica (una familia sin modelo, guardada antes de que su
+   * fila pasara a genérica): se pinta, no se vuelve a ofrecer.
+   */
   value?: string | null;
   onSelect: (engine: EngineCatalog) => void;
   /** Ids que no se ofrecen (los que el técnico ya ha declarado). */
@@ -20,7 +24,7 @@ interface Props {
 // patrón que AircraftTypeRatingPicker: catálogo de Supabase por la caché
 // compartida (useEnginesCatalog), estados explícitos de carga y error con
 // reintento, búsqueda en memoria sobre 164 filas. Sólo ofrece motores activos
-// (searchEngines): las genéricas "model not specified" no se eligen.
+// y no genéricos (searchEngines): una genérica no dice qué modelo es.
 export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, maxResults = 20 }: Props) {
   const { engines, engineIndex, state, error, retry } = useEnginesCatalog();
   const [query, setQuery] = useState('');
@@ -41,7 +45,11 @@ export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, ma
               {selected.manufacturer} · {selected.family} family · {engineTypeLabel(selected.engineType)}
             </Text>
           </View>
-          {!selected.isActive ? (
+          {selected.isGeneric ? (
+            <View style={styles.inactiveBadge}>
+              <Text style={styles.inactiveBadgeText}>Model not specified</Text>
+            </View>
+          ) : !selected.isActive ? (
             <View style={styles.inactiveBadge}>
               <Text style={styles.inactiveBadgeText}>Inactive catalog entry</Text>
             </View>

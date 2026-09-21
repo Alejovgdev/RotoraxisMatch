@@ -106,7 +106,7 @@ import {
   validateProfileYearsExperience,
 } from '../src/utils/yearsExperienceValidation';
 import { AircraftRatingIndex } from '../src/constants/aircraftTypeRatings';
-import { EngineIndex, buildEngineIndex } from '../src/constants/engines';
+import { EngineIndex, buildEngineIndex, searchEngines } from '../src/constants/engines';
 import { MatchScore } from '../src/types/matching';
 
 let passed = 0;
@@ -517,8 +517,8 @@ const NOT_A_REAL_RATING = 'fx-pending-catalog-request'; // never in FIXTURES —
 
 // ── Fase 10: motores ──────────────────────────────────────────────────────
 
-function makeEngine(overrides: Omit<EngineCatalog, 'displayName' | 'isActive'> & Partial<EngineCatalog>): EngineCatalog {
-  return { displayName: `${overrides.manufacturer} ${overrides.id}`, isActive: true, ...overrides };
+function makeEngine(overrides: Omit<EngineCatalog, 'displayName' | 'isActive' | 'isGeneric'> & Partial<EngineCatalog>): EngineCatalog {
+  return { displayName: `${overrides.manufacturer} ${overrides.id}`, isActive: true, isGeneric: false, ...overrides };
 }
 
 // Motor declarado en el perfil. Años display-only: existen para poder ASEVERAR
@@ -558,9 +558,9 @@ const ENGINE_FIXTURES: EngineCatalog[] = [
   makeEngine({ id: 'eng-rr-m250', manufacturer: 'Rolls-Royce', family: 'M250', engineType: 'turboshaft', displayName: 'Rolls-Royce M250' }),
   makeEngine({ id: 'eng-pw307', manufacturer: 'Pratt & Whitney Canada', family: 'PW300', engineType: 'turbofan', displayName: 'PW307' }),
   // Pistones con la forma del seed (migración 071): la familia es la línea del
-  // fabricante, y la genérica "model not specified" va INACTIVA. Existe para
-  // que los 140 ratings Lycoming sin modelo den crédito de familia sin que
-  // nadie pueda declararla ni pedirla.
+  // fabricante, y la genérica "model not specified" va GENÉRICA e INACTIVA
+  // (089). Existe para que los 140 ratings Lycoming sin modelo den crédito de
+  // familia sin que nadie pueda declararla ni pedirla.
   makeEngine({ id: 'eng-lycoming-o360', manufacturer: 'Lycoming', family: 'Lycoming', engineType: 'piston', displayName: 'O-360 series' }),
   makeEngine({ id: 'eng-lycoming-o320', manufacturer: 'Lycoming', family: 'Lycoming', engineType: 'piston', displayName: 'O-320 series' }),
   makeEngine({
@@ -570,6 +570,7 @@ const ENGINE_FIXTURES: EngineCatalog[] = [
     engineType: 'piston',
     displayName: 'Lycoming (model not specified)',
     isActive: false,
+    isGeneric: true,
   }),
   makeEngine({ id: 'eng-continental-io550', manufacturer: 'Continental', family: 'Continental', engineType: 'piston', displayName: 'IO-550 series' }),
 ];
@@ -4029,13 +4030,13 @@ async function main() {
     assert.equal(pw307Sucia.total, nadaPw.total, 'la fila con el modelo en el fabricante puntúa como no tener motores');
   });
 
-  await test('Fase 10 · Catálogo — un rating enlazado a un motor genérico INACTIVO da crédito de familia, nunca de motor exacto', () => {
+  await test('Fase 10 · Catálogo — un rating enlazado a un motor GENÉRICO da crédito de familia, nunca de motor exacto', () => {
     // Decisión del 2026-09-15 (opción B del seed): los ratings de pistón cuyo
     // texto sólo nombra el fabricante se enlazan a "Lycoming (model not
-    // specified)", inactiva. El escalón "motor implícito" mira is_active: una
+    // specified)". El escalón "motor implícito" mira is_generic (089): una
     // genérica no dice QUÉ motor es, así que sólo puede decir de qué familia.
     const generica = ENGINE_INDEX.get('eng-lycoming-generica');
-    assert.equal(generica?.isActive, false, 'guarda del fixture: la genérica llega inactiva');
+    assert.equal(generica?.isGeneric, true, 'guarda del fixture: la genérica llega marcada como genérica');
 
     const oferta = makeEngineOffer('eng-lycoming-o360');
     // Los cinco con la MISMA licencia y los mismos tipos; sólo cambia de dónde
@@ -4073,6 +4074,50 @@ async function main() {
     assert.deepEqual(implicitoGenerico.breakdown, familiaDeclarada.breakdown);
     assert.ok(implicitoGenerico.total < declarado.total, 'nunca llega al motor exacto');
     assert.ok(implicitoGenerico.total > mismoTipo.total, 'pero sí por encima de otro fabricante del mismo tipo');
+  });
+
+  await test('Fase 10 · Catálogo (089) — desactivar un modelo concreto no convierte un exacto en familia; lo que niega el exacto es is_generic', () => {
+    // Hasta la 089 "inactivo" y "genérico" eran la misma bandera, y retirar un
+    // modelo de los selectores rebajaba a familia a quien ya lo tenía. Se
+    // prueban las dos direcciones sobre la MISMA fila (CFM56-7B), para que
+    // sólo la bandera pueda explicar el cambio.
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    const b11 = makeLicense('B1.1');
+    const tipos: TechnicianOverrides = { ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'] };
+    const declarado = makeTechnician({ ...tipos, engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    // Sin motores declarados ni oficio de motor: entra sólo por la vía (b).
+    const implicito = makeTechnician({ ...tipos, licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })] });
+
+    const indiceCon = (cambios: Partial<EngineCatalog>) =>
+      buildEngineIndex(ENGINE_FIXTURES.map((e) => (e.id === 'eng-cfm56-7b' ? { ...e, ...cambios } : e)));
+    const desactivado = indiceCon({ isActive: false });
+    const genericoActivo = indiceCon({ isGeneric: true });
+
+    // Control: activo y concreto. ENGINE_WEIGHTS da 65 al motor.
+    assert.equal(puntuar(oferta, declarado).breakdown.engine, 65, 'declarado exacto: el peso de motor entero');
+    assert.equal(puntuar(oferta, implicito).breakdown.engine, 52, 'implícito exacto: 0,8 del peso');
+
+    // Desactivado: exactamente el mismo resultado, y sigue elegible.
+    assert.deepEqual(puntuar(oferta, declarado, { engineIndex: desactivado }), puntuar(oferta, declarado), 'declarado: nada cambia al desactivar el modelo');
+    assert.deepEqual(puntuar(oferta, implicito, { engineIndex: desactivado }), puntuar(oferta, implicito), 'implícito: nada cambia al desactivar el modelo');
+    assert.equal(elegible(oferta, implicito, { engineIndex: desactivado }), true);
+
+    // Genérico aunque siga activo: los dos bajan a familia (0,55 de 65 = 36),
+    // y la vía (b) sigue admitiendo porque la familia también entra.
+    assert.equal(puntuar(oferta, declarado, { engineIndex: genericoActivo }).breakdown.engine, 36, 'declarado sobre una genérica: familia');
+    assert.equal(puntuar(oferta, implicito, { engineIndex: genericoActivo }).breakdown.engine, 36, 'implícito sobre una genérica: familia');
+    assert.equal(elegible(oferta, implicito, { engineIndex: genericoActivo }), true);
+  });
+
+  await test('Fase 10 · Catálogo (089) — el selector no ofrece genéricas aunque estén activas, ni modelos desactivados', () => {
+    const catalogo = [
+      ...ENGINE_FIXTURES,
+      makeEngine({ id: 'eng-cfm56-generica', manufacturer: 'CFM International', family: 'CFM56', engineType: 'turbofan', displayName: 'CFM56', isGeneric: true }),
+      makeEngine({ id: 'eng-cfm56-retirado', manufacturer: 'CFM International', family: 'CFM56', engineType: 'turbofan', displayName: 'CFM56-9Z', isActive: false }),
+    ];
+    const ids = searchEngines(catalogo, 'cfm56').map((e) => e.id);
+    assert.deepEqual(ids, ['eng-cfm56-5b', 'eng-cfm56-7b'], `sólo las variantes activas: ${ids.join(', ')}`);
+    assert.ok(!searchEngines(catalogo, 'lycoming').some((e) => e.isGeneric), 'la genérica inactiva tampoco');
   });
 
   // ── Hueco preexistente: caducidad en la rama de sólo licencia ─────────
