@@ -4120,6 +4120,60 @@ async function main() {
     assert.ok(!searchEngines(catalogo, 'lycoming').some((e) => e.isGeneric), 'la genérica inactiva tampoco');
   });
 
+  await test('Fase 10 · Catálogo (090) — CFM56 y V2500 en variantes: rating de una variante = exacto implícito; de varias = familia', () => {
+    // La forma del catálogo tras la 090. "CFM56" y "V2500" son las genéricas
+    // de su familia (activas). El 737NG cuelga del CFM56-7B (su única serie,
+    // TCDS IM.A.120) y el MD-90 del V2500-D5 (IM.A.211); el A320 CFM (-5A o
+    // -5B) y el A320 IAE (-A1 o -A5) se quedan en la genérica.
+    const cfm56 = makeEngine({ id: 'eng-cfm56-agregada', manufacturer: 'CFM International', family: 'CFM56', engineType: 'turbofan', displayName: 'CFM56', isGeneric: true });
+    const v2500 = makeEngine({ id: 'eng-v2500-agregada', manufacturer: 'International Aero Engines', family: 'V2500', engineType: 'turbofan', displayName: 'V2500', isGeneric: true });
+    const v2500d5 = makeEngine({ id: 'eng-v2500-d5', manufacturer: 'International Aero Engines', family: 'V2500', engineType: 'turbofan', displayName: 'V2500-D5' });
+    const avion = { aircraftCategory: 'commercial_airplane' as const, productType: 'Aeroplane' as const };
+    const ratings = [
+      makeEngineRating({ id: 'fx-090-a320-cfm', manufacturer: 'Airbus', aircraftFamily: 'Airbus A318/A319/A320/A321', easaEndorsement: 'Airbus A318/A319/A320/A321 (CFM56)', displayName: 'Airbus A320 family — CFM56', engineId: cfm56.id, ...avion }),
+      makeEngineRating({ id: 'fx-090-a320-iae', manufacturer: 'Airbus', aircraftFamily: 'Airbus A319/A320/A321', easaEndorsement: 'Airbus A319/A320/A321 (IAE V2500)', displayName: 'Airbus A320 family — V2500', engineId: v2500.id, ...avion }),
+      makeEngineRating({ id: 'fx-090-md90', manufacturer: 'McDonnell Douglas', aircraftFamily: 'MD-90', easaEndorsement: 'MD-90 (IAE V2500)', displayName: 'MD-90 — V2500', engineId: v2500d5.id, ...avion }),
+    ];
+    const opts = {
+      engineIndex: buildEngineIndex([...ENGINE_FIXTURES, cfm56, v2500, v2500d5]),
+      ratingIndex: buildAircraftRatingIndex([...FIXTURES, ...ENGINE_RATING_FIXTURES, ...ratings]),
+    };
+    const b11 = makeLicense('B1.1');
+    // Mecánico sin oficio de motor ni motores declarados: la B1 es su única vía.
+    const b1Con = (ratingId: string) =>
+      makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: ratingId })] });
+    const declara = (engineId: string) => makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], engines: [makeEngineDeclaration(engineId)] });
+
+    // Oferta de CFM56-7B, los tres casos pedidos. ENGINE_WEIGHTS: motor 65.
+    const oferta7b = makeEngineOffer('eng-cfm56-7b');
+    const ng = puntuar(oferta7b, b1Con('fx-b737ng-cfm56-7b'), opts);
+    const a320 = puntuar(oferta7b, b1Con('fx-090-a320-cfm'), opts);
+    const declarado = puntuar(oferta7b, declara('eng-cfm56-7b'), opts);
+
+    assert.equal(declarado.breakdown.engine, 65, 'declara CFM56-7B: exacto declarado');
+    assert.ok(declarado.matches.includes('Engine: CFM56-7B'), declarado.matches.join(' | '));
+    assert.equal(ng.breakdown.engine, 52, 'B1 con 737NG: exacto implícito (0,8)');
+    assert.ok(ng.matches.some((m) => m.startsWith('Engine: CFM56-7B — from the B1.1')), ng.matches.join(' | '));
+    assert.equal(a320.breakdown.engine, 36, 'B1 con A320 CFM: familia (0,55)');
+    assert.ok(a320.clarifications.includes('Same engine family, different model: CFM56-7B vs CFM56.'), a320.clarifications.join(' | '));
+    assert.ok(declarado.total > ng.total && ng.total > a320.total, `declarado ${declarado.total} > implícito ${ng.total} > familia ${a320.total}`);
+    for (const [nombre, t] of [['737NG', b1Con('fx-b737ng-cfm56-7b')], ['A320 CFM', b1Con('fx-090-a320-cfm')]] as const) {
+      assert.equal(elegible(oferta7b, t, opts), true, `${nombre}: entra por la vía (b), exacto o familia`);
+    }
+
+    // V2500, lo mismo: MD-90 = exacto implícito del -D5, A320 IAE = familia.
+    const ofertaD5 = makeEngineOffer(v2500d5.id);
+    assert.equal(puntuar(ofertaD5, b1Con('fx-090-md90'), opts).breakdown.engine, 52, 'B1 con MD-90: exacto implícito');
+    assert.equal(puntuar(ofertaD5, b1Con('fx-090-a320-iae'), opts).breakdown.engine, 36, 'B1 con A320 IAE: familia');
+
+    // Datos existentes (0 el 2026-09-21): lo que ya apuntaba a la fila
+    // agregada no se reasigna y ahora da familia, también contra sí misma.
+    const ofertaAgregada = makeEngineOffer(cfm56.id);
+    assert.equal(puntuar(ofertaAgregada, declara(cfm56.id), opts).breakdown.engine, 36, 'declaró "CFM56" ante oferta "CFM56": familia');
+    assert.equal(puntuar(ofertaAgregada, declara('eng-cfm56-7b'), opts).breakdown.engine, 36, 'declaró CFM56-7B ante oferta "CFM56": familia');
+    assert.equal(puntuar(oferta7b, declara(cfm56.id), opts).breakdown.engine, 36, 'declaró "CFM56" ante oferta CFM56-7B: familia');
+  });
+
   // ── Hueco preexistente: caducidad en la rama de sólo licencia ─────────
   //
   // `evaluateLicenseCategoryMatch` no mira expiresAt: una B1.1 caducada saca

@@ -1,7 +1,7 @@
 import { EngineCatalog, EngineType } from '../types/catalog';
 
 // Catálogo de motores (`engines`, migración 067) — TIPOS Y FUNCIONES PURAS,
-// NADA MÁS. Las 164 filas viven exclusivamente en Supabase, igual que las de
+// NADA MÁS. Las 174 filas viven exclusivamente en Supabase, igual que las de
 // `aircraft_type_ratings`: aquí no hay copia ni respaldo horneado, y una carga
 // vacía o fallida se cuenta como tal en vez de taparse con datos rancios.
 //

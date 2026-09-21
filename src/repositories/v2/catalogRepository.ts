@@ -193,7 +193,7 @@ const locationCountriesCache = createLocationCountriesCache({ fetchActive: fetch
 // de las 17 genéricas inactivas cuelgan 268 type ratings, y el matching
 // necesita su `family` para darles crédito de familia.
 //
-// Sin paginar: 164 filas contra el tope de 1000 de PostgREST, y el catálogo
+// Sin paginar: 174 filas contra el tope de 1000 de PostgREST, y el catálogo
 // sólo crece por migración. Aun así `count: 'exact'` y aserción dura, por el
 // mismo motivo que en ratings: un catálogo truncado degrada escalones del
 // matching sin ningún error visible.

@@ -23,7 +23,7 @@ interface Props {
 // formulario de oferta de motor y el editor de motores del perfil. Mismo
 // patrón que AircraftTypeRatingPicker: catálogo de Supabase por la caché
 // compartida (useEnginesCatalog), estados explícitos de carga y error con
-// reintento, búsqueda en memoria sobre 164 filas. Sólo ofrece motores activos
+// reintento, búsqueda en memoria sobre 174 filas. Sólo ofrece motores activos
 // y no genéricos (searchEngines): una genérica no dice qué modelo es.
 export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, maxResults = 20 }: Props) {
   const { engines, engineIndex, state, error, retry } = useEnginesCatalog();

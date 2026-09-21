@@ -1,7 +1,7 @@
 import { EngineCatalog } from '../../types/catalog';
 
-// Caché TTL del catálogo de motores (`public.engines`, migraciones 067/071:
-// 164 filas, 17 inactivas).
+// Caché TTL del catálogo de motores (`public.engines`, migraciones 067/071 y
+// 089/090: 174 filas, 17 inactivas, 19 genéricas).
 //
 // Mismo patrón que aircraftTypeRatingsCache y locationCountriesCache: sin
 // ningún import con efectos, para poder testearla con un fetcher falso (ver
