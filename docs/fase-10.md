@@ -82,7 +82,7 @@ Cierre de la sesión 1:
   para la sesión 2 junto con las equivalencias. Todo lo demás que parecía
   castellano eran comentarios, que van en castellano por convención.
 
-**Sesión 2** (cerrada, migraciones pendientes de confirmación) — ofertas FAA con
+**Sesión 2** (cerrada, migraciones aplicadas el 21 septiembre 2026) — ofertas FAA con
 aeronaves como experiencia; licencia opcional en ofertas de motor (FAA P o A&P,
 Part-66 B1.x); equivalencias por autoridad elegidas por la empresa.
 
@@ -114,6 +114,16 @@ Cierre de la sesión 2 (18 septiembre 2026), un commit por punto:
   pasan, y el backfill de la 088 se probó marcando las 4 ofertas EASA. Después
   de cada ensayo, producción sin rastro (misma RPC, mismo CHECK de la 076, sin
   columna nueva, última migración registrada la 085).
+- **086, 087 y 088 aplicadas el 21 septiembre 2026**, en orden, tras
+  confirmación explícita, con `apply_migration`. Registradas como
+  `20260921063655`, `20260921063718` y `20260921063811`; el md5 de
+  `statements` coincide byte a byte con cada fichero. Sus autocomprobaciones
+  pasaron al aplicarse. Después, `npm run test:db` en verde (412 casos H3, 13
+  de seguridad, 17/17 transaccionales) y sin rastro: 0 ofertas `selftest-*`, 0
+  triggers o funciones de prueba, 0 transacciones colgadas. El runner
+  `testHabilitationScopeDatabase.cjs` seguía esperando 16 regresiones
+  transaccionales; se corrigió a 17 (la de la 086). Backfill de la 088: las 8
+  ofertas quedan con `accepted_authorities` vacía; ninguna tenía la casilla.
 
 **Sesión 3** — separar CFM56 en variantes y V2500 con fuente oficial; separar
 «genérico» de «inactivo» en el catálogo de motores.
@@ -150,12 +160,10 @@ despliegue.
   el historial actual: los ficheros llevan prefijo numérico y el historial
   lleva timestamp, así que la CLI no casa ninguno y trataría de aplicarlos
   todos.
-- **086, 087 y 088 están pendientes de confirmación**, y también son de
-  aplicación única, en ese orden (la 088 reemplaza la RPC sobre el cuerpo de la
-  086). El código de la sesión 2 las necesita: pide `accepted_authorities` en
-  todos los SELECT de ofertas, así que hasta aplicar la 088 esta rama no lee
-  ofertas contra la base. `npm run test:db` espera la regresión nueva de la 086
-  y falla hasta aplicarla.
+- **086, 087 y 088 están aplicadas** (21 septiembre 2026) y también son de
+  aplicación única: no reejecutarlas. La base ya tiene `accepted_authorities`,
+  así que esta rama lee ofertas contra ella. El cliente de `main` no la pide y
+  sigue funcionando: la 088 no retira `accepts_equivalent`.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
@@ -164,7 +172,6 @@ despliegue.
 ## 5. Estado de las sesiones
 
 - Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
-- Sesión 2: **hecha**. 086, 087 y 088 ensayadas, pendientes de confirmación
-  para aplicarlas.
+- Sesión 2: **cerrada**. 086, 087 y 088 aplicadas y registradas.
 - Sesión 3: pendiente.
 - Final: pendiente.
