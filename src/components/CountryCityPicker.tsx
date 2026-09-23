@@ -172,36 +172,41 @@ function CountryField({
         </Text>
       </View>
 
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={value ? `${label}: ${value.name}` : `${label}: ${placeholder}`}
-        style={styles.pickerButton}
-        onPress={() => setOpen(true)}
-        activeOpacity={0.75}
-      >
-        <View style={styles.pickerValueRow}>
-          {value ? <Text style={styles.flag}>{countryFlag(value.code)}</Text> : null}
-          <Text style={value ? styles.pickerValue : styles.pickerPlaceholder} numberOfLines={1}>
-            {value?.name ?? placeholder}
-          </Text>
-        </View>
+      {/* EL BOTON DE BORRAR ES HERMANO, NO HIJO. En web cada TouchableOpacity
+          se pinta como <button>, y un <button> dentro de otro es HTML invalido:
+          React lo avisa y el navegador reestructura el DOM por su cuenta, asi
+          que el clic de la "X" deja de ser fiable. El recuadro pasa a ser una
+          View y dentro van dos hermanos. El chevron SIGUE dentro del touchable
+          -no es un boton, es un indicador-, para que pulsar en el lado derecho
+          siga abriendo el selector como antes. */}
+      <View style={styles.pickerButton}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={value ? `${label}: ${value.name}` : `${label}: ${placeholder}`}
+          style={styles.pickerPressable}
+          onPress={() => setOpen(true)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.pickerValueRow}>
+            {value ? <Text style={styles.flag}>{countryFlag(value.code)}</Text> : null}
+            <Text style={value ? styles.pickerValue : styles.pickerPlaceholder} numberOfLines={1}>
+              {value?.name ?? placeholder}
+            </Text>
+          </View>
+          {!required && value ? null : <ChevronDown color={companyUi.textMuted} size={16} strokeWidth={2} />}
+        </TouchableOpacity>
         {!required && value ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={`Clear ${label.toLowerCase()}`}
-            onPress={(event) => {
-              event.stopPropagation();
-              onChange(null);
-            }}
+            onPress={() => onChange(null)}
             hitSlop={10}
             activeOpacity={0.7}
           >
             <X color={companyUi.textMuted} size={16} strokeWidth={2} />
           </TouchableOpacity>
-        ) : (
-          <ChevronDown color={companyUi.textMuted} size={16} strokeWidth={2} />
-        )}
-      </TouchableOpacity>
+        ) : null}
+      </View>
 
       <PickerSheet visible={open} title="Select country" onClose={close}>
         <SearchField value={query} onChangeText={setQuery} placeholder="Search countries..." />
@@ -359,43 +364,43 @@ function CityField({
         <Text style={styles.optionalMark}>Optional</Text>
       </View>
 
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={value ? `${label}: ${value.name}` : `${label}: ${disabled ? 'select a country first' : placeholder}`}
-        accessibilityState={{ disabled }}
-        style={[styles.pickerButton, disabled && styles.pickerButtonDisabled]}
-        onPress={() => !disabled && setOpen(true)}
-        activeOpacity={disabled ? 1 : 0.75}
-      >
-        <View style={styles.pickerValueRow}>
-          {value ? (
-            value.kind === 'directory' ? (
-              <MapPin color={companyUi.accent} size={15} strokeWidth={2.2} />
-            ) : (
-              <PenLine color={companyUi.textMuted} size={15} strokeWidth={2.2} />
-            )
-          ) : null}
-          <Text style={value && !disabled ? styles.pickerValue : styles.pickerPlaceholder} numberOfLines={1}>
-            {disabled ? 'Select a country first' : (value?.name ?? placeholder)}
-          </Text>
-        </View>
+      {/* Mismo montaje que CountryField: la "X" es hermana del touchable y no
+          hija, porque en web eran dos <button> anidados. */}
+      <View style={[styles.pickerButton, disabled && styles.pickerButtonDisabled]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={value ? `${label}: ${value.name}` : `${label}: ${disabled ? 'select a country first' : placeholder}`}
+          accessibilityState={{ disabled }}
+          style={styles.pickerPressable}
+          onPress={() => !disabled && setOpen(true)}
+          activeOpacity={disabled ? 1 : 0.75}
+        >
+          <View style={styles.pickerValueRow}>
+            {value ? (
+              value.kind === 'directory' ? (
+                <MapPin color={companyUi.accent} size={15} strokeWidth={2.2} />
+              ) : (
+                <PenLine color={companyUi.textMuted} size={15} strokeWidth={2.2} />
+              )
+            ) : null}
+            <Text style={value && !disabled ? styles.pickerValue : styles.pickerPlaceholder} numberOfLines={1}>
+              {disabled ? 'Select a country first' : (value?.name ?? placeholder)}
+            </Text>
+          </View>
+          {value ? null : <ChevronDown color={companyUi.textMuted} size={16} strokeWidth={2} />}
+        </TouchableOpacity>
         {value ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={`Clear ${label.toLowerCase()}`}
-            onPress={(event) => {
-              event.stopPropagation();
-              onChange(null);
-            }}
+            onPress={() => onChange(null)}
             hitSlop={10}
             activeOpacity={0.7}
           >
             <X color={companyUi.textMuted} size={16} strokeWidth={2} />
           </TouchableOpacity>
-        ) : (
-          <ChevronDown color={companyUi.textMuted} size={16} strokeWidth={2} />
-        )}
-      </TouchableOpacity>
+        ) : null}
+      </View>
 
       <PickerSheet visible={open} title={countryName ? `City in ${countryName}` : 'Select city'} onClose={close}>
         <SearchField
@@ -644,6 +649,17 @@ const styles = StyleSheet.create({
   },
   pickerButtonDisabled: {
     opacity: 0.5,
+  },
+  // El touchable dentro del recuadro: ocupa todo menos la "X", que vive fuera
+  // de el. Reparte igual que lo hacia `pickerButton`, asi que el aspecto no
+  // cambia.
+  pickerPressable: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   pickerValueRow: {
     flex: 1,
