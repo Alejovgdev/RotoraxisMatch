@@ -74,7 +74,10 @@ export function RequiredLicensesSection({
           ) : !form.licenseCode ? (
             <Text style={styles.inlineHint}>Pick the licence this role certifies under.</Text>
           ) : null}
-          {authority === 'FAA' ? (
+          {/* Punto 2 de los ajustes: una oferta de motor no lleva aeronaves
+              (dos triggers de la 076 lo impiden), asi que esta nota solo aplica
+              a las ofertas de aeronave con autoridad FAA. */}
+          {authority === 'FAA' && form.offerKind !== 'engine' ? (
             <Text style={styles.note}>
               FAA certificates carry no aircraft type ratings. Any aircraft you add below are matched against the
               technician's declared experience: they raise the score, and nobody is excluded for lacking them.
