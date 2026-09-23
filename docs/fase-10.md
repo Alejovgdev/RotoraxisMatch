@@ -163,6 +163,70 @@ Cierre de la sesión 3 (21 septiembre 2026), un commit por punto:
 **Final** — pruebas manuales, ajustes sólo de los fallos encontrados, merge y
 despliegue.
 
+Ajustes de las pruebas manuales (23 septiembre 2026), **hechos**, un commit
+por punto. Ninguno necesitó migración: los seis son de cliente.
+
+1. **Texto de la oferta de motor** (`9717e31`). La primera tarjeta seguía
+   diciendo "No licence and no aircraft type ratings", escrito en el paso 5a,
+   cuando una oferta de motor todavía no admitía licencia; desde la sesión 2
+   sí (B1.x Part-66 o FAA P / A&P), así que contradecía a la tarjeta de
+   licencia de la misma pantalla. Ahora dice que se pide un motor, que la
+   licencia es opcional y que nunca se piden type ratings de aeronave.
+2. **Nota de aeronaves FAA** (`7a0eaf1`). Salía también en ofertas de motor,
+   donde no hay aeronaves que añadir (dos triggers de la 076 lo impiden):
+   queda condicionada a `offerKind !== 'engine'`.
+3. **Filas con máximo 0 fuera del desglose** (`5808e00`). "Habilitation 0/0"
+   en una oferta de motor se lee como nota baja y no lo es: es un eje que la
+   oferta no ha pedido. Qué filas salen, con qué rótulo y filtradas por peso
+   vive ahora en `src/utils/matchBreakdownRows.ts`, usado por los CINCO
+   desgloses (búsqueda de empresa, candidatura, oferta directa a los dos
+   lados y detalle de oferta del técnico) — antes cada uno repetía las seis
+   filas a mano con el motor como única excepción, y por eso el quinto
+   (`MatchExplanation`) no la tenía. El orden se pasa como argumento: las
+   cuatro pantallas de barras empiezan por "Verified" y `MatchExplanation`
+   por la cualificación; unificarlo habría movido filas sin que nadie lo
+   pidiera. Seis tests nuevos, con el invariante de que ninguna fila visible
+   tiene máximo 0 sobre las siete formas de oferta.
+4. **Licencia de otra autoridad** (`2b03f92`). Con una UK CAA B1.1 en el
+   perfil y una oferta EASA B1.1 que no la acepta, el match decía "not
+   present in the profile": falso para las dos partes — la empresa no se
+   entera de que le bastaba con marcar esa autoridad en "Also accept licences
+   from:", y el técnico lee que le falta una licencia que tiene. Ahora: "The
+   offer asks for EASA B1.1. The profile holds UK CAA B1.1, which this offer
+   doesn't accept." Tercera persona porque el mismo texto lo leen la empresa
+   (sobre un candidato) y el técnico (sobre sí mismo).
+   `unacceptedAuthorityText` pregunta a `licenseCodeSatisfies` y a
+   `licenseSatisfiesRequirement`, las mismas que usa el scorer, en vez de
+   comparar por su cuenta. Cubre las cuatro ramas que evalúan licencia,
+   incluida la de aeronave certificada, donde antes no se decía NADA de la
+   licencia. Ningún techo se mueve: en esa rama el aviso va a
+   `clarifications`, y en las otras sustituye un `missingRequirement` por
+   otro. La caducidad de la autoridad correcta sigue ganando. Ocho tests.
+5. **`<button>` dentro de `<button>`** (`329f414`). La "X" de limpiar vivía
+   dentro del touchable del campo; en web los dos se pintan como `<button>`,
+   que es HTML inválido y hace que el clic de la "X" deje de ser fiable. El
+   recuadro pasa a ser una `View` con dos hermanos, en `CityField` y también
+   en `CountryField`, que tenía el mismo montaje. El chevron se queda DENTRO
+   del touchable —no es un botón— para que pulsar el lado derecho siga
+   abriendo el selector. El aspecto no cambia.
+6. **Atrás sin historial** (`625a9ff`). "GO_BACK was not handled by any
+   navigator": una pantalla abierta por recarga o por enlace directo es la
+   primera del historial, así que `router.back()` no tiene destino y la
+   flecha se queda muerta. `useGoBack()` (`src/state/useGoBack.ts`) envuelve
+   la regla pura `backDestination` (`src/utils/backNavigation.ts`): con
+   historial, atrás; sin él, `replace` a la pantalla de inicio del rol, o a
+   `/auth/pending-verification` si la cuenta no está activa. Aplicado a los
+   43 ficheros que llamaban a `router.back()`, incluidos el cierre tras
+   guardar de las dos pantallas de oferta. La tabla de rutas por rol estaba
+   duplicada en `app/index.tsx` y ahora se importa. Nueve tests
+   (`npm run test:back-navigation`, ya dentro de `npm test`), con uno de
+   arquitectura que falla si alguna pantalla vuelve a llamar a
+   `router.back()` por su cuenta.
+
+Después de los seis: `npm test` en verde (262 + 26 + 45 + 9 y los demás
+runners, más los dos validadores en PASS) y `npm run ts` limpio. Sigue sin
+desplegarse ningún cliente.
+
 ## 3. Pendientes (fuera de esta fase)
 
 - Avisos de candidaturas cuando una oferta cambia sus requisitos.
@@ -182,6 +246,10 @@ despliegue.
   desplegado (fase contract de la 088; hoy no la lee ni la escribe nadie).
 - El desglose del match rotula "Habilitation" una fila que en ofertas FAA y sin
   certificar mide experiencia declarada, no type ratings.
+- Otro `<button>` dentro de `<button>` en web, encontrado al arreglar el del
+  selector de ciudad y NO tocado (queda fuera de los seis ajustes): el botón
+  "Open chat" dentro de la tarjeta pulsable de
+  `app/company/direct-offers/index.tsx:343`. Mismo fallo, misma solución.
 
 ## 4. Avisos
 
@@ -214,4 +282,5 @@ despliegue.
 - Sesión 1: **cerrada**. 084 y 085 aplicadas y registradas.
 - Sesión 2: **cerrada**. 086, 087 y 088 aplicadas y registradas.
 - Sesión 3: **cerrada**. 089 y 090 aplicadas y registradas.
-- Final: pendiente.
+- Final: ajustes de las pruebas manuales **hechos** (los seis, 23 septiembre
+  2026, sin migraciones). Quedan el merge y el despliegue.
