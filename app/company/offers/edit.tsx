@@ -10,7 +10,8 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { CheckCircle, FileText, MapPin, Minus, Plane, Plus, Save } from 'lucide-react-native';
 import { colors, spacing } from '../../../src/theme';
 import {
@@ -93,7 +94,7 @@ function computeErrors(form: FormState) {
 type FormErrors = Partial<ReturnType<typeof computeErrors>>;
 
 export default function EditOfferScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -296,7 +297,7 @@ export default function EditOfferScreen() {
         status,
         visible: status === 'published',
       }, form.requiredHabilitations);
-      router.back();
+      goBack();
     } catch (e: any) {
       notify('Error', e?.message ?? 'Could not save offer.');
     } finally {
@@ -337,7 +338,7 @@ export default function EditOfferScreen() {
           eyebrow="Offer editor"
           title="Edit Offer"
           subtitle={offer.title}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {/* Mismo orden que la pantalla de creación: 0) aeronave o motor,

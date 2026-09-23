@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { supabase } from '../../../src/lib/supabase';
 import { useCompanyTypes } from '../../../src/auth/useCatalogOptions';
 import { AuthPickerField, PickerOption } from '../../../src/components/auth/AuthPickerField';
@@ -27,6 +28,7 @@ function isValidEmail(s: string) {
 
 export default function CompanySignupScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { options: companyTypes, loading: typesLoading } = useCompanyTypes();
 
   const [companyName, setCompanyName] = useState('');
@@ -154,7 +156,7 @@ export default function CompanySignupScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 

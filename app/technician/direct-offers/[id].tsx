@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { InlineScore } from '../../../src/components/InlineScore';
@@ -97,6 +98,7 @@ export default function DirectOfferDetailScreen() {
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -273,7 +275,7 @@ export default function DirectOfferDetailScreen() {
           eyebrow="Direct offer"
           title={visibleOffer?.title ?? 'Direct offer'}
           subtitle={`${company.name} - received ${formatDate(request.createdAt)}`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={<TechnicianBadge label={statusLabel(request.status)} tone={statusTone(request.status)} />}
         />
 

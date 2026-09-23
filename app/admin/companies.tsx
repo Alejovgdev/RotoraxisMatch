@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { Building2, Search } from 'lucide-react-native';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { AdminCompanyCard } from '../../src/components/AdminCompanyCard';
@@ -83,7 +84,7 @@ function filterCompanies(
 }
 
 export default function AdminCompaniesScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const {
     companies,
     companyMemberCounts,
@@ -128,7 +129,7 @@ export default function AdminCompaniesScreen() {
           eyebrow="Organizations"
           title="Company management"
           subtitle="Audit buyer profiles, company category and membership footprint before verification."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <AdminCard style={styles.controls}>

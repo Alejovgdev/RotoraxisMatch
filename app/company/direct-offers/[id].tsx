@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import {
   CheckCircle,
   Download,
@@ -82,6 +83,7 @@ function formatDate(iso: string): string {
 
 export default function DirectOfferDetailScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -237,7 +239,7 @@ export default function DirectOfferDetailScreen() {
             eyebrow="Direct offer review"
             title="[Deleted user]"
             subtitle={`Sent ${formatDate(req.createdAt)}`}
-            onBack={() => router.back()}
+            onBack={goBack}
             right={<CompanyBadge label={statusInfo(req.status).label} tone={statusInfo(req.status).tone} />}
           />
           <CompanyCard style={styles.sectionCard}>
@@ -274,7 +276,7 @@ export default function DirectOfferDetailScreen() {
           eyebrow="Direct offer review"
           title={unlockedView ? `${unlockedView.firstName} ${unlockedView.lastName}` : (techView?.anonymousCode ?? '—')}
           subtitle={`Sent ${formatDate(req.createdAt)}`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={<CompanyBadge label={reqStatus.label} tone={reqStatus.tone} />}
         />
 

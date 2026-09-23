@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { useAuth } from '../../src/auth/AuthContext';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/theme';
@@ -24,6 +25,7 @@ function roleRoute(role: AppRole): string {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { signIn, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +65,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 

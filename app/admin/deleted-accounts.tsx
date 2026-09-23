@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import {
   Archive,
   BriefcaseBusiness,
@@ -78,7 +79,7 @@ function displayName(account: DeletedAccount): string {
 }
 
 export default function AdminDeletedAccountsScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { accounts, summary, feedback, state, error, refresh } = useDeletedAccounts();
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const { width } = useWindowDimensions();
@@ -112,7 +113,7 @@ export default function AdminDeletedAccountsScreen() {
           eyebrow="Retention"
           title="Deleted accounts"
           subtitle="Accounts closed by their own owner. Kept as anonymised records so company history stays intact."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {/* Por qué esta pantalla no tiene un botón de "contactar".

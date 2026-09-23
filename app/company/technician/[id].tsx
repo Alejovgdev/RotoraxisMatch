@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -99,6 +100,7 @@ function compactUrlLabel(url: string): string {
 export default function CompanyTechnicianProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 760;
   const companySession = useCompanySession();
@@ -217,7 +219,7 @@ export default function CompanyTechnicianProfileScreen() {
             eyebrow="Technician profile"
             title={copy.title}
             subtitle={copy.subtitle}
-            onBack={() => router.back()}
+            onBack={goBack}
           />
           <EmptyPanel title={copy.title} subtitle={copy.subtitle} />
           {state === 'error' ? (
@@ -255,7 +257,7 @@ export default function CompanyTechnicianProfileScreen() {
           eyebrow="Technician profile"
           title="Unlocked contact"
           subtitle="Full profile available to your company after an accepted connection."
-          onBack={() => router.back()}
+          onBack={goBack}
           right={isWide ? <CompanyBadge label="Identity unlocked" tone="success" /> : undefined}
         />
 

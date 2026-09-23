@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { supabase } from '../../src/lib/supabase';
 import { APP_PUBLIC_URL } from '../../src/lib/appUrl';
 import { Button } from '../../src/components/Button';
@@ -22,6 +23,7 @@ function isValidEmail(s: string) {
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -62,7 +64,7 @@ export default function ForgotPasswordScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back to sign in</Text>
           </TouchableOpacity>
 

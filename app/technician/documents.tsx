@@ -9,7 +9,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { supabase } from '../../src/lib/supabase';
 
 const CONSENT_VERSION = '2025-06';
@@ -112,7 +113,7 @@ function DocumentPanel({ document }: { document: TechnicianDocument }) {
 }
 
 export default function TechnicianDocumentsScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const { documents, loading, refresh } = useTechnicianDashboard();
@@ -273,7 +274,7 @@ export default function TechnicianDocumentsScreen() {
           eyebrow="Verification"
           title="My Documents"
           subtitle="Upload licenses, certificates and verification documents."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <TechnicianCard style={styles.summaryCard}>

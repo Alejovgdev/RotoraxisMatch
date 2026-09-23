@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { BadgeCheck, Building2, Check, Pencil, X } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import {
   CompanyBadge,
@@ -71,7 +71,7 @@ function profileToForm(profile: CompanyProfileView): CompanyForm {
 }
 
 export default function CompanyProfileScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
 const companySession = useCompanySession();
 const companyId = companySession?.companyId;
 const companyMemberRole = companySession?.companyMemberRole;
@@ -185,7 +185,7 @@ const companyMemberRole = companySession?.companyMemberRole;
           eyebrow="Profile"
           title="Company profile"
           subtitle="Operator identity, contact details and marketplace status."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <View style={[styles.grid, isWide && styles.gridWide]}>

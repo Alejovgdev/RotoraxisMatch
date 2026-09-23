@@ -9,7 +9,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import {
   BriefcaseBusiness,
   Building2,
@@ -122,7 +123,7 @@ function formatDate(value: string): string {
 }
 
 export default function AdminOffersScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { offers, loading, refresh, updateOfferStatus, companyMap } = useAdminDashboard();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const { width } = useWindowDimensions();
@@ -159,7 +160,7 @@ export default function AdminOffersScreen() {
           eyebrow="Marketplace"
           title="Offer moderation"
           subtitle="Review visibility, contract details and requirement fit across published and draft offers."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <AdminCard style={styles.controls}>

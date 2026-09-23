@@ -14,6 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import {
   AlertTriangle,
   BriefcaseBusiness,
@@ -159,6 +160,7 @@ function shouldPreferRelation(next: OfferRelation, current?: OfferRelation): boo
 
 export default function OfferDetailScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -469,7 +471,7 @@ export default function OfferDetailScreen() {
           eyebrow="Offer detail"
           title={offer.title}
           subtitle={`${offer.locationCity}, ${offer.locationCountry}${offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={<CompanyBadge label={offer.status} tone={statusTone(offer.status)} />}
         />
 

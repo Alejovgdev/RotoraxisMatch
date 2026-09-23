@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { ClipboardCheck, Clock, UserRound } from 'lucide-react-native';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -76,6 +77,7 @@ function formatDate(iso: string): string {
 
 export default function ApplicationsListScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const companySession = useCompanySession();
@@ -199,7 +201,7 @@ export default function ApplicationsListScreen() {
           eyebrow="Candidate review"
           title="Applications"
           subtitle={`${entries.length} total - ${pendingCount} pending review`}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <ScrollView

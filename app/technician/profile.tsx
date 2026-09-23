@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { Button } from '../../src/components/Button';
 import { CountryCityPicker } from '../../src/components/CountryCityPicker';
@@ -183,6 +184,7 @@ function FieldLabel({ children }: { children: string }) {
 
 export default function TechnicianProfileScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { profile, loading: authLoading } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -1056,7 +1058,7 @@ export default function TechnicianProfileScreen() {
             eyebrow="Technician profile"
             title="My Profile"
             subtitle="Manage the details companies use for matching and verification."
-            onBack={() => router.back()}
+            onBack={goBack}
           />
 
           <TechnicianCard style={styles.profileCard}>

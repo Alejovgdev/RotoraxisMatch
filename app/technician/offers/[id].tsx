@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { colors, spacing } from '../../../src/theme';
 import { formatOfferSalary } from '../../../src/utils/offerSalary';
 import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
@@ -105,6 +106,7 @@ export default function OfferDetailScreen() {
   const technicianId = technicianSession?.technicianId;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -302,7 +304,7 @@ export default function OfferDetailScreen() {
           eyebrow="Offer detail"
           title={offer.title}
           subtitle={company ? `${company.name} - ${offer.locationCity}, ${offer.locationCountry}` : `${offer.locationCity}, ${offer.locationCountry}`}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <TechnicianCard style={styles.summaryCard}>

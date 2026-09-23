@@ -3,6 +3,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { BriefcaseBusiness, ClipboardCheck } from 'lucide-react-native';
 import {
   CompanyCard,
@@ -14,6 +15,7 @@ import {
 
 export default function CompanyRequestsLegacy() {
   const router = useRouter();
+  const goBack = useGoBack();
 
   return (
     <CompanyScreen>
@@ -24,7 +26,7 @@ export default function CompanyRequestsLegacy() {
             eyebrow="Requests"
             title="Where to find your requests"
             subtitle="Incoming applications and direct offer responses each have their own workspace."
-            onBack={() => router.back()}
+            onBack={goBack}
           />
 
           <TouchableOpacity

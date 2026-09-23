@@ -7,7 +7,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import {
   BriefcaseBusiness,
   Building2,
@@ -97,7 +98,7 @@ function formatDate(value: string): string {
 }
 
 export default function AdminRequestsScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const {
     offerRequestsV2,
     offerApplicationsV2,
@@ -183,7 +184,7 @@ export default function AdminRequestsScreen() {
           eyebrow="Oversight"
           title="Requests & applications"
           subtitle="Audit direct offers and technician applications without changing acceptance, unlock or chat behavior."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <AdminCard style={styles.summaryCard}>

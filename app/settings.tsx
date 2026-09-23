@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../src/state/useGoBack';
 import Constants from 'expo-constants';
 import { colors, spacing } from '../src/theme';
 import { useAuth } from '../src/auth/AuthContext';
@@ -16,6 +17,7 @@ import { CompanyPageHeader } from '../src/components/company/CompanyUI';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { profile, signOut } = useAuth();
 
   async function handleSignOut() {
@@ -35,7 +37,7 @@ export default function SettingsScreen() {
           eyebrow="App"
           title="Settings"
           subtitle="Account, help and legal."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {profile && (

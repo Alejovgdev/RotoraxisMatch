@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../src/state/useGoBack';
 import { useAuth } from '../src/auth/AuthContext';
 import { colors, spacing } from '../src/theme';
 
 export default function PublicDeleteAccountScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -25,7 +27,7 @@ export default function PublicDeleteAccountScreen() {
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+        <TouchableOpacity onPress={goBack} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 

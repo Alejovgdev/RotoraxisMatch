@@ -11,7 +11,8 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import {
@@ -43,7 +44,7 @@ export default function TechnicianChatDetailScreen() {
   const profileId = technicianSession?.profileId;
   const technicianId = technicianSession?.technicianId;
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const scrollRef = useRef<ScrollView>(null);
@@ -158,7 +159,7 @@ export default function TechnicianChatDetailScreen() {
             eyebrow="Chat"
             title="Chat unavailable"
             subtitle="This conversation is only accessible for accepted contacts."
-            onBack={() => router.back()}
+            onBack={goBack}
           />
           <EmptyPanel
             title="Accepted contact required"
@@ -182,7 +183,7 @@ export default function TechnicianChatDetailScreen() {
             eyebrow="Chat"
             title={headerTitle}
             subtitle={subTitle || 'Accepted contact'}
-            onBack={() => router.back()}
+            onBack={goBack}
           />
 
           <TechnicianCard style={styles.contextCard}>

@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { FileCheck, Search } from 'lucide-react-native';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { AdminDocumentCard } from '../../src/components/AdminDocumentCard';
@@ -67,7 +68,7 @@ function filterDocuments(
 }
 
 export default function AdminDocumentsScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const {
     documents,
     documentDetailsMap,
@@ -111,7 +112,7 @@ export default function AdminDocumentsScreen() {
           eyebrow="Documents"
           title="Compliance review"
           subtitle="Inspect technician document metadata and keep verification states audit-friendly."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <AdminCard style={styles.controls}>

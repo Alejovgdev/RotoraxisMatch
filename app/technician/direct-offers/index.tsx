@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import {
@@ -81,6 +82,7 @@ function formatDate(iso: string): string {
 
 export default function DirectOffersListScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const { width } = useWindowDimensions();
@@ -201,7 +203,7 @@ export default function DirectOffersListScreen() {
           eyebrow="Company outreach"
           title="Direct Offers"
           subtitle={`Offers sent directly to you${pendingCount > 0 ? ` - ${pendingCount} pending` : ''}`}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {entries.length === 0 && (

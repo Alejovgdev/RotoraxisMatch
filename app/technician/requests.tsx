@@ -3,6 +3,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { Button } from '../../src/components/Button';
 import { colors, spacing, typography } from '../../src/theme';
 import {
@@ -14,6 +15,7 @@ import {
 
 export default function TechnicianRequestsLegacy() {
   const router = useRouter();
+  const goBack = useGoBack();
   return (
     <TechnicianScreen>
       <Stack.Screen options={{ headerShown: false }} />
@@ -25,7 +27,7 @@ export default function TechnicianRequestsLegacy() {
           eyebrow="Requests"
           title="Where to find your requests"
           subtitle="Company outreach and your own applications each have their own space."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <TechnicianCard style={styles.card}>

@@ -18,7 +18,8 @@ import {
   Search,
   Send,
 } from 'lucide-react-native';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { MatchBadge } from '../../src/components/MatchBadge';
 import {
   CompanyBadge,
@@ -106,7 +107,7 @@ function relationBadgeLabel(relation: OfferRelationSummary): string {
 }
 
 export default function TechnicianSearchScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 960;
   const { results, filters, loading, hasSearched, error: sourceError, updateFilter, clearFilters, search } =
@@ -307,7 +308,7 @@ export default function TechnicianSearchScreen() {
               eyebrow="Search"
               title="Search technicians"
               subtitle="Find privacy-safe technician profiles and calculate match quality only against a selected offer."
-              onBack={() => router.back()}
+              onBack={goBack}
             />
 
             <CompanyCard style={styles.searchPanel}>

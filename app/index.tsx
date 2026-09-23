@@ -14,14 +14,10 @@ import { Button } from '../src/components/Button';
 import { colors, spacing } from '../src/theme';
 import { hasSeenIntro } from '../src/storage/introStorage';
 import { useAuth } from '../src/auth/AuthContext';
-import { AppRole, UserStatus } from '../src/types/enums';
-
-function roleRoute(role: AppRole, status: UserStatus): string {
-  if (status !== 'active') return '/auth/pending-verification';
-  if (role === 'admin') return '/admin';
-  if (role === 'company_user') return '/company';
-  return '/technician';
-}
+// La misma tabla que usa la flecha de atrás cuando no hay historial
+// (src/utils/backNavigation.ts). Dos copias acabarían mandando al mismo
+// usuario a sitios distintos según por dónde entrara.
+import { roleHomeRoute } from '../src/utils/backNavigation';
 
 const STATS = [
   { value: '100%', label: 'Privacy First' },
@@ -57,7 +53,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (authLoading) return;
     if (profile) {
-      router.replace(roleRoute(profile.role, profile.status) as any);
+      router.replace(roleHomeRoute(profile.role, profile.status) as any);
       return;
     }
     hasSeenIntro().then((seen) => {

@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { MessageCircle, Send } from 'lucide-react-native';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -69,6 +70,7 @@ function formatDate(iso: string): string {
 
 export default function DirectOffersScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const companySession = useCompanySession();
@@ -232,7 +234,7 @@ export default function DirectOffersScreen() {
           eyebrow="Talent outreach"
           title="Sent Direct Offers"
           subtitle="Offers you have sent directly to technicians."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {/* Summary metrics */}

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { supabase } from '../../../src/lib/supabase';
 import { useTechnicianTypes } from '../../../src/auth/useCatalogOptions';
 import { AuthPickerField, PickerOption } from '../../../src/components/auth/AuthPickerField';
@@ -41,6 +42,7 @@ function buildDate(y: string, m: string, d: string): string | null {
 
 export default function TechnicianSignupScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { options: techTypes, loading: typesLoading } = useTechnicianTypes();
 
   const [firstName, setFirstName] = useState('');
@@ -210,7 +212,7 @@ export default function TechnicianSignupScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 

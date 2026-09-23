@@ -8,12 +8,13 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
+import { useGoBack } from '../src/state/useGoBack';
 import { colors, spacing } from '../src/theme';
 import { TERMS_OF_SERVICE_LAST_UPDATED } from '../src/constants/legal';
 
 export default function TermsOfServiceScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -24,7 +25,7 @@ export default function TermsOfServiceScreen() {
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+        <TouchableOpacity onPress={goBack} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 

@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import {
   BriefcaseBusiness,
   CheckCircle,
@@ -93,6 +94,7 @@ function statusInfo(status: string): { label: string; tone: 'success' | 'warning
 
 export default function ApplicationDetailScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -269,7 +271,7 @@ export default function ApplicationDetailScreen() {
             eyebrow="Application review"
             title={offer.title}
             subtitle={`Applied ${formatDate(app.createdAt)}`}
-            onBack={() => router.back()}
+            onBack={goBack}
             right={<CompanyBadge label={statusInfo(app.status).label} tone={statusInfo(app.status).tone} />}
           />
           <CompanyCard style={styles.sectionCard}>
@@ -307,7 +309,7 @@ export default function ApplicationDetailScreen() {
           eyebrow="Application review"
           title={offer.title}
           subtitle={`Applied ${formatDate(app.createdAt)}`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={<CompanyBadge label={appStatus.label} tone={appStatus.tone} />}
         />
 

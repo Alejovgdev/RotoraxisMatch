@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import {
@@ -63,6 +64,7 @@ function messagePreview(message: ChatMessage | null): string {
 
 export default function TechnicianChatsScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const { width } = useWindowDimensions();
@@ -158,7 +160,7 @@ export default function TechnicianChatsScreen() {
           eyebrow="Messaging"
           title="Chats"
           subtitle={`${entries.length} accepted conversation${entries.length !== 1 ? 's' : ''}`}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {entries.length === 0 && (

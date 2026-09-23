@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { TechnicianMap } from '../../src/components/TechnicianMap';
 import { useMapTechnicians } from '../../src/state/useMapTechnicians';
 import { offerRequestRepository } from '../../src/repositories/v2/offerRequestRepository';
@@ -15,6 +16,7 @@ import { notify } from '../../src/utils/platformAlert';
 
 export default function MapScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const [filters, setFilters] = useState<MapFilters>({});
@@ -113,7 +115,7 @@ export default function MapScreen() {
         filters={filters}
         onFilterChange={handleFilterChange}
         loading={loading}
-        onBack={() => router.back()}
+        onBack={goBack}
         offerMatchesByTechnician={offerMatchesByTechnician}
         loadingOfferMatches={loadingOfferMatches}
         onSendOffer={handleSendOfferFromMap}

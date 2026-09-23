@@ -10,7 +10,8 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { FileText, MapPin, Minus, Plane, Plus, Send } from 'lucide-react-native';
 import { colors, spacing } from '../../../src/theme';
 import {
@@ -89,7 +90,7 @@ function computeErrors(form: FormState) {
 type FormErrors = Partial<ReturnType<typeof computeErrors>>;
 
 export default function NewOfferScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const companySession = useCompanySession();
@@ -192,7 +193,7 @@ export default function NewOfferScreen() {
         requiredEngineId: form.requiredEngineId,
         onlyUnlicensed: form.onlyUnlicensed,
       });
-      router.back();
+      goBack();
     } catch (e: any) {
       notify('Error', e?.message ?? 'Could not save offer.');
     } finally {
@@ -213,7 +214,7 @@ export default function NewOfferScreen() {
           eyebrow="Offer builder"
           title="New Offer"
           subtitle="Create a role technicians can match against."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         {/* Paso 5b: 0) aeronave o motor, antes que nada — decide qué pasos

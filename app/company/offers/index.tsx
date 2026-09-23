@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -83,6 +84,7 @@ const MAX_REQUIREMENT_CHIPS = 5;
 
 export default function OffersListScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const companySession = useCompanySession();
@@ -169,7 +171,7 @@ export default function OffersListScreen() {
           eyebrow="Offer management"
           title="Job Offers"
           subtitle={`${offers.length} total · ${published.length} published · ${drafts.length} draft${drafts.length !== 1 ? 's' : ''}`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={canManage ? (
             <TouchableOpacity
               style={styles.newButton}

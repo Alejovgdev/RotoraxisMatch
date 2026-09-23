@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../src/state/useGoBack';
 import { Search, UserRound } from 'lucide-react-native';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { AdminTechnicianCard } from '../../src/components/AdminTechnicianCard';
@@ -108,7 +109,7 @@ function filterTechnicians(
 }
 
 export default function AdminTechniciansScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const {
     technicians,
     technicianDetailsMap,
@@ -158,7 +159,7 @@ export default function AdminTechniciansScreen() {
           eyebrow="Moderation"
           title="Technician management"
           subtitle="Review identity, license coverage and operational readiness before marketplace access."
-          onBack={() => router.back()}
+          onBack={goBack}
         />
 
         <AdminCard style={styles.controls}>

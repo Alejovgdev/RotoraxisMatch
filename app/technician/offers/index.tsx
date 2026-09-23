@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useGoBack } from '../../../src/state/useGoBack';
 import { MapPinned } from 'lucide-react-native';
 import { colors, spacing } from '../../../src/theme';
 import { formatOfferSalary } from '../../../src/utils/offerSalary';
@@ -95,6 +96,7 @@ type ProductFilter = OfferProductType | 'all';
 
 export default function BrowseOffersScreen() {
   const router = useRouter();
+  const goBack = useGoBack();
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const { width } = useWindowDimensions();
@@ -208,7 +210,7 @@ export default function BrowseOffersScreen() {
           eyebrow="Offer marketplace"
           title="Browse Offers"
           subtitle={`${filtered.length} offer${filtered.length !== 1 ? 's' : ''} ranked by match`}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={(
             <TouchableOpacity
               accessibilityRole="button"
