@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, spacing } from '../theme';
 import { MatchScore, MatchDisplayLabel } from '../types/matching';
+import { MatchScoreWeights } from '../utils/offerMatchExplain';
+import { QUALIFICATION_FIRST_ORDER, visibleBreakdownRows } from '../utils/matchBreakdownRows';
 
 const LEVEL_LABEL: Record<MatchScore['level'], string> = {
   exact: 'Exact match',
@@ -17,19 +19,10 @@ const LEVEL_COLOR: Record<MatchScore['level'], string> = {
   not_met: colors.textMuted,
 };
 
-const BREAKDOWN_LABELS: Record<keyof MatchScore['breakdown'], string> = {
-  habilitation: 'Habilitation',
-  license: 'License',
-  engine: 'Engine',
-  verified: 'Verified',
-  contractFit: 'Contract fit',
-  location: 'Location',
-};
-// Fixed display order — qualification first, since it dominates the score.
-// `engine` va con los otros dos ejes de cualificación: en una oferta de motor
-// es el único que puntúa, y en el resto vale 0 (la fila se pinta a 0, igual
-// que hoy se pinta `habilitation` en una oferta de sólo licencia).
-const BREAKDOWN_ORDER: (keyof MatchScore['breakdown'])[] = ['habilitation', 'license', 'engine', 'verified', 'contractFit', 'location'];
+// Qué filas salen, con qué rótulo y en qué orden: src/utils/matchBreakdownRows.ts,
+// compartido con los cuatro desgloses de barras. Un eje que la oferta no ha
+// pedido tiene máximo 0 y NO se pinta — "Habilitation 0/0" en una oferta de
+// motor se leía como nota baja y no lo era.
 
 // Renders the explainable part of a MatchScore — the numeric breakdown per
 // criterion, what matches, what needs clarification, which mandatory
@@ -42,6 +35,10 @@ const BREAKDOWN_ORDER: (keyof MatchScore['breakdown'])[] = ['habilitation', 'lic
 // getMatchScoreWeights) — avoids showing the same numbers twice. The cap
 // note, matches, clarifications and mandatory-missing sections always
 // render regardless, since those are never duplicated elsewhere.
+// weights: los máximos de ESTA oferta (getMatchScoreWeights). Sin ellos no se
+// puede saber qué fila sobra, así que el bloque entero se calla en vez de
+// pintar seis filas con denominadores que nadie ha comprobado. Los llamadores
+// con hideBreakdown no lo necesitan.
 // displayLabel: overrides the band label ("Excellent match", …) next to the
 // score. Passed by callers that know the offer targets non-licensed trades,
 // where there is no Part-66 requirement to have matched and the honest
@@ -51,11 +48,14 @@ export function MatchExplanation({
   score,
   hideBreakdown = false,
   displayLabel,
+  weights,
 }: {
   score: MatchScore;
   hideBreakdown?: boolean;
   displayLabel?: MatchDisplayLabel;
+  weights?: MatchScoreWeights | null;
 }) {
+  const breakdownRows = visibleBreakdownRows(weights, QUALIFICATION_FIRST_ORDER);
   const rawSum = Object.values(score.breakdown).reduce((sum, v) => sum + v, 0);
   const wasCapped = rawSum > score.total;
 
@@ -90,13 +90,13 @@ export function MatchExplanation({
         <Text style={styles.scoreText}>{score.total}/100 — {displayLabel ?? score.label}</Text>
       </View>
 
-      {!hideBreakdown && (
+      {!hideBreakdown && breakdownRows.length > 0 && (
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Score breakdown</Text>
-          {BREAKDOWN_ORDER.map((key) => (
-            <View key={key} style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>{BREAKDOWN_LABELS[key]}</Text>
-              <Text style={styles.breakdownValue}>{score.breakdown[key]}</Text>
+          {breakdownRows.map((row) => (
+            <View key={row.key} style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>{row.label}</Text>
+              <Text style={styles.breakdownValue}>{score.breakdown[row.key]}</Text>
             </View>
           ))}
         </View>

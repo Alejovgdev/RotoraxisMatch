@@ -49,6 +49,7 @@ import { isOfferOpenForTechnicians, offerRepository } from '../../../src/reposit
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
 import { getMatchScoreWeights, getTechnicianMatchesForOffer, MatchScoreWeights, TechnicianMatchResult } from '../../../src/utils/matchingV2';
+import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { OfferRequiredHabilitation, OfferWithRequirements } from '../../../src/types/offer';
 import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
 import { MatchScore } from '../../../src/types/matching';
@@ -672,14 +673,9 @@ export default function OfferDetailScreen() {
               ) : null}
 
               <View style={styles.breakdown}>
-                <BreakdownItem label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} />
-                <BreakdownItem label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} />
-                <BreakdownItem label="License" value={score.breakdown.license} max={weights?.license ?? 0} />
-                {weights && weights.engine > 0 ? (
-                  <BreakdownItem label="Engine" value={score.breakdown.engine} max={weights.engine} />
-                ) : null}
-                <BreakdownItem label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} />
-                <BreakdownItem label="Location" value={score.breakdown.location} max={weights?.location ?? 0} />
+                {visibleBreakdownRows(weights).map((row) => (
+                  <BreakdownItem key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} />
+                ))}
               </View>
 
               <CapReasonPanel score={score} />

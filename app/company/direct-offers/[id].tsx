@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -44,7 +44,7 @@ import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { getMatchDisplayLabel, getMatchScoreWeights, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../../../src/lib/documentStorage';
 import { useCompanySession } from '../../../src/state/SessionContext';
@@ -95,6 +95,9 @@ export default function DirectOfferDetailScreen() {
   // Paso 5b: el par entero (ver app/company/applications/[id].tsx).
   const [match, setMatch] = useState<PairMatch | null>(null);
   const score: MatchScore | null = match?.eligible ? match.score : null;
+  // Los maximos de ESTA oferta: sin ellos MatchExplanation no sabe que fila
+  // sobra (misma fuente que los desgloses de barras del resto de pantallas).
+  const weights = useMemo(() => (offer ? getMatchScoreWeights(offer) : null), [offer]);
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -300,7 +303,7 @@ export default function DirectOfferDetailScreen() {
                 context="match for this offer"
                 notEligible={score.blockers.length > 0}
               />
-              <MatchExplanation score={score} displayLabel={getMatchDisplayLabel(offer, score)} />
+              <MatchExplanation score={score} displayLabel={getMatchDisplayLabel(offer, score)} weights={weights} />
             </>
           ) : null}
           {match && !match.eligible ? (

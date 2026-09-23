@@ -48,6 +48,7 @@ import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianR
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { canReviewApplications } from '../../../src/utils/companyPermissionsV2';
@@ -423,14 +424,9 @@ export default function ApplicationDetailScreen() {
         {score ? (
           <CompanyCard style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Match breakdown</Text>
-            <BreakdownRow label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} />
-            <BreakdownRow label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} />
-            <BreakdownRow label="License" value={score.breakdown.license} max={weights?.license ?? 0} />
-            {weights && weights.engine > 0 ? (
-              <BreakdownRow label="Engine" value={score.breakdown.engine} max={weights.engine} />
-            ) : null}
-            <BreakdownRow label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} />
-            <BreakdownRow label="Location" value={score.breakdown.location} max={weights?.location ?? 0} />
+            {visibleBreakdownRows(weights).map((row) => (
+              <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} />
+            ))}
             <MatchExplanation score={score} hideBreakdown displayLabel={offer ? getMatchDisplayLabel(offer, score) : undefined} />
           </CompanyCard>
         ) : null}

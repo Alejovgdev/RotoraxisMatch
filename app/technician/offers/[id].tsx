@@ -40,6 +40,7 @@ import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianR
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
@@ -382,14 +383,9 @@ export default function OfferDetailScreen() {
           <TechnicianCard style={styles.section}>
             <Text style={styles.sectionTitle}>Match</Text>
             <Text style={styles.sectionSub}>How your profile scores against this offer's criteria.</Text>
-            <BreakdownRow label="Verified" value={score.breakdown.verified} max={weights?.verified ?? 0} accent={accent} />
-            <BreakdownRow label="Habilitation" value={score.breakdown.habilitation} max={weights?.habilitation ?? 0} accent={accent} />
-            <BreakdownRow label="License" value={score.breakdown.license} max={weights?.license ?? 0} accent={accent} />
-            {weights && weights.engine > 0 ? (
-              <BreakdownRow label="Engine" value={score.breakdown.engine} max={weights.engine} accent={accent} />
-            ) : null}
-            <BreakdownRow label="Contract fit" value={score.breakdown.contractFit} max={weights?.contractFit ?? 0} accent={accent} />
-            <BreakdownRow label="Location" value={score.breakdown.location} max={weights?.location ?? 0} accent={accent} />
+            {visibleBreakdownRows(weights).map((row) => (
+              <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} accent={accent} />
+            ))}
             <MatchExplanation score={score} hideBreakdown displayLabel={getMatchDisplayLabel(offer, score)} />
           </TechnicianCard>
         )}
