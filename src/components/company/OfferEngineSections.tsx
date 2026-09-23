@@ -15,7 +15,7 @@ export function OfferKindSection({ value, onChange }: { value: OfferKind; onChan
       <Text style={styles.title}>What does this offer ask for?</Text>
       <Text style={styles.subtitle}>
         {value === 'engine'
-          ? 'An engine — nothing else. No licence and no aircraft type ratings: technicians are matched on the engines they have worked on.'
+          ? 'An engine. A licence is optional, and aircraft type ratings are never asked for: technicians are matched on the engines they have worked on.'
           : 'A licence and/or aircraft type ratings, the usual way.'}
       </Text>
       <View style={styles.chipRow}>
