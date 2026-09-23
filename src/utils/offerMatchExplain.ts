@@ -55,7 +55,9 @@ import { EngineIndex, getEngineLabel } from '../constants/engines';
 import {
   LicenseSatisfaction,
   authorityLicenseCanExpire,
+  credentialLabel,
   isB1LicenseCode,
+  licenseCodeSatisfies,
   licenseSatisfiesRequirement,
 } from '../constants/licenses';
 import { localDateToIso } from './dateField';
@@ -883,6 +885,63 @@ function evaluateLicenseCategoryMatch(
 }
 
 /**
+ * Cierre de la Fase 10 — "NO LA TIENE" Y "LA TIENE DE OTRA AUTORIDAD" NO SON LO
+ * MISMO, y decir "not present in the profile" de quien sí tiene la categoría es
+ * falso para las dos partes: la empresa no se entera de que le bastaba con
+ * marcar esa autoridad en "Also accept licences from:", y el técnico lee que le
+ * falta una licencia que tiene.
+ *
+ * La pregunta es la contraria de la que hace `selectLicenseForOffer`:
+ * credenciales cuyo CÓDIGO responde por lo que la oferta pide
+ * (`licenseCodeSatisfies`, con la inclusión B1→A) pero que
+ * `licenseSatisfiesRequirement` descarta — o sea, por la autoridad. Se pregunta
+ * a las dos funciones reales y no a una comparación propia: una tercera opinión
+ * sobre qué cuenta acabaría discrepando de la que puntúa.
+ *
+ * Sólo tiene sentido cuando NO hay credencial elegida: si la hubiera, la
+ * licencia cuenta y no hay nada que explicar. Entre varias descartadas se nombra
+ * UNA, elegida de forma estable (código exacto antes que incluido, vigente antes
+ * que caducada, el id para desempatar): la lista entera convertiría un aviso en
+ * un inventario.
+ */
+function unacceptedAuthorityText(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  technician: Pick<TechnicianWithRelations, 'licenses'>,
+  today: string,
+): string | undefined {
+  const required = offer.licenseCode;
+  const requiredAuthority = offer.licenseAuthority;
+  // Sin autoridad exigida no hay autoridad que rechazar: `licenseSatisfiesRequirement`
+  // da 'exact' a cualquier código que encaje, así que no habría descartados.
+  if (!required || !requiredAuthority) return undefined;
+
+  const rejected = technician.licenses
+    .filter(
+      (held) =>
+        licenseCodeSatisfies(held.licenseCode, required) &&
+        licenseSatisfiesRequirement(
+          held,
+          { authority: requiredAuthority, licenseCode: required },
+          offer.acceptedAuthorities,
+        ) === null,
+    )
+    .sort((a, b) => {
+      if ((a.licenseCode === required) !== (b.licenseCode === required)) return a.licenseCode === required ? -1 : 1;
+      const expiredA = isLicenseExpired(a, today);
+      const expiredB = isLicenseExpired(b, today);
+      if (expiredA !== expiredB) return expiredA ? 1 : -1;
+      return a.id.localeCompare(b.id);
+    });
+
+  const best = rejected[0];
+  if (!best) return undefined;
+  return (
+    `The offer asks for ${credentialLabel(requiredAuthority, required)}. ` +
+    `The profile holds ${credentialLabel(best.authority, best.licenseCode)}, which this offer doesn't accept.`
+  );
+}
+
+/**
  * La licencia como EJE PROPIO (sesión 2): cuenta o no cuenta, y si no, por qué.
  *
  * La rama de sólo licencia ya lo hacía en línea; la oferta FAA con aeronaves
@@ -890,13 +949,19 @@ function evaluateLicenseCategoryMatch(
  * sólo informa—, así que sale aquí en vez de copiarse. La variante que no
  * cuenta lleva el texto y la que cuenta no: no hay "por qué" que leer de una
  * licencia que sí está.
+ *
+ * Cierre de Fase 10: la variante que no cuenta distingue TRES motivos —vencida,
+ * de una autoridad que esta oferta no acepta, y ausente—. `unacceptedAuthority`
+ * viaja aparte de `missingText` (que ya lo lleva dentro) porque la rama de motor
+ * redacta su propia frase alrededor.
  */
 type LicenseAxis =
   | { held: true; matchText?: string; clarificationText?: string }
-  | { held: false; missingText: string; vigenciaNotice?: VigenciaNotice };
+  | { held: false; missingText: string; vigenciaNotice?: VigenciaNotice; unacceptedAuthority?: string };
 
 function evaluateLicenseAxis(
-  offer: Pick<OfferWithRequirements, 'licenseCode'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  technician: Pick<TechnicianWithRelations, 'licenses'>,
   license: TechnicianLicense | undefined,
   today: string,
 ): LicenseAxis {
@@ -905,13 +970,16 @@ function evaluateLicenseAxis(
     return { held: true, matchText: broad.matchText, clarificationText: broad.clarificationText };
   }
   // Vencida: qué caducó, no qué falta — mismo formato que la rama con aeronave.
-  // Ausente: la segunda fuente de missingRequirements, que no depende de
-  // mandatory/preferred sino de que la oferta pida una licencia que no tiene.
-  return {
-    held: false,
-    missingText: broad.expiredText ? `${broad.expiredText} — expired` : `Required license: ${offer.licenseCode}`,
-    vigenciaNotice: broad.vigenciaNotice,
-  };
+  // Va ANTES que la autoridad porque una credencial vencida SÍ fue elegida: es
+  // de la autoridad correcta, y renovarla es la acción que resuelve la oferta.
+  if (broad.expiredText) {
+    return { held: false, missingText: `${broad.expiredText} — expired`, vigenciaNotice: broad.vigenciaNotice };
+  }
+  const unaccepted = unacceptedAuthorityText(offer, technician, today);
+  if (unaccepted) return { held: false, missingText: unaccepted, unacceptedAuthority: unaccepted };
+  // Ausente de verdad: la segunda fuente de missingRequirements, que no depende
+  // de mandatory/preferred sino de que la oferta pida una licencia que no tiene.
+  return { held: false, missingText: `Required license: ${offer.licenseCode}`, vigenciaNotice: broad.vigenciaNotice };
 }
 
 const TIER_RANK: Record<HabilitationTier, number> = { not_met: 0, related_family: 1, exact: 2 };
@@ -1010,15 +1078,18 @@ function scoreWithSelectedLicense(
     // INCOMPLETE_AIRCRAFT_SET_CAP (59) y la licencia topa, cuando aquí sólo
     // puntúa. Tampoco toca el nivel, que es el del motor.
     if (offer.licenseCode) {
-      const axis = evaluateLicenseAxis(offer, selectedLicense?.license, today);
+      const axis = evaluateLicenseAxis(offer, technician, selectedLicense?.license, today);
       if (axis.held) {
         license = Math.round(weights.license * equivalenceFraction);
         if (axis.matchText) matches.push(axis.matchText);
       } else {
+        const engineNote = 'On an engine offer the licence adds to the score; it never excludes.';
         clarifications.push(
           axis.vigenciaNotice
-            ? `${offer.licenseCode} expired. On an engine offer the licence adds to the score; it never excludes.`
-            : `The offer also asks for ${offer.licenseCode}; not present in the profile. On an engine offer the licence adds to the score; it never excludes.`,
+            ? `${offer.licenseCode} expired. ${engineNote}`
+            : axis.unacceptedAuthority
+              ? `${axis.unacceptedAuthority} ${engineNote}`
+              : `The offer also asks for ${offer.licenseCode}; not present in the profile. ${engineNote}`,
         );
         if (axis.vigenciaNotice) vigenciaNotices.push(axis.vigenciaNotice);
       }
@@ -1115,6 +1186,17 @@ function scoreWithSelectedLicense(
     // aceptadas y el A&P de la FAA.
     const licenseHeld = selectedLicense != null;
 
+    // Cierre de Fase 10 — esta rama nunca decía nada de la licencia: sin
+    // credencial elegida, `license` se quedaba en 0 y el único texto era el de
+    // la aeronave ("EASA B1.1 + A320; not present in the profile"), que con una
+    // UK CAA B1.1 + A320 en el perfil es falso dos veces. Va a clarifications y
+    // no a missingRequirements: explica, no añade un requisito incumplido, así
+    // que ningún techo se mueve.
+    if (!licenseHeld) {
+      const unaccepted = unacceptedAuthorityText(offer, technician, today);
+      if (unaccepted) clarifications.push(unaccepted);
+    }
+
     // `everyAircraftExact` sólo degrada el nivel cuando la oferta EXIGE todas
     // las aeronaves. Con "basta con una", cubrir una de tres es un match
     // exacto y punto — que es exactamente lo que hacía el modelo anterior:
@@ -1136,7 +1218,7 @@ function scoreWithSelectedLicense(
       // informa. La licencia se evalúa como en la rama de sólo licencia (misma
       // función, caducidad incluida) y su ausencia se nombra. Con la licencia y
       // sin la aeronave el nivel es el de categoría, no 'not_met'.
-      const axis = evaluateLicenseAxis(offer, selectedLicense?.license, today);
+      const axis = evaluateLicenseAxis(offer, technician, selectedLicense?.license, today);
       if (axis.held) {
         license = Math.round(weights.license * equivalenceFraction);
         if (axis.matchText) matches.push(axis.matchText);
@@ -1155,7 +1237,7 @@ function scoreWithSelectedLicense(
   } else if (hasQualificationRequirements) {
     // No aircraft named — the offer only states its license category, so
     // fall back to the category check.
-    const axis = evaluateLicenseAxis(offer, selectedLicense?.license, today);
+    const axis = evaluateLicenseAxis(offer, technician, selectedLicense?.license, today);
     if (axis.held) {
       level = 'legacy';
       if (axis.matchText) matches.push(axis.matchText);

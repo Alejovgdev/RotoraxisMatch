@@ -4887,6 +4887,108 @@ async function main() {
     assert.equal(visibleBreakdownRows(pesos)[1].label, 'Habilitation', 'el rótulo sale del helper, no de la pantalla');
   });
 
+  // ── Cierre de Fase 10 · "no la tienes" vs "no la acepto" ───────────────
+  //
+  // Con la misma categoría de otra autoridad, el perfil SÍ tiene la licencia:
+  // lo que no la acepta es esta oferta. Decirlo cambia quién tiene que hacer
+  // algo — la empresa puede marcar esa autoridad en "Also accept licences
+  // from:"; el técnico no tiene nada que sacarse.
+
+  const TEXTO_UK_NO_ACEPTADA =
+    'The offer asks for EASA B1.1. The profile holds UK CAA B1.1, which this offer doesn\'t accept.';
+
+  await test('Autoridad no aceptada · oferta de aeronave — se nombra la licencia que tiene, no "not present in the profile"', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), conA320Bajo('UK_CAA'));
+    assert.ok(
+      r.clarifications.includes(TEXTO_UK_NO_ACEPTADA),
+      `falta el aviso de autoridad; clarifications=${JSON.stringify(r.clarifications)}`,
+    );
+    assert.equal(r.breakdown.license, 0, 'sigue sin puntuar: explicar no es aceptar');
+  });
+
+  await test('Autoridad no aceptada · oferta de sólo licencia — el requisito dice cuál tiene y que no se acepta', () => {
+    const oferta = makeOffer({ licenseAuthority: 'EASA', licenseCode: 'B1.1', requiredHabilitations: [], acceptedAuthorities: [] });
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA' });
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [uk] }));
+    assert.ok(r.missingRequirements.includes(TEXTO_UK_NO_ACEPTADA), JSON.stringify(r.missingRequirements));
+    assert.ok(
+      !r.missingRequirements.some((m) => m === 'Required license: B1.1'),
+      'el texto genérico no se acumula con el específico',
+    );
+  });
+
+  await test('Autoridad no aceptada · oferta de motor — el aviso conserva la coletilla de que la licencia no excluye', () => {
+    const oferta = makeEngineOffer(ENGINE_FIXTURES[0].id, {
+      requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA', acceptedAuthorities: [],
+    });
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA' });
+    const tecnico = makeTechnician({
+      ...PERFIL_MOTOR,
+      licenses: [uk],
+      engines: [makeEngineDeclaration(ENGINE_FIXTURES[0].id)],
+    });
+    const r = puntuar(oferta, tecnico);
+    const aviso = r.clarifications.find((c) => c.startsWith(TEXTO_UK_NO_ACEPTADA));
+    assert.ok(aviso, JSON.stringify(r.clarifications));
+    assert.ok(
+      aviso.includes('it never excludes'),
+      'en una oferta de motor la licencia puntúa y no topa: eso se sigue diciendo',
+    );
+    assert.ok(
+      !r.clarifications.some((c) => c.includes('not present in the profile')),
+      'el texto viejo desaparece cuando sí tiene la categoría',
+    );
+  });
+
+  await test('Autoridad no aceptada · sin ninguna licencia en el perfil se mantiene el texto genérico', () => {
+    const oferta = makeOffer({ licenseAuthority: 'EASA', licenseCode: 'B1.1', requiredHabilitations: [], acceptedAuthorities: [] });
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR }));
+    assert.deepEqual(r.missingRequirements, ['Required license: B1.1']);
+  });
+
+  await test('Autoridad no aceptada · si la oferta SÍ acepta esa autoridad no hay nada que avisar', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: EQUIVALENTES_EASA_B11 }), conA320Bajo('UK_CAA'));
+    assert.ok(
+      !r.clarifications.some((c) => c.includes("doesn't accept")),
+      JSON.stringify(r.clarifications),
+    );
+    assert.ok(r.breakdown.license > 0, 'la equivalente aceptada puntúa');
+  });
+
+  await test('Autoridad no aceptada · una credencial elegible de otra autoridad aceptada gana al aviso', () => {
+    const uk = makeLicense('B1.1', { id: 'lic-uk', authority: 'UK_CAA' });
+    const gcaa = makeLicense('B1.1', { id: 'lic-gcaa', authority: 'GCAA' });
+    const oferta = ofertaA320('EASA', { acceptedAuthorities: ['GCAA'] });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [uk, gcaa],
+      habilitations: [makeHabOn(gcaa, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    });
+    const r = puntuar(oferta, tecnico);
+    assert.ok(
+      !r.clarifications.some((c) => c.includes("doesn't accept")),
+      'con credencial elegida no hay nada que explicar, aunque sobre una descartada',
+    );
+  });
+
+  await test('Autoridad no aceptada · la caducidad de la autoridad correcta gana al aviso de autoridad', () => {
+    const easaCaducada = makeLicense('B1.1', { id: 'lic-easa', authority: 'EASA', expiresAt: '2026-01-01' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk', authority: 'UK_CAA' });
+    const oferta = makeOffer({ licenseAuthority: 'EASA', licenseCode: 'B1.1', requiredHabilitations: [], acceptedAuthorities: [] });
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [easaCaducada, uk] }));
+    assert.deepEqual(r.missingRequirements, ['B1.1 — expired'], 'renovar la EASA es la acción, no cambiar de autoridad');
+  });
+
+  await test('Autoridad no aceptada · entre varias descartadas se nombra una sola, y la vigente antes que la caducada', () => {
+    const ukCaducada = makeLicense('B1.1', { id: 'lic-a-uk', authority: 'UK_CAA', expiresAt: '2026-01-01' });
+    const casaVigente = makeLicense('B1.1', { id: 'lic-z-casa', authority: 'CASA' });
+    const oferta = makeOffer({ licenseAuthority: 'EASA', licenseCode: 'B1.1', requiredHabilitations: [], acceptedAuthorities: [] });
+    const r = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [ukCaducada, casaVigente] }));
+    assert.deepEqual(r.missingRequirements, [
+      'The offer asks for EASA B1.1. The profile holds CASA (Australia) B1.1, which this offer doesn\'t accept.',
+    ]);
+  });
+
 }
 
 main()
