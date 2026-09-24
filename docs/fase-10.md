@@ -251,6 +251,18 @@ desplegarse ningún cliente.
   selector de ciudad y NO tocado (queda fuera de los seis ajustes): el botón
   "Open chat" dentro de la tarjeta pulsable de
   `app/company/direct-offers/index.tsx:343`. Mismo fallo, misma solución.
+- Encontrado en los ajustes finales y NO tocado: una oferta FAA con aeronaves
+  sigue diciendo "The offer also lists 737; not present in the profile" de un
+  técnico que tiene el 737 como type rating bajo una Part-66. La oferta FAA sólo
+  compara la experiencia declarada, así que no puntúa, pero la frase es falsa.
+  Qué decir es decisión de producto.
+- Encontrado en los ajustes finales y NO tocado: si el rating pedido cuelga de
+  otra credencial ACEPTADA que no es la elegida (las credenciales no se
+  combinan), la línea de la aeronave sigue diciendo "not present in the
+  profile". El arreglo de los ajustes cubre sólo la autoridad no aceptada.
+- Encontrado en los ajustes finales y NO tocado: en el detalle de oferta de
+  empresa, una oferta DIRECTA retirada sigue ordenándose por encima de los
+  técnicos sin relación. El ajuste cubrió sólo las candidaturas retiradas.
 
 ## 4. Avisos
 
