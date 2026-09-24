@@ -5155,6 +5155,30 @@ async function main() {
     );
   });
 
+  await test('Orden de candidatos · una oferta directa retirada también va con los sin relación, por puntuación', () => {
+    assert.deepEqual(
+      ordenar([
+        { id: 'sin-90', total: 90 },
+        { id: 'directa-retirada-95', directOfferStatus: 'withdrawn', total: 95 },
+        { id: 'directa-rechazada-5', directOfferStatus: 'rejected', total: 5 },
+        { id: 'directa-retirada-40', directOfferStatus: 'withdrawn', total: 40 },
+        { id: 'sin-50', total: 50 },
+      ]),
+      ['directa-rechazada-5', 'directa-retirada-95', 'sin-90', 'sin-50', 'directa-retirada-40'],
+    );
+  });
+
+  await test('Orden de candidatos · candidatura y oferta directa retiradas: con los sin relación', () => {
+    assert.deepEqual(
+      ordenar([
+        { id: 'sin-90', total: 90 },
+        { id: 'ambas-retiradas-30', applicationStatus: 'withdrawn', directOfferStatus: 'withdrawn', total: 30 },
+        { id: 'directa-pendiente-10', directOfferStatus: 'pending', total: 10 },
+      ]),
+      ['directa-pendiente-10', 'sin-90', 'ambas-retiradas-30'],
+    );
+  });
+
   await test('Aeronave bajo autoridad no aceptada · un rating bajo otro CÓDIGO no es cosa de autoridad', () => {
     const b2 = makeLicense('B2', { authority: 'UK_CAA' });
     const tecnico = makeTechnician({

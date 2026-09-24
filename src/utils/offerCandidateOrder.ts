@@ -11,6 +11,9 @@
 // ordena como si no existiera (con los sin relación, o con su oferta directa si
 // la tiene); la etiqueta "Withdrawn" la sigue pintando la pantalla, que no lee
 // de aquí.
+//
+// Últimos ajustes: lo mismo para una OFERTA DIRECTA retirada. Con las dos
+// retiradas, el técnico se ordena con los sin relación.
 import { OfferRequestStatus } from '../types/enums';
 
 export const OFFER_RELATION_STATUS_ORDER: Record<OfferRequestStatus, number> = {
@@ -29,8 +32,9 @@ export interface OfferCandidateOrderEntry {
 
 function orderKey(entry: OfferCandidateOrderEntry): { group: number; status: number } {
   const application = entry.applicationStatus === 'withdrawn' ? undefined : entry.applicationStatus;
+  const directOffer = entry.directOfferStatus === 'withdrawn' ? undefined : entry.directOfferStatus;
   if (application) return { group: 0, status: OFFER_RELATION_STATUS_ORDER[application] ?? 4 };
-  if (entry.directOfferStatus) return { group: 1, status: OFFER_RELATION_STATUS_ORDER[entry.directOfferStatus] ?? 4 };
+  if (directOffer) return { group: 1, status: OFFER_RELATION_STATUS_ORDER[directOffer] ?? 4 };
   return { group: 2, status: 10 };
 }
 

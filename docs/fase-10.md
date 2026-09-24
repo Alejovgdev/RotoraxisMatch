@@ -256,9 +256,6 @@ desplegarse ningún cliente.
   técnico que tiene el 737 como type rating bajo una Part-66. La oferta FAA sólo
   compara la experiencia declarada, así que no puntúa, pero la frase es falsa.
   Qué decir es decisión de producto.
-- Encontrado en los ajustes finales y NO tocado: en el detalle de oferta de
-  empresa, una oferta DIRECTA retirada sigue ordenándose por encima de los
-  técnicos sin relación. El ajuste cubrió sólo las candidaturas retiradas.
 
 ## 4. Avisos
 
