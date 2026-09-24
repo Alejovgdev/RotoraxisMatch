@@ -48,7 +48,7 @@ import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { useCompanySession } from '../../../src/state/SessionContext';
@@ -172,9 +172,9 @@ export default function ApplicationDetailScreen() {
     }, [load]),
   );
 
-  // Real per-offer denominators — never hardcoded (see
-  // app/company/offers/[id].tsx / getMatchScoreWeights).
-  const weights = useMemo(() => (offer ? getMatchScoreWeights(offer) : null), [offer]);
+  // Real per-offer rows, labels and denominators — never hardcoded (see
+  // src/utils/matchBreakdownRows.ts).
+  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -427,7 +427,7 @@ export default function ApplicationDetailScreen() {
         {score ? (
           <CompanyCard style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Match breakdown</Text>
-            {visibleBreakdownRows(weights).map((row) => (
+            {breakdownRows.map((row) => (
               <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} />
             ))}
             <MatchExplanation score={score} hideBreakdown displayLabel={offer ? getMatchDisplayLabel(offer, score) : undefined} />

@@ -14,7 +14,9 @@
 // motor como única excepción condicionada. Repetirla una sexta vez era la forma
 // de que un eje nuevo saliera en cuatro pantallas y en la quinta no.
 import { MatchScore } from '../types/matching';
-import { MatchScoreWeights } from './offerMatchExplain';
+import { OfferWithRequirements } from '../types/offer';
+import { getMatchScoreWeights } from './offerMatchExplain';
+import { offerAircraftAreExperience } from './offerShape';
 
 export type BreakdownKey = keyof MatchScore['breakdown'];
 
@@ -24,10 +26,13 @@ export interface BreakdownRowSpec {
   max: number;
 }
 
-// El rótulo, en un único sitio. `Habilitation` sigue rotulando una fila que en
-// ofertas FAA y sin certificar mide experiencia declarada y no type ratings:
-// está anotado en los Pendientes de docs/fase-10.md, y cambiarlo es un cambio
-// de producto, no de presentación.
+// El rótulo, en un único sitio. Ajustes finales de Fase 10: en una oferta FAA
+// la fila de habilitación mide la experiencia de aeronave declarada —la FAA no
+// emite type ratings (`offerAircraftAreExperience`)— y se rotula así. En las
+// ofertas sin certificar sigue diciendo `Habilitation` aunque allí cuentan las
+// dos fuentes: está en los Pendientes de docs/fase-10.md.
+const AIRCRAFT_EXPERIENCE_LABEL = 'Aircraft experience';
+
 const BREAKDOWN_LABELS: Record<BreakdownKey, string> = {
   habilitation: 'Habilitation',
   license: 'License',
@@ -63,16 +68,26 @@ export const QUALIFICATION_FIRST_ORDER: readonly BreakdownKey[] = [
  * movido filas de sitio en cuatro pantallas sin que nadie lo pidiera; lo que sí
  * se unifica es QUÉ filas salen y cómo se rotulan.
  *
- * Sin pesos —la pantalla todavía no sabe contra qué oferta puntúa— la lista es
+ * Recibe la OFERTA y no sus pesos (ajustes finales de Fase 10): el rótulo
+ * depende de ella, y de ella salen también los máximos. Con pesos y oferta por
+ * separado, una pantalla podía pasar unos de una y rotular con la otra.
+ *
+ * Sin oferta —la pantalla todavía no sabe contra qué oferta puntúa— la lista es
  * vacía: pintar seis filas con denominadores inventados es peor que no pintar
  * ninguna.
  */
 export function visibleBreakdownRows(
-  weights: MatchScoreWeights | null | undefined,
+  offer: OfferWithRequirements | null | undefined,
   order: readonly BreakdownKey[] = VERIFIED_FIRST_ORDER,
 ): BreakdownRowSpec[] {
-  if (!weights) return [];
+  if (!offer) return [];
+  const weights = getMatchScoreWeights(offer);
+  const aircraftAreExperience = offerAircraftAreExperience(offer);
   return order
     .filter((key) => weights[key] > 0)
-    .map((key) => ({ key, label: BREAKDOWN_LABELS[key], max: weights[key] }));
+    .map((key) => ({
+      key,
+      label: key === 'habilitation' && aircraftAreExperience ? AIRCRAFT_EXPERIENCE_LABEL : BREAKDOWN_LABELS[key],
+      max: weights[key],
+    }));
 }

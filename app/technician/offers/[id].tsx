@@ -40,7 +40,7 @@ import { companyRepositoryV2 } from '../../../src/repositories/v2/companyReposit
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
-import { getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
 import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
@@ -207,7 +207,8 @@ export default function OfferDetailScreen() {
   // (app/company/offers/[id].tsx) — never hardcoded, since weights change
   // per offer (qualification-requiring vs. not) and have changed once
   // already (Fase 2 rebalance).
-  const weights = useMemo(() => (offer ? getMatchScoreWeights(offer) : null), [offer]);
+  // Filas, rótulos y máximos salen de la oferta: src/utils/matchBreakdownRows.ts.
+  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
 
   async function handleApply() {
     if (!offer || !technicianId) {
@@ -386,7 +387,7 @@ export default function OfferDetailScreen() {
           <TechnicianCard style={styles.section}>
             <Text style={styles.sectionTitle}>Match</Text>
             <Text style={styles.sectionSub}>How your profile scores against this offer's criteria.</Text>
-            {visibleBreakdownRows(weights).map((row) => (
+            {breakdownRows.map((row) => (
               <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} accent={accent} />
             ))}
             <MatchExplanation score={score} hideBreakdown displayLabel={getMatchDisplayLabel(offer, score)} />

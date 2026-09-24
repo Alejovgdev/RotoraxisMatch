@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, spacing } from '../theme';
 import { MatchScore, MatchDisplayLabel } from '../types/matching';
-import { MatchScoreWeights } from '../utils/offerMatchExplain';
+import { OfferWithRequirements } from '../types/offer';
 import { QUALIFICATION_FIRST_ORDER, visibleBreakdownRows } from '../utils/matchBreakdownRows';
 
 const LEVEL_LABEL: Record<MatchScore['level'], string> = {
@@ -35,10 +35,11 @@ const LEVEL_COLOR: Record<MatchScore['level'], string> = {
 // getMatchScoreWeights) — avoids showing the same numbers twice. The cap
 // note, matches, clarifications and mandatory-missing sections always
 // render regardless, since those are never duplicated elsewhere.
-// weights: los máximos de ESTA oferta (getMatchScoreWeights). Sin ellos no se
-// puede saber qué fila sobra, así que el bloque entero se calla en vez de
-// pintar seis filas con denominadores que nadie ha comprobado. Los llamadores
-// con hideBreakdown no lo necesitan.
+// offer: la oferta contra la que se puntuó. De ella salen los máximos y los
+// rótulos de las filas (visibleBreakdownRows). Sin ella no se puede saber qué
+// fila sobra, así que el bloque entero se calla en vez de pintar seis filas con
+// denominadores que nadie ha comprobado. Los llamadores con hideBreakdown no la
+// necesitan.
 // displayLabel: overrides the band label ("Excellent match", …) next to the
 // score. Passed by callers that know the offer targets non-licensed trades,
 // where there is no Part-66 requirement to have matched and the honest
@@ -48,14 +49,14 @@ export function MatchExplanation({
   score,
   hideBreakdown = false,
   displayLabel,
-  weights,
+  offer,
 }: {
   score: MatchScore;
   hideBreakdown?: boolean;
   displayLabel?: MatchDisplayLabel;
-  weights?: MatchScoreWeights | null;
+  offer?: OfferWithRequirements | null;
 }) {
-  const breakdownRows = visibleBreakdownRows(weights, QUALIFICATION_FIRST_ORDER);
+  const breakdownRows = visibleBreakdownRows(offer, QUALIFICATION_FIRST_ORDER);
   const rawSum = Object.values(score.breakdown).reduce((sum, v) => sum + v, 0);
   const wasCapped = rawSum > score.total;
 

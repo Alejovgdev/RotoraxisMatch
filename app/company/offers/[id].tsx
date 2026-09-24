@@ -49,7 +49,7 @@ import {
 import { isOfferOpenForTechnicians, offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
-import { getMatchScoreWeights, getTechnicianMatchesForOffer, MatchScoreWeights, TechnicianMatchResult } from '../../../src/utils/matchingV2';
+import { getTechnicianMatchesForOffer, MatchScoreWeights, TechnicianMatchResult } from '../../../src/utils/matchingV2';
 import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { compareOfferCandidates, OFFER_RELATION_STATUS_ORDER } from '../../../src/utils/offerCandidateOrder';
 import { OfferRequiredHabilitation, OfferWithRequirements } from '../../../src/types/offer';
@@ -413,7 +413,7 @@ export default function OfferDetailScreen() {
     return [...matches].sort((a, b) => compareOfferCandidates(orderEntry(a), orderEntry(b)));
   }, [applicationByTechnician, directOfferByTechnician, matches]);
 
-  const weights = useMemo(() => (offer ? getMatchScoreWeights(offer) : null), [offer]);
+  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
 
   // Mismo gate que app/technician/offers/index.tsx: mientras el catalogo
   // carga no se pinta nada, para no enseñar los ratings requeridos como UUID
@@ -660,7 +660,7 @@ export default function OfferDetailScreen() {
               ) : null}
 
               <View style={styles.breakdown}>
-                {visibleBreakdownRows(weights).map((row) => (
+                {breakdownRows.map((row) => (
                   <BreakdownItem key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} />
                 ))}
               </View>

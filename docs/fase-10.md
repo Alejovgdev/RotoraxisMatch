@@ -244,8 +244,9 @@ desplegarse ningún cliente.
 - Retirar `offers.accepts_equivalent` y su clave en
   `update_offer_with_habilitations` cuando el cliente de esta rama esté
   desplegado (fase contract de la 088; hoy no la lee ni la escribe nadie).
-- El desglose del match rotula "Habilitation" una fila que en ofertas FAA y sin
-  certificar mide experiencia declarada, no type ratings.
+- El desglose del match rotula "Habilitation" una fila que en ofertas sin
+  certificar mide type ratings y experiencia declarada juntos. En las FAA ya
+  dice "Aircraft experience" (ajustes finales).
 - Otro `<button>` dentro de `<button>` en web, encontrado al arreglar el del
   selector de ciudad y NO tocado (queda fuera de los seis ajustes): el botón
   "Open chat" dentro de la tarjeta pulsable de

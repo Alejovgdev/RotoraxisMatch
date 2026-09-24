@@ -4823,7 +4823,7 @@ async function main() {
 
   await test('Desglose · una oferta de motor no pinta habilitación (máximo 0) y sí pinta motor', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b');
-    const filas = visibleBreakdownRows(getMatchScoreWeights(oferta));
+    const filas = visibleBreakdownRows(oferta);
     const claves = filas.map((f) => f.key);
     assert.ok(!claves.includes('habilitation'), 'habilitation tiene máximo 0 en una oferta de motor');
     assert.ok(!claves.includes('license'), 'sin licencia pedida, license también vale 0');
@@ -4832,7 +4832,7 @@ async function main() {
 
   await test('Desglose · la oferta de motor con licencia recupera la fila de licencia, nunca la de habilitación', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: 'B1.1' });
-    const claves = visibleBreakdownRows(getMatchScoreWeights(oferta)).map((f) => f.key);
+    const claves = visibleBreakdownRows(oferta).map((f) => f.key);
     assert.ok(claves.includes('license'), 'la licencia opcional de la sesión 2 puntúa, luego se pinta');
     assert.ok(claves.includes('engine'));
     assert.ok(!claves.includes('habilitation'), 'una oferta de motor nunca pide type ratings');
@@ -4840,7 +4840,7 @@ async function main() {
 
   await test('Desglose · una oferta de aeronave no pinta la fila de motor', () => {
     const oferta = makeOffer({ requiredHabilitations: [makeHabReq('rating-a320')] });
-    const claves = visibleBreakdownRows(getMatchScoreWeights(oferta)).map((f) => f.key);
+    const claves = visibleBreakdownRows(oferta).map((f) => f.key);
     assert.ok(!claves.includes('engine'), 'el eje de motor sólo puntúa en ofertas de motor');
     assert.ok(claves.includes('habilitation'));
     assert.ok(claves.includes('license'));
@@ -4848,7 +4848,7 @@ async function main() {
 
   await test('Desglose · una oferta sin requisitos de cualificación no pinta ninguno de los tres ejes', () => {
     const oferta = makeOffer({ requiresCertification: false, licenseCode: undefined, requiredHabilitations: [] });
-    const claves = visibleBreakdownRows(getMatchScoreWeights(oferta)).map((f) => f.key);
+    const claves = visibleBreakdownRows(oferta).map((f) => f.key);
     assert.deepEqual(claves, ['verified', 'contractFit', 'location']);
   });
 
@@ -4864,7 +4864,7 @@ async function main() {
     ];
     for (const oferta of ofertas) {
       const pesos = getMatchScoreWeights(oferta);
-      const filas = visibleBreakdownRows(pesos);
+      const filas = visibleBreakdownRows(oferta);
       assert.ok(filas.length > 0, 'siempre queda algo que pintar');
       for (const fila of filas) {
         assert.ok(fila.max > 0, `${fila.key} no debería pintarse con máximo 0`);
@@ -4873,19 +4873,39 @@ async function main() {
     }
   });
 
-  await test('Desglose · sin pesos no se pinta nada, y cada orden conserva el suyo', () => {
+  await test('Desglose · sin oferta no se pinta nada, y cada orden conserva el suyo', () => {
     assert.deepEqual(visibleBreakdownRows(null), [], 'sin oferta no hay denominador que enseñar');
     assert.deepEqual(visibleBreakdownRows(undefined), []);
-    const pesos = getMatchScoreWeights(makeOffer({ requiredHabilitations: [makeHabReq('rating-a320')] }));
+    const oferta = makeOffer({ requiredHabilitations: [makeHabReq('rating-a320')] });
     assert.deepEqual(
-      visibleBreakdownRows(pesos, VERIFIED_FIRST_ORDER).map((f) => f.key),
+      visibleBreakdownRows(oferta, VERIFIED_FIRST_ORDER).map((f) => f.key),
       ['verified', 'habilitation', 'license', 'contractFit', 'location'],
     );
     assert.deepEqual(
-      visibleBreakdownRows(pesos, QUALIFICATION_FIRST_ORDER).map((f) => f.key),
+      visibleBreakdownRows(oferta, QUALIFICATION_FIRST_ORDER).map((f) => f.key),
       ['habilitation', 'license', 'verified', 'contractFit', 'location'],
     );
-    assert.equal(visibleBreakdownRows(pesos)[1].label, 'Habilitation', 'el rótulo sale del helper, no de la pantalla');
+    assert.equal(visibleBreakdownRows(oferta)[1].label, 'Habilitation', 'el rótulo sale del helper, no de la pantalla');
+  });
+
+  // Ajustes finales de Fase 10: en una oferta FAA esa fila mide experiencia
+  // declarada (la FAA no emite type ratings), y se rotula así.
+  const rotulos = (oferta: OfferWithRequirements) =>
+    Object.fromEntries(visibleBreakdownRows(oferta).map((f) => [f.key, f.label]));
+
+  await test('Desglose · en una oferta FAA con aeronaves la fila es "Aircraft experience", con su máximo real', () => {
+    const faa = makeOffer({ licenseAuthority: 'FAA', licenseCode: 'A&P', requiredHabilitations: [makeHabReq('rating-a320')] });
+    const fila = visibleBreakdownRows(faa).find((f) => f.key === 'habilitation');
+    assert.equal(fila?.label, 'Aircraft experience');
+    assert.equal(fila?.max, getMatchScoreWeights(faa).habilitation, 'cambia el rótulo, no el peso');
+    assert.equal(rotulos(faa).license, 'License');
+  });
+
+  await test('Desglose · en las Part-66 sigue siendo "Habilitation", de cualquier autoridad', () => {
+    for (const authority of PART66_AUTHORITIES) {
+      const oferta = makeOffer({ licenseAuthority: authority, requiredHabilitations: [makeHabReq('rating-a320')] });
+      assert.equal(rotulos(oferta).habilitation, 'Habilitation', authority);
+    }
   });
 
   // ── Cierre de Fase 10 · "no la tienes" vs "no la acepto" ───────────────
