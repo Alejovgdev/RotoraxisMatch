@@ -5169,6 +5169,83 @@ async function main() {
     );
   });
 
+  // ── Últimos ajustes de Fase 10 · el rating bajo otra credencial ACEPTADA ──
+  //
+  // EASA B1.1 + A320 elegida, UK CAA B1.1 + 777 aceptada. Una credencial
+  // responde por toda la oferta y no se combinan, así que el 777 no cuenta —
+  // pero está en el perfil, y "not present in the profile" era falso.
+
+  const B777 = getAircraftTypeRatingLabel('fx-b777-ge90', RATING_INDEX_MOTORES);
+  const TEXTO_777_BAJO_UK_ACEPTADA =
+    `the profile holds ${B777} under UK CAA B1.1; this match is assessed on EASA B1.1, ` +
+    'and ratings from different licences are not combined';
+  const ofertaA320o777 = (extra: OfferOverrides = {}) =>
+    makeOffer({
+      licenseAuthority: 'EASA',
+      acceptedAuthorities: EQUIVALENTES_EASA_B11,
+      requiredHabilitations: [makeHabReq('fx-a320-cfm56'), makeHabReq('fx-b777-ge90')],
+      ...extra,
+    });
+  const easaA320ukConOSin777 = (con777: boolean) => {
+    const easa = makeLicense('B1.1', { id: 'lic-easa', authority: 'EASA' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk', authority: 'UK_CAA' });
+    return makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa, uk],
+      habilitations: [
+        makeHabOn(easa, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+        ...(con777 ? [makeHabOn(uk, { aircraftTypeRatingId: 'fx-b777-ge90' })] : []),
+      ],
+    });
+  };
+
+  await test('Otra credencial aceptada · "basta con una" — explica que no se combinan, y ni la nota ni la elección cambian', () => {
+    const r = puntuar(ofertaA320o777(), easaA320ukConOSin777(true));
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${B777}; ${TEXTO_777_BAJO_UK_ACEPTADA}`),
+      JSON.stringify(r.clarifications),
+    );
+    assert.ok(!r.clarifications.some((c) => c.includes('not present in the profile')), JSON.stringify(r.clarifications));
+    // Contraste: el mismo perfil sin el 777 bajo la UK CAA puntúa igual y
+    // sigue respondiendo con la EASA (exacta: sin línea de equivalencia).
+    const contraste = puntuar(ofertaA320o777(), easaA320ukConOSin777(false));
+    assert.equal(r.total, 100);
+    assert.equal(r.total, contraste.total);
+    assert.deepEqual(r.breakdown, contraste.breakdown);
+    assert.equal(r.authorityEquivalence, undefined, 'la elegida sigue siendo la EASA');
+    assert.deepEqual(r.matches, contraste.matches);
+  });
+
+  await test('Otra credencial aceptada · "todas" — el requisito incumplido lo explica y el techo no se mueve', () => {
+    const oferta = ofertaA320o777({ requiresAllAircraft: true });
+    const r = puntuar(oferta, easaA320ukConOSin777(true));
+    const contraste = puntuar(oferta, easaA320ukConOSin777(false));
+    assert.deepEqual(r.missingRequirements, [`B1.1 + ${B777} — ${TEXTO_777_BAJO_UK_ACEPTADA}`]);
+    assert.deepEqual(contraste.missingRequirements, [`B1.1 + ${B777}`], 'sin el rating, el texto de siempre');
+    assert.equal(r.total, contraste.total);
+    assert.deepEqual(r.breakdown, contraste.breakdown);
+  });
+
+  await test('Otra credencial aceptada · gana al aviso de autoridad rechazada cuando el rating está bajo las dos', () => {
+    const easa = makeLicense('B1.1', { id: 'lic-easa', authority: 'EASA' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk', authority: 'UK_CAA' });
+    const casa = makeLicense('B1.1', { id: 'lic-casa', authority: 'CASA' });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa, uk, casa],
+      habilitations: [
+        makeHabOn(easa, { aircraftTypeRatingId: 'fx-a320-cfm56' }),
+        makeHabOn(uk, { aircraftTypeRatingId: 'fx-b777-ge90' }),
+        makeHabOn(casa, { aircraftTypeRatingId: 'fx-b777-ge90' }),
+      ],
+    });
+    const r = puntuar(ofertaA320o777({ acceptedAuthorities: ['UK_CAA'] }), tecnico);
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${B777}; ${TEXTO_777_BAJO_UK_ACEPTADA}`),
+      JSON.stringify(r.clarifications),
+    );
+  });
+
 }
 
 main()

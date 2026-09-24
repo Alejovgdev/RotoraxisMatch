@@ -968,12 +968,80 @@ function unacceptedAuthorityRatingHolder(
   requiredRatingId: string,
   today: string,
 ): TechnicianLicense | undefined {
+  return firstRejectedByAuthority(offer, ratingHolders(technician, requiredRatingId), today);
+}
+
+// Las credenciales de las que cuelga ese rating exacto, por id de credencial.
+function ratingHolders(
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
+  requiredRatingId: string,
+): TechnicianLicense[] {
   const holderIds = new Set(
     technician.habilitations
       .filter((h) => h.aircraftTypeRatingId === requiredRatingId)
       .map((h) => h.technicianLicenseId),
   );
-  return firstRejectedByAuthority(offer, technician.licenses.filter((l) => holderIds.has(l.id)), today);
+  return technician.licenses.filter((l) => holderIds.has(l.id));
+}
+
+/**
+ * Últimos ajustes de Fase 10 — el rating cuelga de OTRA credencial que la
+ * oferta SÍ acepta, pero no de la elegida. Una credencial responde por toda la
+ * oferta y los ratings de dos credenciales no se combinan (selectLicenseForOffer):
+ * con una EASA B1.1 + A320 elegida y una UK CAA B1.1 + A330 aceptada, el A330
+ * no cuenta, y "not present in the profile" era falso.
+ *
+ * Pregunta a `licenseSatisfiesRequirement`, la misma que decide los candidatos.
+ * Sólo explica: ni la nota ni la credencial elegida cambian. Entre varias, la
+ * de autoridad exacta y después el id, para que el texto sea estable.
+ */
+function otherAcceptedRatingHolder(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
+  requiredRatingId: string,
+  selected: TechnicianLicense,
+): TechnicianLicense | undefined {
+  const required = offer.licenseCode;
+  if (!required) return undefined;
+  return ratingHolders(technician, requiredRatingId)
+    .flatMap((held) => {
+      if (held.id === selected.id) return [];
+      const satisfaction = licenseSatisfiesRequirement(
+        held,
+        { authority: offer.licenseAuthority, licenseCode: required },
+        offer.acceptedAuthorities,
+      );
+      return satisfaction ? [{ held, exact: satisfaction === 'exact' }] : [];
+    })
+    .sort((a, b) => (a.exact !== b.exact ? (a.exact ? -1 : 1) : a.held.id.localeCompare(b.held.id)))[0]?.held;
+}
+
+/**
+ * El rating pedido no cuenta bajo la credencial elegida, pero el perfil lo
+ * tiene bajo otra. Dos motivos, dos textos; ninguno toca la nota. Primero la
+ * credencial aceptada no elegida (la oferta la admite; lo que falla es que no
+ * se combinan) y después la de autoridad rechazada (ajustes finales).
+ */
+function ratingHeldElsewhereText(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
+  requiredRatingId: string,
+  ratingLabel: string,
+  selected: TechnicianLicense | undefined,
+  today: string,
+): string | undefined {
+  const accepted = selected ? otherAcceptedRatingHolder(offer, technician, requiredRatingId, selected) : undefined;
+  if (accepted && selected) {
+    return (
+      `the profile holds ${ratingLabel} under ${credentialLabel(accepted.authority, accepted.licenseCode)}; ` +
+      `this match is assessed on ${credentialLabel(selected.authority, selected.licenseCode)}, ` +
+      'and ratings from different licences are not combined'
+    );
+  }
+  const rejected = unacceptedAuthorityRatingHolder(offer, technician, requiredRatingId, today);
+  return rejected
+    ? `the profile holds ${ratingLabel} under ${credentialLabel(rejected.authority, rejected.licenseCode)}, which this offer doesn't accept`
+    : undefined;
 }
 
 /**
@@ -1194,24 +1262,22 @@ function scoreWithSelectedLicense(
         // está cumplida exactamente. Una coincidencia degradada por vigencia
         // SIGUE siendo tier 'exact' — degradar nunca degrada a "no cumplida".
         everyAircraftExact = false;
-        // Ajustes finales de Fase 10: el rating está, pero colgado de una
-        // credencial de otra autoridad que esta oferta no acepta. Cambia el
-        // texto, nunca la lista en la que va: el techo no se mueve.
-        const rejectedHolder =
+        // Ajustes finales de Fase 10: el rating está, pero colgado de otra
+        // credencial — de una autoridad que esta oferta no acepta, o (últimos
+        // ajustes) de una aceptada que no es la elegida. Cambia el texto, nunca
+        // la lista en la que va: el techo no se mueve.
+        const heldElsewhere =
           evidence === 'rating' && outcome.tier === 'not_met' && !outcome.expiredText
-            ? unacceptedAuthorityRatingHolder(offer, technician, req.aircraftTypeRatingId, today)
+            ? ratingHeldElsewhereText(offer, technician, req.aircraftTypeRatingId, ratingLabel, selectedLicense?.license, today)
             : undefined;
-        const heldUnderRejected = rejectedHolder
-          ? `the profile holds ${ratingLabel} under ${credentialLabel(rejectedHolder.authority, rejectedHolder.licenseCode)}, which this offer doesn't accept`
-          : undefined;
         if (offer.requiresAllAircraft) {
           // La oferta dijo que hacen falta TODAS: esto es lo que dispara el
           // cap y hay que nombrarlo.
-          missingRequirements.push(heldUnderRejected ? `${aircraftLabel} — ${heldUnderRejected}` : aircraftLabel);
+          missingRequirements.push(heldElsewhere ? `${aircraftLabel} — ${heldElsewhere}` : aircraftLabel);
         } else if (outcome.tier === 'not_met') {
           // Basta con una: no cumplir ésta no es un fallo, es información.
           clarifications.push(
-            `The offer also lists ${aircraftLabel}; ${heldUnderRejected ?? 'not present in the profile'}`,
+            `The offer also lists ${aircraftLabel}; ${heldElsewhere ?? 'not present in the profile'}`,
           );
         }
       }
