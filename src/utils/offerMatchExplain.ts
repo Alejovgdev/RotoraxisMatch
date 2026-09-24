@@ -909,13 +909,30 @@ function unacceptedAuthorityText(
   technician: Pick<TechnicianWithRelations, 'licenses'>,
   today: string,
 ): string | undefined {
+  const best = firstRejectedByAuthority(offer, technician.licenses, today);
+  if (!best || !offer.licenseCode) return undefined;
+  return (
+    `The offer asks for ${credentialLabel(offer.licenseAuthority, offer.licenseCode)}. ` +
+    `The profile holds ${credentialLabel(best.authority, best.licenseCode)}, which this offer doesn't accept.`
+  );
+}
+
+// De estas credenciales, la que la oferta descarta SÓLO por la autoridad, o
+// ninguna. La comparten el aviso de licencia (arriba) y el de aeronave (abajo):
+// si cada uno filtrara por su cuenta, podrían nombrar credenciales distintas
+// del mismo perfil.
+function firstRejectedByAuthority(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  licenses: readonly TechnicianLicense[],
+  today: string,
+): TechnicianLicense | undefined {
   const required = offer.licenseCode;
   const requiredAuthority = offer.licenseAuthority;
   // Sin autoridad exigida no hay autoridad que rechazar: `licenseSatisfiesRequirement`
   // da 'exact' a cualquier código que encaje, así que no habría descartados.
   if (!required || !requiredAuthority) return undefined;
 
-  const rejected = technician.licenses
+  return licenses
     .filter(
       (held) =>
         licenseCodeSatisfies(held.licenseCode, required) &&
@@ -931,14 +948,32 @@ function unacceptedAuthorityText(
       const expiredB = isLicenseExpired(b, today);
       if (expiredA !== expiredB) return expiredA ? 1 : -1;
       return a.id.localeCompare(b.id);
-    });
+    })[0];
+}
 
-  const best = rejected[0];
-  if (!best) return undefined;
-  return (
-    `The offer asks for ${credentialLabel(requiredAuthority, required)}. ` +
-    `The profile holds ${credentialLabel(best.authority, best.licenseCode)}, which this offer doesn't accept.`
+/**
+ * Ajustes finales de Fase 10 — lo mismo para la AERONAVE. Con el A320 colgado
+ * de una UK CAA B1.1, una oferta EASA B1.1 que no acepta UK CAA decía "The offer
+ * also lists B1.1 + A320; not present in the profile", y el rating sí está en el
+ * perfil: lo que falla es la autoridad de la credencial de la que cuelga.
+ *
+ * Sólo el rating EXACTO, y sólo bajo una credencial que la oferta descarta por
+ * la autoridad (`firstRejectedByAuthority`, la misma pregunta que el aviso de
+ * licencia). Si no hay ninguna, el texto de siempre es cierto y se queda. Es
+ * texto: ni puntúa ni mueve techos.
+ */
+function unacceptedAuthorityRatingHolder(
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
+  requiredRatingId: string,
+  today: string,
+): TechnicianLicense | undefined {
+  const holderIds = new Set(
+    technician.habilitations
+      .filter((h) => h.aircraftTypeRatingId === requiredRatingId)
+      .map((h) => h.technicianLicenseId),
   );
+  return firstRejectedByAuthority(offer, technician.licenses.filter((l) => holderIds.has(l.id)), today);
 }
 
 /**
@@ -1159,13 +1194,25 @@ function scoreWithSelectedLicense(
         // está cumplida exactamente. Una coincidencia degradada por vigencia
         // SIGUE siendo tier 'exact' — degradar nunca degrada a "no cumplida".
         everyAircraftExact = false;
+        // Ajustes finales de Fase 10: el rating está, pero colgado de una
+        // credencial de otra autoridad que esta oferta no acepta. Cambia el
+        // texto, nunca la lista en la que va: el techo no se mueve.
+        const rejectedHolder =
+          evidence === 'rating' && outcome.tier === 'not_met' && !outcome.expiredText
+            ? unacceptedAuthorityRatingHolder(offer, technician, req.aircraftTypeRatingId, today)
+            : undefined;
+        const heldUnderRejected = rejectedHolder
+          ? `the profile holds ${ratingLabel} under ${credentialLabel(rejectedHolder.authority, rejectedHolder.licenseCode)}, which this offer doesn't accept`
+          : undefined;
         if (offer.requiresAllAircraft) {
           // La oferta dijo que hacen falta TODAS: esto es lo que dispara el
           // cap y hay que nombrarlo.
-          missingRequirements.push(aircraftLabel);
+          missingRequirements.push(heldUnderRejected ? `${aircraftLabel} — ${heldUnderRejected}` : aircraftLabel);
         } else if (outcome.tier === 'not_met') {
           // Basta con una: no cumplir ésta no es un fallo, es información.
-          clarifications.push(`The offer also lists ${aircraftLabel}; not present in the profile`);
+          clarifications.push(
+            `The offer also lists ${aircraftLabel}; ${heldUnderRejected ?? 'not present in the profile'}`,
+          );
         }
       }
     }

@@ -4989,6 +4989,76 @@ async function main() {
     ]);
   });
 
+  // ── Ajustes finales de Fase 10 · la AERONAVE bajo otra autoridad ────────
+  //
+  // El aviso de licencia ya distinguía "no la tienes" de "no la acepto"; la
+  // línea de la aeronave seguía diciendo "not present in the profile" de un
+  // A320 que el perfil sí tiene, colgado de una UK CAA B1.1.
+
+  const A320 = getAircraftTypeRatingLabel('fx-a320-cfm56', RATING_INDEX_MOTORES);
+  const TEXTO_A320_BAJO_UK = `the profile holds ${A320} under UK CAA B1.1, which this offer doesn't accept`;
+
+  await test('Aeronave bajo autoridad no aceptada · "basta con una" — nombra la credencial, no "not present in the profile"', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), conA320Bajo('UK_CAA'));
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${A320}; ${TEXTO_A320_BAJO_UK}`),
+      JSON.stringify(r.clarifications),
+    );
+    assert.ok(!r.clarifications.some((c) => c.includes('not present in the profile')), JSON.stringify(r.clarifications));
+  });
+
+  await test('Aeronave bajo autoridad no aceptada · "todas" — el requisito incumplido lo dice, y el techo no se mueve', () => {
+    const oferta = ofertaA320('EASA', { acceptedAuthorities: [], requiresAllAircraft: true });
+    const r = puntuar(oferta, conA320Bajo('UK_CAA'));
+    assert.deepEqual(r.missingRequirements, [`B1.1 + ${A320} — ${TEXTO_A320_BAJO_UK}`]);
+    // Contraste: la misma UK CAA B1.1 SIN el A320 puntúa igual. El texto
+    // explica; no convierte el rating descartado en evidencia.
+    const sinRating = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1', { authority: 'UK_CAA' })] });
+    const contraste = puntuar(oferta, sinRating);
+    assert.deepEqual(contraste.missingRequirements, [`B1.1 + ${A320}`], 'sin el rating el texto de siempre');
+    assert.equal(r.total, contraste.total);
+    assert.deepEqual(r.breakdown, contraste.breakdown);
+  });
+
+  await test('Aeronave bajo autoridad no aceptada · también con otra credencial elegida que no lleva ese rating', () => {
+    const easa = makeLicense('B1.1', { id: 'lic-easa', authority: 'EASA' });
+    const uk = makeLicense('B1.1', { id: 'lic-uk', authority: 'UK_CAA' });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [easa, uk],
+      habilitations: [makeHabOn(uk, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    });
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), tecnico);
+    assert.ok(r.breakdown.license > 0, 'la EASA B1.1 sí cuenta como licencia');
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${A320}; ${TEXTO_A320_BAJO_UK}`),
+      JSON.stringify(r.clarifications),
+    );
+  });
+
+  await test('Aeronave bajo autoridad no aceptada · sin el rating en ninguna licencia se queda el texto de siempre', () => {
+    const tecnico = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1', { authority: 'UK_CAA' })] });
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), tecnico);
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${A320}; not present in the profile`),
+      JSON.stringify(r.clarifications),
+    );
+  });
+
+  await test('Aeronave bajo autoridad no aceptada · un rating bajo otro CÓDIGO no es cosa de autoridad', () => {
+    const b2 = makeLicense('B2', { authority: 'UK_CAA' });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [b2],
+      habilitations: [makeHabOn(b2, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    });
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), tecnico);
+    assert.ok(
+      r.clarifications.includes(`The offer also lists B1.1 + ${A320}; not present in the profile`),
+      JSON.stringify(r.clarifications),
+    );
+  });
+
 }
 
 main()
