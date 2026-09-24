@@ -51,6 +51,7 @@ import { offerApplicationRepository } from '../../../src/repositories/v2/offerAp
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
 import { getMatchScoreWeights, getTechnicianMatchesForOffer, MatchScoreWeights, TechnicianMatchResult } from '../../../src/utils/matchingV2';
 import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
+import { compareOfferCandidates, OFFER_RELATION_STATUS_ORDER } from '../../../src/utils/offerCandidateOrder';
 import { OfferRequiredHabilitation, OfferWithRequirements } from '../../../src/types/offer';
 import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
 import { MatchScore } from '../../../src/types/matching';
@@ -96,14 +97,6 @@ function availabilityLabel(value?: string): string {
   if (value === 'unavailable') return 'Unavailable';
   return 'Availability pending';
 }
-
-const OFFER_RELATION_STATUS_ORDER: Record<string, number> = {
-  accepted: 0,
-  pending: 1,
-  rejected: 2,
-  expired: 3,
-  withdrawn: 3,
-};
 
 type OfferRelation = {
   id: string;
@@ -411,21 +404,12 @@ export default function OfferDetailScreen() {
   }, [applicationByTechnician, directOfferByTechnician]);
 
   const orderedMatches = useMemo(() => {
-    return [...matches].sort((a, b) => {
-      const applicationA = applicationByTechnician[a.technician.id];
-      const applicationB = applicationByTechnician[b.technician.id];
-      const directA = directOfferByTechnician[a.technician.id];
-      const directB = directOfferByTechnician[b.technician.id];
-      const relationA = applicationA ?? directA;
-      const relationB = applicationB ?? directB;
-      const groupA = applicationA ? 0 : directA ? 1 : 2;
-      const groupB = applicationB ? 0 : directB ? 1 : 2;
-      if (groupA !== groupB) return groupA - groupB;
-      const orderA = relationA ? OFFER_RELATION_STATUS_ORDER[relationA.status] ?? 4 : 10;
-      const orderB = relationB ? OFFER_RELATION_STATUS_ORDER[relationB.status] ?? 4 : 10;
-      if (orderA !== orderB) return orderA - orderB;
-      return b.score.total - a.score.total;
+    const orderEntry = (match: TechnicianMatchResult) => ({
+      applicationStatus: applicationByTechnician[match.technician.id]?.status,
+      directOfferStatus: directOfferByTechnician[match.technician.id]?.status,
+      total: match.score.total,
     });
+    return [...matches].sort((a, b) => compareOfferCandidates(orderEntry(a), orderEntry(b)));
   }, [applicationByTechnician, directOfferByTechnician, matches]);
 
   const weights = useMemo(() => (offer ? getMatchScoreWeights(offer) : null), [offer]);

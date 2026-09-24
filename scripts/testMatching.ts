@@ -57,6 +57,7 @@ import {
 } from '../src/utils/matchBreakdownRows';
 import { loadSearchOfferResults, visibleSearchResults } from '../src/utils/searchOfferResults';
 import { offerShapeViolations } from '../src/utils/offerShape';
+import { compareOfferCandidates, OfferCandidateOrderEntry } from '../src/utils/offerCandidateOrder';
 import {
   heldCountByAuthority,
   heldLicenseCodes,
@@ -5090,6 +5091,47 @@ async function main() {
     assert.equal(
       puntuar(oferta, tecnico).authorityEquivalence,
       'Accepted via equivalent authority: the profile holds CASA (Australia) B1.1; the offer asks for UK CAA B1.1.',
+    );
+  });
+
+  // ── Ajustes finales de Fase 10 · orden del detalle de oferta de empresa ──
+
+  const ordenar = (entradas: Array<OfferCandidateOrderEntry & { id: string }>) =>
+    [...entradas].sort(compareOfferCandidates).map((e) => e.id);
+
+  await test('Orden de candidatos · una candidatura retirada se ordena con los sin relación, por puntuación', () => {
+    assert.deepEqual(
+      ordenar([
+        { id: 'sin-90', total: 90 },
+        { id: 'retirada-95', applicationStatus: 'withdrawn', total: 95 },
+        { id: 'retirada-40', applicationStatus: 'withdrawn', total: 40 },
+        { id: 'sin-50', total: 50 },
+      ]),
+      ['retirada-95', 'sin-90', 'sin-50', 'retirada-40'],
+    );
+  });
+
+  await test('Orden de candidatos · accepted, pending y rejected siguen delante, en ese orden y sin mirar la nota', () => {
+    assert.deepEqual(
+      ordenar([
+        { id: 'retirada-99', applicationStatus: 'withdrawn', total: 99 },
+        { id: 'rechazada-10', applicationStatus: 'rejected', total: 10 },
+        { id: 'sin-98', total: 98 },
+        { id: 'pendiente-20', applicationStatus: 'pending', total: 20 },
+        { id: 'directa-97', directOfferStatus: 'pending', total: 97 },
+        { id: 'aceptada-30', applicationStatus: 'accepted', total: 30 },
+      ]),
+      ['aceptada-30', 'pendiente-20', 'rechazada-10', 'directa-97', 'retirada-99', 'sin-98'],
+    );
+  });
+
+  await test('Orden de candidatos · retirada con oferta directa va con las ofertas directas', () => {
+    assert.deepEqual(
+      ordenar([
+        { id: 'sin-90', total: 90 },
+        { id: 'retirada-y-directa-10', applicationStatus: 'withdrawn', directOfferStatus: 'pending', total: 10 },
+      ]),
+      ['retirada-y-directa-10', 'sin-90'],
     );
   });
 
