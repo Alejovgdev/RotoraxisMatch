@@ -682,6 +682,7 @@ export default function OfferDetailScreen() {
 
               <CapReasonPanel score={score} />
               <VigenciaNotices score={score} />
+              <AuthorityEquivalenceNote score={score} />
 
               {relation?.status === 'accepted' ? (
                 <ViewTechnicianProfileButton technicianId={technician.id} fullWidth />
@@ -911,6 +912,19 @@ function VigenciaNotices({ score }: { score: MatchScore }) {
           <Text style={styles.vigenciaDetail}>{n.detail}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+// Ajustes finales de Fase 10: el recorte por autoridad equivalente (87 en vez
+// de 100) tampoco es un techo, así que CapReasonPanel no lo recoge. Siempre
+// visible cuando existe, como la vigencia de arriba.
+function AuthorityEquivalenceNote({ score }: { score: MatchScore }) {
+  if (!score.authorityEquivalence) return null;
+  return (
+    <View style={styles.vigenciaRow}>
+      <CompanyBadge label="Equivalent" tone="info" small />
+      <Text style={styles.vigenciaDetail}>{score.authorityEquivalence}</Text>
     </View>
   );
 }

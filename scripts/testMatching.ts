@@ -5045,6 +5045,54 @@ async function main() {
     );
   });
 
+  // ── Ajustes finales de Fase 10 · el recorte por equivalencia, dicho ──────
+
+  const TEXTO_EQUIVALENTE_UK =
+    'Accepted via equivalent authority: the profile holds UK CAA B1.1; the offer asks for EASA B1.1.';
+
+  await test('Autoridad equivalente · oferta de aeronave — el 87 lleva la línea que lo explica', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: EQUIVALENTES_EASA_B11 }), conA320Bajo('UK_CAA'));
+    assert.equal(r.total, 87);
+    assert.equal(r.authorityEquivalence, TEXTO_EQUIVALENTE_UK);
+  });
+
+  await test('Autoridad equivalente · con la autoridad exacta no hay línea (y el campo ni existe)', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: EQUIVALENTES_EASA_B11 }), conA320Bajo('EASA'));
+    assert.equal(r.total, 100);
+    assert.ok(!('authorityEquivalence' in r), JSON.stringify(r.authorityEquivalence));
+  });
+
+  await test('Autoridad equivalente · no aceptada tampoco: no hay recorte que explicar, hay rechazo', () => {
+    const r = puntuar(ofertaA320('EASA', { acceptedAuthorities: [] }), conA320Bajo('UK_CAA'));
+    assert.equal(r.authorityEquivalence, undefined);
+  });
+
+  await test('Autoridad equivalente · oferta de sólo licencia y oferta de motor con licencia', () => {
+    const uk = makeLicense('B1.1', { authority: 'UK_CAA' });
+    const soloLicencia = makeOffer({ licenseAuthority: 'EASA', licenseCode: 'B1.1', requiredHabilitations: [], acceptedAuthorities: EQUIVALENTES_EASA_B11 });
+    assert.equal(puntuar(soloLicencia, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [uk] })).authorityEquivalence, TEXTO_EQUIVALENTE_UK);
+
+    const motor = makeEngineOffer(ENGINE_FIXTURES[0].id, {
+      requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA', acceptedAuthorities: EQUIVALENTES_EASA_B11,
+    });
+    const tecnico = makeTechnician({ ...PERFIL_MOTOR, licenses: [uk], engines: [makeEngineDeclaration(ENGINE_FIXTURES[0].id)] });
+    assert.equal(puntuar(motor, tecnico).authorityEquivalence, TEXTO_EQUIVALENTE_UK);
+  });
+
+  await test('Autoridad equivalente · las credenciales se nombran con la etiqueta de su autoridad', () => {
+    const casa = makeLicense('B1.1', { authority: 'CASA' });
+    const oferta = ofertaA320('UK_CAA', { acceptedAuthorities: ['CASA'] });
+    const tecnico = makeTechnician({
+      ...PERFIL_A_FAVOR,
+      licenses: [casa],
+      habilitations: [makeHabOn(casa, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
+    });
+    assert.equal(
+      puntuar(oferta, tecnico).authorityEquivalence,
+      'Accepted via equivalent authority: the profile holds CASA (Australia) B1.1; the offer asks for UK CAA B1.1.',
+    );
+  });
+
   await test('Aeronave bajo autoridad no aceptada · un rating bajo otro CÓDIGO no es cosa de autoridad', () => {
     const b2 = makeLicense('B2', { authority: 'UK_CAA' });
     const tecnico = makeTechnician({

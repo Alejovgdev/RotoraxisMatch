@@ -77,6 +77,16 @@ export interface MatchScore {
   matches: string[];          // human-readable confirmed matches
   clarifications: string[];   // human-readable points that need confirming
   vigenciaNotices: VigenciaNotice[]; // expired / not-current — informational, never excludes (see VigenciaNotice)
+  /**
+   * Ajustes finales de Fase 10: la credencial que responde por la oferta es de
+   * OTRA autoridad que la oferta acepta ("Also accept licences from:"), y por
+   * eso la licencia y sus ratings puntúan recortados (87 en vez de 100). Sin
+   * esta línea el recorte no lo explicaba nada en pantalla.
+   *
+   * Ausente cuando la autoridad es la exacta o cuando la credencial no llega a
+   * puntuar: no hay recorte que explicar.
+   */
+  authorityEquivalence?: string;
   // Requisitos que la oferta declara y el perfil no cumple. DOS fuentes
   // (Fase 6 tanda D): una aeronave no cumplida en T1 cuando la oferta exige
   // TODAS (requiresAllAircraft), y la licencia de la oferta que el técnico no

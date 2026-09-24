@@ -63,6 +63,7 @@ export function MatchExplanation({
     score.matches.length === 0 &&
     score.clarifications.length === 0 &&
     score.vigenciaNotices.length === 0 &&
+    !score.authorityEquivalence &&
     score.missingRequirements.length === 0 &&
     score.blockers.length === 0
   ) {
@@ -126,6 +127,15 @@ export function MatchExplanation({
           ))}
         </View>
       )}
+
+      {/* Ajustes finales de Fase 10: por qué la licencia y sus ratings puntúan
+          recortados — la credencial es de otra autoridad que la oferta acepta. */}
+      {score.authorityEquivalence ? (
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Authority</Text>
+          <Text style={styles.authorityLine}>{score.authorityEquivalence}</Text>
+        </View>
+      ) : null}
 
       {score.matches.length > 0 && (
         <View style={styles.block}>
@@ -250,6 +260,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: colors.warning,
+  },
+  authorityLine: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.text,
   },
   missingLine: {
     fontSize: 12,

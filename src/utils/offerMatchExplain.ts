@@ -1415,6 +1415,16 @@ function scoreWithSelectedLicense(
 
   const rawTotal = verified + habilitation + license + contractFit + location + engine;
 
+  // Ajustes finales de Fase 10 — el recorte por equivalencia, dicho. Sólo si la
+  // credencial equivalente llegó a puntuar como licencia: es entonces cuando
+  // `equivalenceFraction` ha recortado algo. En todas las ramas que puntúan la
+  // licencia, `license > 0` es exactamente "esta credencial contó".
+  const authorityEquivalence =
+    selectedLicense?.satisfaction === 'equivalent' && license > 0 && offer.licenseCode
+      ? `Accepted via equivalent authority: the profile holds ${credentialLabel(selectedLicense.license.authority, selectedLicense.license.licenseCode)}; ` +
+        `the offer asks for ${credentialLabel(offer.licenseAuthority, offer.licenseCode)}.`
+      : undefined;
+
   // Every score ceiling is applied in one place — see applyScoreCeilings()
   // and the ladder documented above it. Most restrictive always wins,
   // however many apply at once.
@@ -1463,6 +1473,7 @@ function scoreWithSelectedLicense(
     matches,
     clarifications,
     vigenciaNotices,
+    ...(authorityEquivalence ? { authorityEquivalence } : {}),
     missingRequirements,
     profileTypeMismatch,
     blockers,
