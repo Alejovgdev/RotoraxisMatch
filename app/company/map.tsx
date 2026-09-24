@@ -13,6 +13,7 @@ import { MapFilters, MapFilterValue } from '../../src/types/filters';
 import { MapOfferMatchOption } from '../../src/types/mapOffers';
 import { colors } from '../../src/theme';
 import { notify } from '../../src/utils/platformAlert';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 export default function MapScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function MapScreen() {
                 offerId: offer.id,
                 title: offer.title,
                 contractType: offer.contractType,
-                location: [offer.locationCity, offer.locationCountry].filter(Boolean).join(', '),
+                location: formatLocation(offer.locationCity, offer.locationCountry),
                 score: score.total,
                 label: getMatchDisplayLabel(offer, score),
                 requestStatus: existing?.status,

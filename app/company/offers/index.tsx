@@ -42,6 +42,7 @@ import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
 import { offerRequirementChips } from '../../../src/utils/offerRequirementsText';
 import { useCompanySession, useSession } from '../../../src/state/SessionContext';
 import { canManageOffers } from '../../../src/utils/companyPermissionsV2';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 type OfferCounts = {
   applications: number;
@@ -221,7 +222,7 @@ export default function OffersListScreen() {
                   <View style={styles.locationRow}>
                     <MapPin color={companyUi.textMuted} size={14} strokeWidth={2} />
                     <Text style={styles.locationText} numberOfLines={1}>
-                      {offer.locationCity}, {offer.locationCountry}
+                      {formatLocation(offer.locationCity, offer.locationCountry)}
                       {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
                     </Text>
                   </View>

@@ -62,6 +62,7 @@ import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { credentialLabel } from '../../../src/constants/licenses';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   license: 'License',
@@ -351,7 +352,7 @@ export default function ApplicationDetailScreen() {
             <IconBox icon={BriefcaseBusiness} color={companyUi.accent} backgroundColor={companyUi.accentSoft} />
             <View style={styles.sectionCopy}>
               <Text style={styles.sectionTitle}>Offer summary</Text>
-              <Text style={styles.sectionSub}>{offer.locationCity}, {offer.locationCountry}</Text>
+              <Text style={styles.sectionSub}>{formatLocation(offer.locationCity, offer.locationCountry)}</Text>
             </View>
           </View>
           <InfoRow label="Status" value={offer.status} />
@@ -406,7 +407,7 @@ export default function ApplicationDetailScreen() {
 
             <View style={styles.badgeRow}>
               <CompanyBadge label={technicianTypeLabels(techView.technicianTypes)} tone="cyan" small />
-              <CompanyBadge label={`${techView.city}, ${techView.country}`} tone="muted" small />
+              <CompanyBadge label={formatLocation(techView.city, techView.country)} tone="muted" small />
               <CompanyBadge label={techView.verificationStatus} tone={techView.verificationStatus === 'verified' ? 'success' : 'warning'} small />
             </View>
 

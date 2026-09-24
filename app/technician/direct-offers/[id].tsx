@@ -48,6 +48,7 @@ import { OfferWithRequirements } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { MatchScore } from '../../../src/types/matching';
 import { ChatRoom } from '../../../src/types/chat';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 const CONTRACT_LABELS: Record<string, string> = {
   permanent: 'Permanent',
@@ -287,7 +288,7 @@ export default function DirectOfferDetailScreen() {
               <Text style={styles.companyType}>
                 {company.companyType ? COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType : 'Company'}
               </Text>
-              <Text style={styles.companyLocation}>{company.city}, {company.country}</Text>
+              <Text style={styles.companyLocation}>{formatLocation(company.city, company.country)}</Text>
               {company.website ? (
                 <ExternalLink url={company.website} color={techUi.accent} />
               ) : null}
@@ -315,7 +316,7 @@ export default function DirectOfferDetailScreen() {
             )}
             <Text style={styles.offerTitle}>{visibleOffer.title}</Text>
             <Text style={styles.offerLocation}>
-              {visibleOffer.locationCity}, {visibleOffer.locationCountry}
+              {formatLocation(visibleOffer.locationCity, visibleOffer.locationCountry)}
               {visibleOffer.locationBaseAirport ? ` - ${visibleOffer.locationBaseAirport}` : ''}
             </Text>
             <Text style={styles.offerDescription}>{visibleOffer.description}</Text>

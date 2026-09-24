@@ -52,6 +52,7 @@ import { MatchScore } from '../../../src/types/matching';
 import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
 import { ChatRoom } from '../../../src/types/chat';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 function formatPublishedDate(iso: string): string {
   const d = new Date(iso);
@@ -303,7 +304,7 @@ export default function OfferDetailScreen() {
         <TechnicianPageHeader
           eyebrow="Offer detail"
           title={offer.title}
-          subtitle={company ? `${company.name} - ${offer.locationCity}, ${offer.locationCountry}` : `${offer.locationCity}, ${offer.locationCountry}`}
+          subtitle={company ? `${company.name} - ${formatLocation(offer.locationCity, offer.locationCountry)}` : formatLocation(offer.locationCity, offer.locationCountry)}
           onBack={goBack}
         />
 
@@ -344,7 +345,7 @@ export default function OfferDetailScreen() {
             <ExternalLink url={company.website} color={techUi.accent} />
           ) : null}
           <Text style={styles.location}>
-            {offer.locationCity}, {offer.locationCountry}
+            {formatLocation(offer.locationCity, offer.locationCountry)}
             {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
           </Text>
           <Text style={styles.publishedDate}>Published {formatPublishedDate(offer.createdAt)}</Text>

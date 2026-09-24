@@ -57,6 +57,7 @@ import { isUnlocked, UnlockedTechnicianView } from '../../../src/types/privacy';
 import { ChatRoom } from '../../../src/types/chat';
 import { Document } from '../../../src/types/document';
 import { notify } from '../../../src/utils/platformAlert';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   license: 'License',
@@ -270,7 +271,7 @@ export default function CompanyTechnicianProfileScreen() {
               <View style={styles.heroMeta}>
                 <View style={styles.inlineMeta}>
                   <MapPin color={companyUi.textMuted} size={15} strokeWidth={2} />
-                  <Text style={styles.inlineMetaText}>{profile.city || 'Location not specified'}, {profile.country}</Text>
+                  <Text style={styles.inlineMetaText}>{formatLocation(profile.city, profile.country) || 'Location not specified'}</Text>
                 </View>
                 <View style={styles.inlineMeta}>
                   <BriefcaseBusiness color={companyUi.textMuted} size={15} strokeWidth={2} />

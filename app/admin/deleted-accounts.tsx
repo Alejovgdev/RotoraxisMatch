@@ -39,6 +39,7 @@ import {
   adminUi,
 } from '../../src/components/admin/AdminUI';
 import { spacing } from '../../src/theme';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 type RoleFilter = 'all' | 'technician' | 'company_user';
 
@@ -205,7 +206,7 @@ export default function AdminDeletedAccountsScreen() {
 
 function DeletedAccountCard({ account }: { account: DeletedAccount }) {
   const isTechnician = account.role === 'technician';
-  const location = [account.city, account.country].filter(Boolean).join(', ');
+  const location = formatLocation(account.city, account.country);
 
   return (
     <AdminCard style={styles.card}>

@@ -33,6 +33,7 @@ import { OfferApplication } from '../../../src/types/offerRequest';
 import { Offer } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { ChatRoom } from '../../../src/types/chat';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 type StatusFilter = 'all' | 'pending' | 'accepted' | 'closed';
 
@@ -242,7 +243,7 @@ export default function ApplicationHistoryScreen() {
               <View style={styles.metaRow}>
                 <Text style={styles.metaText}>Applied {formatDate(app.createdAt)}</Text>
                 {offer ? (
-                  <Text style={styles.metaText}>{offer.locationCity}, {offer.locationCountry}</Text>
+                  <Text style={styles.metaText}>{formatLocation(offer.locationCity, offer.locationCountry)}</Text>
                 ) : null}
               </View>
 

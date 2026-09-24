@@ -47,6 +47,7 @@ import { MatchBadge } from '../../src/components/MatchBadge';
 import { CONTRACT_TYPES } from '../../src/constants/contractTypes';
 import { colors, spacing } from '../../src/theme';
 import type { Company, MatchRequest } from '../../src/types';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 type DashboardIconKind =
   | 'profile'
@@ -509,9 +510,7 @@ export default function TechnicianDashboard() {
                           {bestEligibleMatch.offer.title}
                         </Text>
                         <Text style={styles.featuredOpportunityMeta} numberOfLines={2}>
-                          {[bestEligibleMatch.offer.locationCity, bestEligibleMatch.offer.locationCountry]
-                            .filter(Boolean)
-                            .join(', ')}
+                          {formatLocation(bestEligibleMatch.offer.locationCity, bestEligibleMatch.offer.locationCountry)}
                           {' · '}
                           {getContractTypeLabel(bestEligibleMatch.offer.contractType)}
                         </Text>

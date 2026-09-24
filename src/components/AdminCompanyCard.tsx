@@ -21,6 +21,7 @@ import {
 import type { AdminTone } from './admin/AdminUI';
 import { spacing } from '../theme';
 import { notify, confirmAction } from '../utils/platformAlert';
+import { formatLocation } from '../utils/formatLocation';
 
 interface Props {
   company: Company;
@@ -121,7 +122,7 @@ export function AdminCompanyCard({
 
       <View style={styles.metaGrid}>
         <InfoPill icon={Building2} label={companyTypeLabel(company.companyType)} />
-        <InfoPill icon={MapPin} label={`${company.city}, ${company.country}`} />
+        <InfoPill icon={MapPin} label={formatLocation(company.city, company.country)} />
         {memberCount !== undefined ? (
           <InfoPill icon={Users} label={`${memberCount} member${memberCount === 1 ? '' : 's'}`} />
         ) : null}

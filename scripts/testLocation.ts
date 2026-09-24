@@ -37,6 +37,7 @@ import { buildOfferMapMarkerUpdateScript } from '../src/utils/offerMapWebViewBri
 import { matchesTechnicianSearchIdentity } from '../src/utils/technicianSearchFilterMatch';
 import { LOCATION_CITY_INDEX, resolveLocationSnapshot } from '../src/constants/locationCities';
 import { findCountry } from '../src/constants/countries';
+import { formatLocation } from '../src/utils/formatLocation';
 
 let passed = 0;
 let failed = 0;
@@ -1152,6 +1153,61 @@ async function main() {
       [],
       `Estos ficheros construyen la URL del proveedor en vez de pasar por ${ALLOWED}: ${offenders.join(', ')}`,
     );
+  });
+
+  // ── Ajustes finales de Fase 10 · "ciudad, país" sin coma suelta ────────
+
+  await test('Ubicación — sin ciudad no queda coma suelta, ni con país en código ni con nombre', () => {
+    assert.equal(formatLocation('Madrid', 'Spain'), 'Madrid, Spain');
+    assert.equal(formatLocation('', 'Spain'), 'Spain');
+    assert.equal(formatLocation(undefined, 'ES'), 'ES');
+    assert.equal(formatLocation(null, 'ES'), 'ES');
+    assert.equal(formatLocation('   ', 'ES'), 'ES', 'una ciudad sólo con espacios tampoco cuenta');
+    assert.equal(formatLocation(' Sevilla ', ' ES '), 'Sevilla, ES');
+    assert.equal(formatLocation('Madrid', undefined), 'Madrid');
+    assert.equal(formatLocation(undefined, undefined), '', 'sin nada, vacío: el llamador decide qué pintar');
+  });
+
+  await test('Arquitectura — ninguna pantalla pega "ciudad, país" a mano', () => {
+    // Cada `${city}, ${country}` escrito a mano era un ", ES" esperando a un
+    // técnico sin ciudad. Los tres patrones que había: JSX, plantilla y
+    // array con filter(Boolean).join.
+    const PATTERNS = [
+      /(city|City)\}\s*,\s*\$?\{[^}]*(country|Country)/,
+      /\[[^\]]*(city|City)[^\]]*(country|Country)[^\]]*\]\s*\.filter\(Boolean\)/,
+    ];
+    const ALLOWED = 'src/utils/formatLocation.ts';
+    const root = process.cwd();
+    const offenders: string[] = [];
+
+    function walk(dir: string) {
+      for (const entry of readdirSync(dir)) {
+        if (entry === 'node_modules' || entry.startsWith('.')) continue;
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.(ts|tsx)$/.test(entry)) continue;
+        const rel = relative(root, full).split('\\').join('/');
+        if (rel === ALLOWED) continue;
+        readFileSync(full, 'utf8').split('\n').forEach((line, i) => {
+          if (PATTERNS.some((p) => p.test(line))) offenders.push(`${rel}:${i + 1}`);
+        });
+      }
+    }
+
+    for (const dir of ['src', 'app']) {
+      assert.ok(statSync(join(root, dir)).isDirectory(), `falta ${dir}/: el guardián no miraría nada`);
+      walk(join(root, dir));
+    }
+    // Y que los patrones SÍ detectan lo que prohíben: si no, el guardián
+    // pasaría en verde por no reconocer nada.
+    assert.ok(PATTERNS[0].test('{offer.locationCity}, {offer.locationCountry}'));
+    assert.ok(PATTERNS[0].test('`${technician.city}, ${technician.country}`'));
+    assert.ok(PATTERNS[1].test('[account.city, account.country].filter(Boolean).join(", ")'));
+
+    assert.deepEqual(offenders, [], `Usa formatLocation() de ${ALLOWED}: ${offenders.join(', ')}`);
   });
 }
 

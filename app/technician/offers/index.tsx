@@ -40,6 +40,7 @@ import { OFFER_PRODUCT_TYPES, getOfferProductTypeLabel } from '../../../src/cons
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
 import { ONLY_UNLICENSED_TEXT, offerEngineText, offerLicenseText } from '../../../src/utils/offerRequirementsText';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 function formatPublishedDate(iso: string): string {
   const d = new Date(iso);
@@ -309,7 +310,7 @@ export default function BrowseOffersScreen() {
                 </View>
 
                 <Text style={styles.cardLocation}>
-                  {offer.locationCity}, {offer.locationCountry}
+                  {formatLocation(offer.locationCity, offer.locationCountry)}
                   {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
                 </Text>
                 <Text style={styles.cardDate}>Published {formatPublishedDate(offer.createdAt)}</Text>

@@ -68,6 +68,7 @@ import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLic
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 type Tone = 'success' | 'warning' | 'error' | 'muted' | 'navy' | 'info' | 'cyan';
 
@@ -454,7 +455,7 @@ export default function OfferDetailScreen() {
         <CompanyPageHeader
           eyebrow="Offer detail"
           title={offer.title}
-          subtitle={`${offer.locationCity}, ${offer.locationCountry}${offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}`}
+          subtitle={`${formatLocation(offer.locationCity, offer.locationCountry)}${offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}`}
           onBack={goBack}
           right={<CompanyBadge label={offer.status} tone={statusTone(offer.status)} />}
         />
@@ -483,7 +484,7 @@ export default function OfferDetailScreen() {
           <View style={styles.locationLine}>
             <MapPin color={companyUi.textMuted} size={15} strokeWidth={2} />
             <Text style={styles.locationText}>
-              {offer.locationCity}, {offer.locationCountry}
+              {formatLocation(offer.locationCity, offer.locationCountry)}
               {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
             </Text>
           </View>
@@ -621,7 +622,7 @@ export default function OfferDetailScreen() {
                 <View style={styles.techInfo}>
                   <Text style={styles.techCode}>{technician.anonymousCode}</Text>
                   <Text style={styles.techMeta}>
-                    {technicianTypeLabels(technician.technicianTypes)} - {technician.city}, {technician.country}
+                    {technicianTypeLabels(technician.technicianTypes)} - {formatLocation(technician.city, technician.country)}
                   </Text>
                 </View>
                 <MatchBadge score={score.total} context="match for this offer" notEligible={score.blockers.length > 0} />

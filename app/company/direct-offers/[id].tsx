@@ -58,6 +58,7 @@ import { ChatRoom } from '../../../src/types/chat';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { notify, confirmAction } from '../../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   license:  'License',
@@ -326,7 +327,7 @@ export default function DirectOfferDetailScreen() {
               <IconBox icon={CheckCircle} color={companyUi.green} backgroundColor={companyUi.greenSoft} />
               <View style={styles.sectionCopy}>
                 <Text style={styles.sectionTitle}>{offer.title}</Text>
-                <Text style={styles.sectionSub}>{offer.locationCity}, {offer.locationCountry}</Text>
+                <Text style={styles.sectionSub}>{formatLocation(offer.locationCity, offer.locationCountry)}</Text>
               </View>
             </View>
             <InfoRow label="Contract" value={offer.contractType} />
@@ -389,7 +390,7 @@ export default function DirectOfferDetailScreen() {
 
             <View style={styles.badgeRow}>
               <CompanyBadge label={technicianTypeLabels(techView.technicianTypes)} tone="cyan" small />
-              <CompanyBadge label={`${techView.city}, ${techView.country}`} tone="muted" small />
+              <CompanyBadge label={formatLocation(techView.city, techView.country)} tone="muted" small />
               <CompanyBadge
                 label={techView.verificationStatus}
                 tone={techView.verificationStatus === 'verified' ? 'success' : 'warning'}

@@ -65,6 +65,7 @@ import { EMPTY_LOCATION } from '../../src/types/location';
 import { notify, confirmAction } from '../../src/utils/platformAlert';
 import { ViewTechnicianProfileButton } from '../../src/components/company/ViewTechnicianProfileButton';
 import { spacing } from '../../src/theme';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 type PreviewMap = Record<string, SafeTechnicianPreview>;
 
@@ -611,7 +612,7 @@ function TechnicianResultCard({
             <View style={styles.metaItem}>
               <MapPin color={companyUi.textMuted} size={13} strokeWidth={2} />
               <Text style={styles.metaText} numberOfLines={1}>
-                {technician.city}, {technician.country}
+                {formatLocation(technician.city, technician.country)}
               </Text>
             </View>
             <View style={styles.metaItem}>

@@ -39,6 +39,7 @@ import { TechnicianWithRelations } from '../../../src/types/technician';
 import { SafeTechnicianPreview } from '../../../src/types/privacy';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 type StatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';
 
@@ -267,7 +268,7 @@ export default function ApplicationsListScreen() {
 
                 {safePreview ? (
                   <View style={styles.previewRow}>
-                    <CompanyBadge label={`${safePreview.city}, ${safePreview.country}`} tone="muted" small />
+                    <CompanyBadge label={formatLocation(safePreview.city, safePreview.country)} tone="muted" small />
                     <CompanyBadge label={safePreview.verificationStatus} tone={safePreview.verificationStatus === 'verified' ? 'success' : 'warning'} small />
                   </View>
                 ) : null}

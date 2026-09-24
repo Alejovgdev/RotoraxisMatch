@@ -11,6 +11,7 @@ import { CollapsibleAircraftFilter } from '../CollapsibleAircraftFilter';
 import { MapBottomSheet } from '../map/MapBottomSheet';
 import { techUi } from '../technician/TechnicianUI';
 import { TECHNICIAN_MAP_AVAILABILITY } from './TechnicianMapControls';
+import { formatLocation } from '../../utils/formatLocation';
 
 type MultiFilterKey =
   | 'licenseCategories'
@@ -189,7 +190,7 @@ export function TechnicianMapDetailSheet({
 }) {
   const representative = group?.technicians[0];
   const grouped = (group?.technicians.length ?? 0) > 1;
-  const location = representative ? `${representative.city}, ${representative.country}` : undefined;
+  const location = representative ? formatLocation(representative.city, representative.country) : undefined;
 
   return (
     <MapBottomSheet
@@ -208,7 +209,7 @@ export function TechnicianMapDetailSheet({
           <View key={technician.id} style={styles.technicianCard}>
             <Text style={styles.technicianName}>{technician.fullName ?? technician.anonymousCode}</Text>
             <Text style={styles.technicianMeta}>
-              {technician.city}, {technician.country}
+              {formatLocation(technician.city, technician.country)}
               {technician.baseAirport ? ` · ${technician.baseAirport}` : ''}
               {' · '}{technician.yearsExperience} yrs exp
             </Text>

@@ -21,6 +21,7 @@ import {
 import type { AdminTone } from './admin/AdminUI';
 import { spacing } from '../theme';
 import { notify, confirmAction } from '../utils/platformAlert';
+import { formatLocation } from '../utils/formatLocation';
 
 interface Props {
   technician: Technician;
@@ -200,7 +201,7 @@ export function AdminTechnicianCard({ technician, details, typeRatingLabels, acc
             <InfoPill icon={Mail} label={details?.email ?? '—'} />
             <InfoPill icon={Cake} label={birthDateLabel(details)} />
             <InfoPill icon={BriefcaseBusiness} label={technicianTypesLabel(details)} />
-            <InfoPill icon={MapPin} label={`${technician.city}, ${technician.country}`} />
+            <InfoPill icon={MapPin} label={formatLocation(technician.city, technician.country)} />
             <InfoPill icon={Clock} label={waitingLabel(details)} />
           </View>
           <Text style={styles.pendingNote}>
@@ -211,7 +212,7 @@ export function AdminTechnicianCard({ technician, details, typeRatingLabels, acc
         <>
           <View style={styles.metaGrid}>
             <InfoPill icon={BriefcaseBusiness} label={technicianTypesLabel(details)} />
-            <InfoPill icon={MapPin} label={`${technician.city}, ${technician.country}`} />
+            <InfoPill icon={MapPin} label={formatLocation(technician.city, technician.country)} />
             <InfoPill icon={UserRound} label={`${technician.yearsExperience} years exp.`} />
           </View>
 

@@ -32,6 +32,7 @@ import { matchPairs, PairMatch } from '../../../src/utils/matchingV2';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
 import { OfferRequest } from '../../../src/types/offerRequest';
 import { OfferWithRequirements } from '../../../src/types/offer';
+import { formatLocation } from '../../../src/utils/formatLocation';
 
 type RequestEntry = {
   request: OfferRequest;
@@ -129,7 +130,7 @@ export default function DirectOffersListScreen() {
       companyName: company?.name ?? 'Company',
       offerTitle: offer?.title ?? null,
       contractType: offer ? (CONTRACT_LABELS[offer.contractType] ?? offer.contractType) : null,
-      location: offer ? `${offer.locationCity}, ${offer.locationCountry}` : null,
+      location: offer ? formatLocation(offer.locationCity, offer.locationCountry) : null,
       match: matchByRequestId.get(req.id) ?? null,
     }));
 

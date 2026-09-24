@@ -40,6 +40,7 @@ import {
 } from '../../src/components/admin/AdminUI';
 import type { AdminTone } from '../../src/components/admin/AdminUI';
 import { spacing } from '../../src/theme';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 type StatusFilter = 'all' | OfferStatus;
 
@@ -270,7 +271,7 @@ function OfferCard({
 
       <View style={styles.metaGrid}>
         <InfoPill icon={Building2} label={companyName} />
-        <InfoPill icon={MapPin} label={`${offer.locationCity}, ${offer.locationCountry}`} />
+        <InfoPill icon={MapPin} label={formatLocation(offer.locationCity, offer.locationCountry)} />
         <InfoPill icon={FileText} label={`Created ${formatDate(offer.createdAt)}`} />
       </View>
 

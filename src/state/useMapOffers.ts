@@ -4,6 +4,7 @@ import { companyRepositoryV2 } from '../repositories/v2/companyRepositoryV2';
 import { offerApplicationRepository } from '../repositories/v2/offerApplicationRepository';
 import { getMatchDisplayLabel, getOfferMatchesForTechnician } from '../utils/matchingV2';
 import { indexCountriesByCode, resolveMapPin } from '../utils/locationBridge';
+import { formatLocation } from '../utils/formatLocation';
 import { useCountryCatalog } from './useCountryCatalog';
 import { useTechnicianSession } from './SessionContext';
 import {
@@ -77,9 +78,7 @@ export function useMapOffers(filters: OfferMapFilters): UseMapOffersReturn {
 
         const company = companiesById.get(offer.companyId);
         const application = applicationsByOfferId.get(offer.id);
-        const location = [offer.locationCity || offer.locationCityName, offer.locationCountry]
-          .filter(Boolean)
-          .join(', ');
+        const location = formatLocation(offer.locationCity || offer.locationCityName, offer.locationCountry);
 
         return [{
           id: offer.id,

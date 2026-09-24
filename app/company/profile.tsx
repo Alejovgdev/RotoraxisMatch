@@ -38,6 +38,7 @@ import type { CompanyTypeCode } from '../../src/types/catalog';
 import { spacing } from '../../src/theme';
 import { notify, confirmAction } from '../../src/utils/platformAlert';
 import { isValidUrl, normalizeUrl } from '../../src/utils/urlValidation';
+import { formatLocation } from '../../src/utils/formatLocation';
 
 type CompanyForm = {
   name: string;
@@ -196,7 +197,7 @@ const companyMemberRole = companySession?.companyMemberRole;
                 <View style={styles.heroInfo}>
                   <Text style={styles.companyName}>{displayName}</Text>
                   <Text style={styles.companyLocation}>
-                    {displayCity}, {displayCountry}
+                    {formatLocation(displayCity, displayCountry)}
                   </Text>
                   <View style={styles.badgeRow}>
                     <CompanyBadge label={labelize(displayType)} tone="navy" />
