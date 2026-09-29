@@ -7,6 +7,7 @@ import { AUTHORITIES, authorityLabel } from '../../constants/licenses';
 import {
   OfferRequirementsForm,
   acceptableAuthorities,
+  acceptedAuthoritiesNote,
   selectableAuthorities,
   selectableLicenses,
   showsAcceptedAuthorities,
@@ -88,8 +89,9 @@ export function RequiredLicensesSection({
         <Text style={styles.inlineHint}>Pick the authority first — the licences it issues appear here.</Text>
       )}
 
-      {/* Sesión 2: sustituye a la casilla "Considerar otras autoridades". Sólo
-          las otras Part-66 que emiten esta categoría; la FAA nunca aparece. */}
+      {/* Sesión 2: sustituye a la casilla "Considerar otras autoridades". Las
+          otras Part-66 que emiten esta categoría y, desde la parte 3, la FAA
+          si la categoría tiene equivalente FAA (no la C). */}
       {showsAcceptedAuthorities(form) && authority && form.licenseCode ? (
         <>
           <Text style={styles.fieldLabel}>Also accept licences from:</Text>
@@ -104,10 +106,7 @@ export function RequiredLicensesSection({
             ))}
           </View>
           <Text style={styles.note}>
-            {form.acceptedAuthorities.length === 0
-              ? `None selected: only ${authorityLabel(authority)} ${form.licenseCode} counts.`
-              : `The same ${form.licenseCode} category from these authorities scores slightly below an exact ${authorityLabel(authority)} match.`}{' '}
-            This is a search preference, not legal recognition.
+            {acceptedAuthoritiesNote(form)} This is a search preference, not legal recognition.
           </Text>
         </>
       ) : null}

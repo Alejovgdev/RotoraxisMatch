@@ -3545,18 +3545,20 @@ async function main() {
     assert.ok(!r.missingRequirements.some((m) => m.includes('expired')), 'el requisito está cumplido: no se lista como caducado');
   });
 
-  await test('Fase 10 · Equivalencias — FAA nunca cruza por equivalencia con ningún código Part-66', () => {
+  await test('Fase 10 · Equivalencias — la FAA sólo cruza por su tabla y si la oferta Part-66 la acepta; una oferta FAA no acepta a nadie', () => {
     assert.deepEqual(equivalentAuthorities('FAA'), [], 'FAA no tiene equivalentes');
     for (const authority of PART66_AUTHORITIES) {
-      assert.ok(!equivalentAuthorities(authority).includes('FAA'), `${authority} no lista a FAA`);
+      // Parte 3: la FAA no es "el mismo código en otra autoridad"; entra por
+      // equivalentAuthoritiesForLicense, con su tabla.
+      assert.ok(!equivalentAuthorities(authority).includes('FAA'), `${authority} no lista a FAA como mismo código`);
       assert.ok(!equivalentAuthorities(authority).includes(authority), `${authority} no se lista a sí misma: son las OTRAS`);
     }
     assert.deepEqual([...equivalentAuthorities('EASA')].sort(), ['CASA', 'GCAA', 'UK_CAA']);
 
-    // Y en el scorer, en las dos direcciones, con todas las aceptadas marcadas.
+    // Y en el scorer: sin la FAA en la lista, un A&P no cumple una B1.1 EASA.
     const faaAyP = makeLicense('A&P', { authority: 'FAA' });
     const enPart66 = puntuar(makeOffer({ licenseAuthority: 'EASA', acceptedAuthorities: EQUIVALENTES_EASA_B11 }), makeTechnician({ ...PERFIL_A_FAVOR, licenses: [faaAyP] }));
-    assert.equal(enPart66.breakdown.license, 0, 'un A&P no cumple una B1.1 EASA');
+    assert.equal(enPart66.breakdown.license, 0, 'un A&P no cumple una B1.1 EASA que no acepta la FAA');
 
     // Sesión 2: una oferta FAA no puede aceptar a nadie (088), y aunque la
     // lista llegara al scorer, una A1 EASA no cumpliría una A FAA.
@@ -3568,9 +3570,19 @@ async function main() {
       'una A1 EASA no cumple una A FAA',
     );
     assert.equal(
-      licenseSatisfiesRequirement({ authority: 'FAA', licenseCode: 'A&P' }, { authority: 'EASA', licenseCode: 'B1.1' }, ['FAA']),
+      licenseSatisfiesRequirement({ authority: 'FAA', licenseCode: 'A&P' }, { authority: 'EASA', licenseCode: 'B1.1' }, EQUIVALENTES_EASA_B11),
       null,
-      'ni una lista con la FAA dentro la hace equivalente',
+      'sin la FAA en la lista, no',
+    );
+    assert.equal(
+      licenseSatisfiesRequirement({ authority: 'FAA', licenseCode: 'A&P' }, { authority: 'EASA', licenseCode: 'B1.1' }, ['FAA']),
+      'equivalent',
+      'parte 3: con la FAA en la lista, equivalente (nunca exacta)',
+    );
+    assert.equal(
+      licenseSatisfiesRequirement({ authority: 'FAA', licenseCode: 'A&P' }, { authority: 'EASA', licenseCode: 'C' }, ['FAA']),
+      null,
+      'la C no tiene equivalente FAA, aunque una lista mal formada la traiga',
     );
   });
 
@@ -3596,10 +3608,12 @@ async function main() {
     }
   });
 
-  await test('Sesión 2 · Equivalencias — los chips son las otras Part-66 que emiten la categoría, y la lista se limpia al cambiar la licencia', () => {
-    assert.deepEqual(equivalentAuthoritiesForLicense('EASA', 'B1.1'), ['UK_CAA', 'CASA', 'GCAA']);
-    assert.deepEqual(equivalentAuthoritiesForLicense('EASA', 'B2L'), ['UK_CAA'], 'CASA y GCAA no emiten B2L');
-    assert.deepEqual(equivalentAuthoritiesForLicense('UK_CAA', 'B3'), ['EASA', 'GCAA'], 'CASA no emite B3');
+  await test('Sesión 2 · Equivalencias — los chips son las otras Part-66 que emiten la categoría (y la FAA si tiene equivalente), y la lista se limpia al cambiar la licencia', () => {
+    // Parte 3: la FAA al final, en el orden del catálogo, salvo con la C.
+    assert.deepEqual(equivalentAuthoritiesForLicense('EASA', 'B1.1'), ['UK_CAA', 'CASA', 'GCAA', 'FAA']);
+    assert.deepEqual(equivalentAuthoritiesForLicense('EASA', 'B2L'), ['UK_CAA', 'FAA'], 'CASA y GCAA no emiten B2L');
+    assert.deepEqual(equivalentAuthoritiesForLicense('UK_CAA', 'B3'), ['EASA', 'GCAA', 'FAA'], 'CASA no emite B3');
+    assert.deepEqual(equivalentAuthoritiesForLicense('EASA', 'C'), ['UK_CAA', 'CASA', 'GCAA'], 'la C no tiene equivalente FAA');
     assert.deepEqual(equivalentAuthoritiesForLicense('FAA', 'A&P'), []);
     assert.deepEqual(equivalentAuthoritiesForLicense('EASA', undefined), []);
 
@@ -3608,13 +3622,17 @@ async function main() {
     assert.deepEqual(retainApplicableAuthorities(['UK_CAA', 'CASA'], 'UK_CAA', 'B1.1'), ['CASA']);
     assert.deepEqual(retainApplicableAuthorities(['UK_CAA', 'CASA'], 'EASA', 'B3'), ['UK_CAA']);
     assert.deepEqual(retainApplicableAuthorities(['UK_CAA'], 'FAA', 'A&P'), []);
+    assert.deepEqual(retainApplicableAuthorities(['UK_CAA', 'FAA'], 'EASA', 'C'), ['UK_CAA'], 'pasar a C quita la FAA');
+    assert.deepEqual(retainApplicableAuthorities(['FAA'], 'FAA', 'A&P'), [], 'pasar a una oferta FAA la quita');
 
-    // El espejo de forma rechaza lo mismo que la 088.
+    // El espejo de forma rechaza lo mismo que la 088 y la 095.
     const forma = { offerKind: 'aircraft' as const, technicianType: 'mechanic' as const, requiresCertification: true, licenseCode: 'B1.1' as const, licenseAuthority: 'EASA' as const,
       requiredEngineId: undefined, onlyUnlicensed: false, requiredHabilitations: [] as unknown[] };
     assert.deepEqual(offerShapeViolations({ ...forma, acceptedAuthorities: ['UK_CAA', 'CASA'] }), []);
     assert.ok(offerShapeViolations({ ...forma, acceptedAuthorities: ['EASA'] }).length > 0, 'la exigida no se acepta a sí misma');
-    assert.ok(offerShapeViolations({ ...forma, acceptedAuthorities: ['FAA'] }).length > 0, 'la FAA nunca');
+    assert.deepEqual(offerShapeViolations({ ...forma, acceptedAuthorities: ['UK_CAA', 'FAA'] }), [], 'parte 3: la FAA con una B1.1');
+    assert.ok(offerShapeViolations({ ...forma, licenseCode: 'C', acceptedAuthorities: ['FAA'] }).length > 0, 'la FAA con una C, no');
+    assert.ok(offerShapeViolations({ ...forma, licenseCode: 'A&P', licenseAuthority: 'FAA', acceptedAuthorities: ['FAA'] }).length > 0, 'una oferta FAA no acepta a nadie');
     assert.ok(offerShapeViolations({ ...forma, acceptedAuthorities: ['UK_CAA', 'UK_CAA'] }).length > 0, 'repetidas');
     assert.ok(offerShapeViolations({ ...forma, licenseCode: 'B2L', acceptedAuthorities: ['CASA'] }).length > 0, 'CASA no emite B2L');
   });
@@ -3862,6 +3880,141 @@ async function main() {
     assert.equal(aircraftExperienceAfterLicenseChange(filas, [{ authority: 'FAA', code: 'A' }]), filas, 'con la A se quedan, y la lista es la misma');
     const sinFirmas = [{ aircraftTypeRatingId: 'r1', signed: false }];
     assert.equal(aircraftExperienceAfterLicenseChange(sinFirmas, []), sinFirmas, 'nada que quitar: la misma lista');
+  });
+
+  // ── Parte 3 (095): la FAA como autoridad equivalente en ofertas Part-66 ──
+
+  const conFaa = (codes: ('A' | 'P' | 'A&P')[], extra: TechnicianOverrides = {}) =>
+    makeTechnician({ ...PERFIL_A_FAVOR, licenses: codes.map((code) => makeLicense(code, { authority: 'FAA' })), ...extra });
+  const TEXTO_SIN_FIRMAR = (label: string) => `${label} declared but not signed off. This offer only counts signed-off aircraft.`;
+
+  await test('Parte 3 · EASA B1.1 sin aeronaves que acepta la FAA: un A&P cumple con el 20 % menos; con sólo la A, no', () => {
+    const oferta = makeOffer({ licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] });
+    const nativo = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1')] }));
+    const ap = puntuar(oferta, conFaa(['A&P']));
+    assert.equal(nativo.total, 100);
+    assert.equal(ap.breakdown.license, Math.round(65 * 0.8), 'el recorte de cualquier equivalente');
+    assert.equal(ap.total, 87);
+    assert.ok(ap.total < nativo.total, 'el EASA nativo queda por delante');
+    assert.equal(
+      ap.authorityEquivalence,
+      'Accepted via equivalent authority: the profile holds FAA A&P; the offer asks for EASA B1.1.',
+    );
+    // H8: la A y la P en filas separadas son un A&P.
+    assert.equal(puntuar(oferta, conFaa(['A', 'P'])).total, 87);
+
+    const soloA = puntuar(oferta, conFaa(['A']));
+    assert.equal(soloA.breakdown.license, 0);
+    assert.ok(soloA.missingRequirements.includes('Required license: B1.1'), soloA.missingRequirements.join(' | '));
+    assert.equal(puntuar(oferta, conFaa(['P'])).breakdown.license, 0, 'ni la P');
+  });
+
+  await test('Parte 3 · EASA A1 que acepta la FAA: cumple quien tiene A o A&P', () => {
+    const oferta = makeOffer({ licenseCode: 'A1', licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] });
+    assert.equal(puntuar(oferta, conFaa(['A'])).total, 87, 'A');
+    assert.equal(puntuar(oferta, conFaa(['A&P'])).total, 87, 'A&P');
+    assert.equal(puntuar(oferta, conFaa(['P'])).breakdown.license, 0, 'P no');
+    assert.equal(puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A1')] })).total, 100, 'el EASA nativo, por delante');
+  });
+
+  await test('Parte 3 · EASA B2 (y B2L) que acepta la FAA: cumple quien tiene A&P', () => {
+    const avionico: TechnicianOverrides = { technicianTypes: ['avionic'] };
+    for (const code of ['B2', 'B2L'] as const) {
+      const oferta = makeOffer({ technicianType: 'avionic', licenseCode: code, licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] });
+      assert.equal(puntuar(oferta, conFaa(['A&P'], avionico)).total, 87, `${code}: A&P`);
+      assert.equal(puntuar(oferta, conFaa(['A'], avionico)).breakdown.license, 0, `${code}: con la A sola, no`);
+    }
+  });
+
+  await test('Parte 3 · Oferta con licencia C: la FAA no se puede marcar', () => {
+    assert.ok(!equivalentAuthoritiesForLicense('EASA', 'C').includes('FAA'));
+    assert.throws(() => makeOffer({ licenseCode: 'C', licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] }), /cannot be accepted as equivalent/);
+    assert.deepEqual(retainApplicableAuthorities(['UK_CAA', 'FAA'], 'EASA', 'C'), ['UK_CAA'], 'cambiar a C la quita');
+  });
+
+  await test('Parte 3 · EASA B1.1 con A320 que acepta la FAA: A320 firmado hace de type rating con el 20 % menos; sin firmar, sin type rating y con la línea de la 094', () => {
+    const oferta = ofertaA320('EASA', { acceptedAuthorities: ['FAA'] });
+    const label = getAircraftTypeRatingLabel('fx-a320-cfm56', RATING_INDEX_MOTORES);
+
+    const nativo = puntuar(oferta, conA320Bajo('EASA'));
+    const firmado = puntuar(oferta, conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 8, true)] }));
+    assert.equal(nativo.total, 100);
+    assert.equal(firmado.breakdown.habilitation, Math.round(45 * 0.8), 'el type rating, con el recorte');
+    assert.equal(firmado.breakdown.license, Math.round(20 * 0.8));
+    assert.equal(firmado.total, 87);
+    assert.equal(firmado.level, 'exact');
+    assert.ok(firmado.matches.includes(`Signed off on ${label} — 8 years declared`), firmado.matches.join(' | '));
+    assert.ok(firmado.total < nativo.total, 'el EASA nativo con lo mismo queda por delante');
+
+    // Misma familia firmada: el escalón de familia, también con el recorte.
+    const familia = puntuar(oferta, conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-v2500', 5, true)] }));
+    assert.equal(familia.breakdown.habilitation, Math.round(45 * 0.57 * 0.8));
+
+    const sinFirmarTecnico = conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 8, false)] });
+    const sinFirmar = puntuar(oferta, sinFirmarTecnico);
+    const sinA320 = puntuar(oferta, conFaa(['A&P']));
+    assert.equal(sinFirmar.breakdown.habilitation, 0, 'cuenta como sin type rating');
+    assert.deepEqual(sinFirmar.breakdown, sinA320.breakdown);
+    assert.equal(sinFirmar.total, ZERO_QUALIFICATION_CAP, 'sale abajo');
+    assert.ok(elegible(oferta, sinFirmarTecnico), 'no se descarta');
+    assert.ok(sinFirmar.clarifications.includes(TEXTO_SIN_FIRMAR(label)), sinFirmar.clarifications.join(' | '));
+    assert.ok(!sinFirmar.clarifications.some((c) => c.includes('not present in the profile')), 'no es verdad que no esté');
+
+    // La P no firma: aunque tuviera la aeronave, no entra por la FAA.
+    assert.equal(puntuar(oferta, conFaa(['P'])).breakdown.license, 0);
+  });
+
+  await test('Parte 3 · oferta que exige todas (A320 y A330): un A&P con sólo el A320 firmado no las cumple todas', () => {
+    const a330 = makeRating({
+      id: 'fx-a330-trent700', manufacturer: 'Airbus', aircraftFamily: 'A330', engineManufacturer: 'Rolls-Royce',
+      engineFamily: 'Trent 700', displayName: 'Airbus A330 — Trent 700', commercialAliases: ['A330'],
+      aircraftCategory: 'commercial_airplane', productType: 'Aeroplane',
+    });
+    const ratingIndex = buildAircraftRatingIndex([...FIXTURES, ...ENGINE_RATING_FIXTURES, a330]);
+    const oferta = makeOffer({
+      licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'], requiresAllAircraft: true,
+      requiredHabilitations: [makeHabReq('fx-a320-cfm56'), makeHabReq('fx-a330-trent700')],
+    });
+    const a330Label = getAircraftTypeRatingLabel('fx-a330-trent700', ratingIndex);
+
+    const soloA320 = puntuar(oferta, conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 8, true)] }), { ratingIndex });
+    assert.ok(soloA320.missingRequirements.includes(`B1.1 + ${a330Label}`), soloA320.missingRequirements.join(' | '));
+    assert.ok(soloA320.total <= 59, `esperaba INCOMPLETE_AIRCRAFT_SET_CAP, got ${soloA320.total}`);
+    assert.notEqual(soloA320.level, 'exact');
+
+    const a330SinFirmar = puntuar(
+      oferta,
+      conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 8, true), makeAircraftExperience('fx-a330-trent700', 3, false)] }),
+      { ratingIndex },
+    );
+    assert.ok(a330SinFirmar.missingRequirements.includes(TEXTO_SIN_FIRMAR(a330Label)), a330SinFirmar.missingRequirements.join(' | '));
+    assert.ok(a330SinFirmar.total <= 59, `esperaba INCOMPLETE_AIRCRAFT_SET_CAP, got ${a330SinFirmar.total}`);
+
+    const lasDos = puntuar(
+      oferta,
+      conFaa(['A&P'], { aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 8, true), makeAircraftExperience('fx-a330-trent700', 3, true)] }),
+      { ratingIndex },
+    );
+    assert.equal(lasDos.total, 87, 'las dos firmadas: cumple, con el recorte');
+    assert.deepEqual(lasDos.missingRequirements, []);
+  });
+
+  await test('Parte 3 · oferta de motor con licencia que acepta la FAA: sólo aplica la tabla, la entrada no cambia', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b', { requiresCertification: true, licenseCode: 'B1.1', licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] });
+    const motor = (licenses: TechnicianLicense[]) =>
+      makeTechnician({ ...PERFIL_MOTOR, licenses, engines: [makeEngineDeclaration('eng-cfm56-7b', 8)] });
+    const nativo = puntuar(oferta, motor([makeLicense('B1.1')]));
+    const ap = puntuar(oferta, motor([makeLicense('A&P', { authority: 'FAA' })]));
+    const soloA = puntuar(oferta, motor([makeLicense('A', { authority: 'FAA' })]));
+    assert.equal(nativo.breakdown.license, 20);
+    assert.equal(ap.breakdown.license, Math.round(20 * 0.8));
+    assert.equal(soloA.breakdown.license, 0, 'la A no cuenta por una B1.1');
+    assert.ok(nativo.total > ap.total);
+
+    // La vía (b) no cambia: un A&P sin motores ni type rating B1, que no es
+    // Engine Technician, sigue fuera.
+    const mecanicoAp = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('A&P', { authority: 'FAA' })] });
+    assert.equal(elegible(oferta, mecanicoAp), false);
   });
 
   await test('Sesión 2 · Aviónica FAA — una oferta de aviónica puede pedir A o A&P, y los dos puntúan', () => {

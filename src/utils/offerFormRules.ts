@@ -20,7 +20,9 @@ import { OfferKind, OfferProductType } from '../types/offer';
 import { AuthorityCode, AuthorityLicenseCode, TechnicianTypeCode } from '../types/catalog';
 import { isLicensedTechnicianType } from '../constants/technicianTypes';
 import {
+  authorityLabel,
   equivalentAuthoritiesForLicense,
+  faaEquivalentLicenseCodes,
   licensesSelectableForOffer,
   retainApplicableAuthorities,
 } from '../constants/licenses';
@@ -118,11 +120,31 @@ export function showsLicenseSection(form: OfferRequirementsForm): boolean {
 
 /**
  * Los chips de "Also accept licences from:" (sesión 2): las otras autoridades
- * Part-66 que emiten la categoría elegida. Sin autoridad o sin código, ninguno;
- * con una licencia FAA, ninguno (la FAA no cruza con nadie).
+ * Part-66 que emiten la categoría elegida y, desde la parte 3, la FAA si esa
+ * categoría tiene equivalente FAA (no la C). Sin autoridad o sin código,
+ * ninguno; con una licencia FAA, ninguno.
  */
 export function acceptableAuthorities(form: OfferRequirementsForm): AuthorityCode[] {
   return equivalentAuthoritiesForLicense(form.licenseAuthority, form.licenseCode);
+}
+
+/**
+ * La nota bajo los chips. Con la FAA marcada dice qué certificado FAA cuenta
+ * (parte 3): "the same B1.1 category" sería falso, la FAA no emite una B1.1.
+ */
+export function acceptedAuthoritiesNote(form: OfferRequirementsForm): string {
+  const authority = form.licenseAuthority;
+  const code = form.licenseCode;
+  if (!authority || !code) return '';
+  const exact = authorityLabel(authority);
+  if (form.acceptedAuthorities.length === 0) return `None selected: only ${exact} ${code} counts.`;
+  if (!form.acceptedAuthorities.includes('FAA')) {
+    return `The same ${code} category from these authorities scores slightly below an exact ${exact} match.`;
+  }
+  return (
+    `Accepted licences score slightly below an exact ${exact} match. ` +
+    `From the FAA, ${faaEquivalentLicenseCodes(code).join(' or ')} counts for ${code}.`
+  );
 }
 
 /** La fila de chips sólo aparece si hay alguno que ofrecer. */

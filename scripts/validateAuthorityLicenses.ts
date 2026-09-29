@@ -12,9 +12,16 @@
 // permitir leer, la consulta devolvería 0 filas y el script lo dice en vez de
 // dar un PASS vacío.
 //
+// Parte 3 (095): además, la tabla de equivalencias FAA —qué certificado FAA
+// cuenta por cada categoría Part-66— en TS (faaEquivalentLicenseCodes) y en
+// SQL (public.faa_equivalent_license_codes, la que usa el trigger de forma de
+// la oferta), código a código. Para comprobar una migración antes de aplicarla:
+//   npm run validate:authority-licenses -- --rehearse=supabase/migrations/NNN_x.sql
+//
 // Run: npm run validate:authority-licenses
 import { createClient } from '@supabase/supabase-js';
 import { loadEnvFile } from './lib/loadEnv';
+import { queryWithRehearsedMigration, rehearseArgument, sqlText } from './lib/rehearseMigration';
 import * as licensesModule from '../src/constants/licenses';
 
 loadEnvFile();
@@ -112,6 +119,40 @@ async function main() {
     if (JSON.stringify(dbAuth) !== JSON.stringify(tsAuth)) {
       errors.push(`authorities difiere de AUTHORITIES:\n    tabla: ${dbAuth.join(', ')}\n    TS:    ${tsAuth.join(', ')}`);
     }
+  }
+
+  // 5. Parte 3 (095): la tabla de equivalencias FAA. Los códigos Part-66, los
+  // FAA y uno inexistente: los tres últimos tienen que dar vacío en las dos.
+  const faaProbeCodes = [...licensesModule.LICENSE_CODES, ...licensesModule.FAA_LICENSE_CODES, 'X'];
+  const rehearseFile = rehearseArgument();
+  const dbFaa = new Map<string, string[]>();
+  try {
+    if (rehearseFile) {
+      console.log(`Ensayo: faa_equivalent_license_codes de ${rehearseFile}, dentro de BEGIN … ROLLBACK.`);
+      const result = await queryWithRehearsedMigration<{ codes: Record<string, string[]> }>(
+        SUPABASE_URL!,
+        rehearseFile,
+        `SELECT json_object_agg(c, public.faa_equivalent_license_codes(c)) AS codes ` +
+          `FROM unnest(ARRAY[${faaProbeCodes.map(sqlText).join(', ')}]::text[]) AS c`,
+      );
+      for (const [code, codes] of Object.entries(result[0]?.codes ?? {})) dbFaa.set(code, codes);
+    } else {
+      for (const code of faaProbeCodes) {
+        const { data: codes, error: rpcError } = await supabase.rpc('faa_equivalent_license_codes', { p_license_code: code });
+        if (rpcError) throw new Error(rpcError.message);
+        dbFaa.set(code, (codes ?? []) as string[]);
+      }
+    }
+    for (const code of faaProbeCodes) {
+      const ts = licensesModule.faaEquivalentLicenseCodes(code);
+      const db = dbFaa.get(code);
+      if (JSON.stringify(db) !== JSON.stringify(ts)) {
+        errors.push(`Equivalencia FAA de ${code}: TS [${ts.join(', ')}], SQL [${db?.join(', ') ?? 'sin respuesta'}]`);
+      }
+    }
+    console.log(`FAA equivalences compared: ${faaProbeCodes.length} codes`);
+  } catch (err) {
+    errors.push(`No se pudo leer faa_equivalent_license_codes: ${(err as Error).message}`);
   }
 
   console.log('\n=== AUTHORITY LICENSES VALIDATION ===');

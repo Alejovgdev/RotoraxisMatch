@@ -370,13 +370,13 @@ export function licensesSelectableForOffer(
 
 /**
  * Las OTRAS autoridades Part-66 que una oferta de esta autoridad puede aceptar
- * como equivalentes.
+ * como equivalentes con el MISMO código.
  *
  * Nunca se incluye a sí misma —son las otras, y el caso exacto se decide
- * antes—, y la FAA no aparece en ninguna lista ni tiene la suya: un A&P no es
- * una B1.1 emitida en otro sitio, es otro sistema. Eso no hace falta
- * programarlo dos veces: los códigos FAA y los Part-66 son disjuntos, así que
- * aunque se cruzaran las autoridades no habría ningún par que casara.
+ * antes—, y la FAA no está aquí: un A&P no es una B1.1 emitida en otro sitio,
+ * es otro sistema. Desde la parte 3 (migración 095) la FAA sí puede aceptarse,
+ * pero por su propia tabla (FAA_EQUIVALENT_CODES), no por código igual; la
+ * añade equivalentAuthoritiesForLicense. Una oferta FAA sigue sin equivalentes.
  */
 export function equivalentAuthorities(authority: string): AuthorityCode[] {
   if (!PART66_AUTHORITIES.includes(authority as AuthorityCode)) return [];
@@ -384,18 +384,57 @@ export function equivalentAuthorities(authority: string): AuthorityCode[] {
 }
 
 /**
+ * Qué certificados FAA cuentan por cada categoría Part-66 cuando una oferta
+ * Part-66 acepta la FAA (parte 3, migración 095). No es uno a uno como entre
+ * autoridades Part-66:
+ *
+ *   A1–A4                   A o A&P   (line maintenance: basta la célula)
+ *   B1.x, B2, B2L, B3, L    A&P
+ *   C                       ninguno   (no hay equivalente FAA; FAA no se ofrece)
+ *
+ * Espejo de public.faa_equivalent_license_codes (095), que usa el trigger
+ * enforce_offer_accepted_authorities; `npm run validate:authority-licenses`
+ * compara las dos código a código. El orden de cada lista es el del catálogo FAA.
+ */
+const FAA_EQUIVALENT_CODES: Record<LicenseCode, FaaLicenseCode[]> = {
+  A1: ['A', 'A&P'],
+  A2: ['A', 'A&P'],
+  A3: ['A', 'A&P'],
+  A4: ['A', 'A&P'],
+  'B1.1': ['A&P'],
+  'B1.2': ['A&P'],
+  'B1.3': ['A&P'],
+  'B1.4': ['A&P'],
+  B2: ['A&P'],
+  B2L: ['A&P'],
+  B3: ['A&P'],
+  L: ['A&P'],
+  C: [],
+};
+
+/** Los certificados FAA que cuentan por esta categoría Part-66; [] si ninguno o si el código no es Part-66. */
+export function faaEquivalentLicenseCodes(part66Code: string): FaaLicenseCode[] {
+  return [...(FAA_EQUIVALENT_CODES[part66Code as LicenseCode] ?? [])];
+}
+
+/**
  * Las autoridades que una oferta que pide ESTE código a ESTA autoridad puede
  * marcar en "Also accept licences from:" (sesión 2, migración 088): las otras
- * Part-66 que emiten ese código, en el orden del catálogo. CASA no aparece para
- * una B3; nadie aparece para una licencia FAA.
+ * Part-66 que emiten ese código, en el orden del catálogo, y al final la FAA si
+ * la oferta es Part-66 y el código tiene equivalente FAA (parte 3, 095). CASA no
+ * aparece para una B3; la FAA no aparece para una C; nadie aparece para una
+ * licencia FAA.
  *
  * Una sola respuesta para los chips del formulario, la limpieza al cambiar la
- * licencia (formulario y repositorio) y el espejo de forma; en la base, el
- * CHECK chk_offers_accepted_authorities y el trigger que lee authority_licenses.
+ * licencia (formulario y repositorio), el espejo de forma y el scorer; en la
+ * base, el CHECK chk_offers_accepted_authorities y el trigger que lee
+ * authority_licenses y faa_equivalent_license_codes.
  */
 export function equivalentAuthoritiesForLicense(authority: string | undefined, code: string | undefined): AuthorityCode[] {
   if (!authority || !code) return [];
-  return equivalentAuthorities(authority).filter((a) => isValidAuthorityLicense(a, code));
+  const part66 = equivalentAuthorities(authority).filter((a) => isValidAuthorityLicense(a, code));
+  const faa = PART66_AUTHORITIES.includes(authority as AuthorityCode) && faaEquivalentLicenseCodes(code).length > 0;
+  return faa ? [...part66, 'FAA'] : part66;
 }
 
 /**
@@ -460,7 +499,10 @@ export type LicenseSatisfaction = 'exact' | 'equivalent';
  *
  *   'exact'      misma autoridad, con un código que satisface.
  *   'equivalent' otra autoridad Part-66 que la oferta aceptó expresamente
- *                (`acceptedAuthorities`, sesión 2: una lista, no una casilla).
+ *                (`acceptedAuthorities`, sesión 2: una lista, no una casilla),
+ *                con el mismo código; o, desde la parte 3, un certificado FAA
+ *                que cuenta por ese código (FAA_EQUIVALENT_CODES) en una
+ *                oferta Part-66 que aceptó la FAA.
  *   null         no responde.
  *
  * `required.authority` ausente = oferta anterior a la 075: se cae al código
@@ -473,6 +515,14 @@ export function licenseSatisfiesRequirement(
   required: { authority?: string; licenseCode: string },
   acceptedAuthorities: readonly string[],
 ): LicenseSatisfaction | null {
+  // Parte 3 (095): un certificado FAA en una oferta Part-66. Los códigos no se
+  // comparan —son de otro sistema—; cuenta si la oferta aceptó la FAA para ese
+  // código y el certificado está en su tabla. Nunca exacto.
+  if (held.authority === 'FAA' && required.authority !== undefined && required.authority !== 'FAA') {
+    if (!acceptedAuthorities.includes('FAA')) return null;
+    if (!equivalentAuthoritiesForLicense(required.authority, required.licenseCode).includes('FAA')) return null;
+    return (faaEquivalentLicenseCodes(required.licenseCode) as string[]).includes(held.licenseCode) ? 'equivalent' : null;
+  }
   if (!licenseCodeSatisfies(held.licenseCode, required.licenseCode)) return null;
   if (required.authority === undefined || held.authority === required.authority) return 'exact';
   if (!acceptedAuthorities.includes(held.authority)) return null;
@@ -480,7 +530,8 @@ export function licenseSatisfiesRequirement(
   // equivalence. An accepted authority still compares the same category abroad.
   if (held.licenseCode !== required.licenseCode) return null;
   // La lista la valida la base (088), pero el scorer no da por hecho lo que la
-  // base garantiza: la FAA, o la propia autoridad, nunca cuentan como equivalentes.
+  // base garantiza: la propia autoridad nunca cuenta como equivalente, ni una
+  // oferta FAA acepta a nadie. Un certificado FAA ya salió por su rama, arriba.
   return equivalentAuthorities(required.authority).includes(held.authority as AuthorityCode)
     ? 'equivalent'
     : null;

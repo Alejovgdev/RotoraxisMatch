@@ -307,7 +307,8 @@ const VIGENCIA_DEGRADATION_FRACTION = 0.1;
 // Fase 10 — equivalencia de autoridad: el mismo recorte multiplicativo, sobre
 // el mismo sitio, cuando la credencial que responde por la oferta viene de
 // OTRA autoridad Part-66 que la empresa aceptó (sesión 2: la eligió en la lista
-// "Also accept licences from:", migración 088; antes era una sola casilla).
+// "Also accept licences from:", migración 088; antes era una sola casilla), o
+// la FAA por su tabla de equivalencias (parte 3, 095): mismo recorte.
 //
 // Multiplicador y NO un tier nuevo, a propósito: la equivalencia es
 // ortogonal a lo bien que el técnico cubre la aeronave. Un tier mezclaría las
@@ -804,6 +805,12 @@ function experienceMustBeSignedOff(evidence: AircraftEvidence, offerLicenseCode:
 // El evaluador de UNA aeronave según la evidencia que la oferta admite (ver
 // aircraftEvidenceFor). Lo usan la elección de credencial y la puntuación: si
 // cada una eligiera su evaluador, podrían discrepar sobre la misma aeronave.
+//
+// Parte 3 (095): en una oferta Part-66 que acepta la FAA, la credencial elegida
+// puede ser un certificado FAA, y de él no cuelga ningún type rating. Lo que
+// hace de type rating es la aeronave FIRMADA (094): misma aeronave, exacta;
+// misma familia, 0,57; declarada sin firmar, no cuenta y lo dice. El recorte
+// del 20 % lo pone la equivalencia, como a cualquier otra autoridad.
 function evaluateAircraftRequirement(
   evidence: AircraftEvidence,
   req: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>,
@@ -814,6 +821,9 @@ function evaluateAircraftRequirement(
   today: string,
 ): RequirementOutcome {
   if (evidence === 'rating' && offerLicenseCode) {
+    if (license?.authority === 'FAA') {
+      return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, { habilitations: false, signedOnly: true });
+    }
     return evaluateHabilitationRequirement(req, offerLicenseCode, license, technician, ratingIndex, today);
   }
   return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, {

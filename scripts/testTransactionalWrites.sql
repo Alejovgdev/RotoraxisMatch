@@ -6,7 +6,7 @@ CREATE TEMP TABLE transaction_results(test text,passed boolean);
 GRANT ALL ON transaction_results TO authenticated;
 DO $test$
 DECLARE t uuid; tu uuid; other_t uuid; cu uuid; cid uuid; lic uuid; engine uuid; rating uuid; product text;
-  src offers%ROWTYPE; o uuid; saved jsonb; payload jsonb; failed boolean;
+  src offers%ROWTYPE; o uuid; o2 uuid; saved jsonb; payload jsonb; failed boolean;
 BEGIN
   SELECT tp.id,tp.user_id INTO t,tu FROM technician_profiles tp JOIN profiles p ON p.id=tp.user_id WHERE p.status='active' LIMIT 1;
   SELECT id INTO other_t FROM technician_profiles WHERE id<>t LIMIT 1;
@@ -19,6 +19,9 @@ BEGIN
     ON CONFLICT(technician_id,authority,license_code) DO UPDATE SET authority=excluded.authority RETURNING id INTO lic;
   INSERT INTO offers(company_id,title,description,contract_type,product_type,technician_type,requires_certification,location_country,location_country_code)
     VALUES(cid,'selftest-082','rollback',src.contract_type,product,'mechanic',false,src.location_country,src.location_country_code) RETURNING id INTO o;
+  -- 095: una segunda oferta, sin aeronaves, para las autoridades aceptadas.
+  INSERT INTO offers(company_id,title,description,contract_type,product_type,technician_type,requires_certification,location_country,location_country_code)
+    VALUES(cid,'selftest-095','rollback',src.contract_type,'Aeroplane','mechanic',false,src.location_country,src.location_country_code) RETURNING id INTO o2;
   -- 091: el técnico arranca SIN el tipo Engine Technician, y sin motores.
   DELETE FROM technician_profile_types WHERE technician_id=t AND type_code='engine_technician';
   -- 094: y sin licencias FAA (la firma de aeronaves depende de ellas).
@@ -141,6 +144,23 @@ BEGIN
     failed AND EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT offer_kind='aircraft' AND technician_type='mechanic' FROM offers WHERE id=o);
   PERFORM update_offer_with_habilitations(o,jsonb_build_object('offer_kind','engine','required_engine_id',engine,'technician_type','engine_technician'),NULL);
   INSERT INTO transaction_results SELECT 'engine transition clears aircraft atomically',NOT EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT offer_kind='engine' FROM offers WHERE id=o);
+  -- 095: una oferta Part-66 acepta la FAA; con la C no (se rechaza, no se
+  -- corrige); una oferta FAA no acepta a nadie.
+  failed:=true;
+  BEGIN PERFORM update_offer_with_habilitations(o2,'{"requires_certification":true,"license_code":"B1.1","license_authority":"EASA","accepted_authorities":["UK_CAA","FAA"]}',NULL);
+    EXCEPTION WHEN check_violation THEN failed:=false; END;
+  INSERT INTO transaction_results SELECT 'Part-66 offer accepts FAA as equivalent',
+    failed AND (SELECT accepted_authorities=ARRAY['UK_CAA','FAA'] FROM offers WHERE id=o2);
+  failed:=false;
+  BEGIN PERFORM update_offer_with_habilitations(o2,'{"license_code":"C"}',NULL);
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE 'The FAA has no equivalent for a C licence%'; END;
+  INSERT INTO transaction_results SELECT 'C offer cannot accept FAA and keeps its row',
+    failed AND (SELECT license_code='B1.1' AND accepted_authorities=ARRAY['UK_CAA','FAA'] FROM offers WHERE id=o2);
+  failed:=false;
+  BEGIN PERFORM update_offer_with_habilitations(o2,'{"license_code":"A&P","license_authority":"FAA","accepted_authorities":["FAA"]}',NULL);
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE '%chk_offers_accepted_authorities%'; END;
+  INSERT INTO transaction_results SELECT 'FAA offer cannot accept equivalents',
+    failed AND (SELECT license_authority IS DISTINCT FROM 'FAA' FROM offers WHERE id=o2);
   RESET ROLE;
 END $test$;
 SELECT * FROM transaction_results ORDER BY test;

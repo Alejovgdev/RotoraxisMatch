@@ -120,7 +120,9 @@ export function offerShapeViolations(offer: OfferShape): string[] {
   }
 
   // Sesión 2 (088): las aceptadas son OTRAS autoridades Part-66 que emiten el
-  // mismo código. Ni la exigida, ni la FAA, ni ninguna sin licencia.
+  // mismo código. Ni la exigida, ni ninguna sin licencia. Parte 3 (095): y la
+  // FAA en una oferta Part-66 cuyo código tiene equivalente FAA (no la C);
+  // una oferta FAA sigue sin aceptadas.
   const accepted = offer.acceptedAuthorities;
   if (new Set(accepted).size !== accepted.length) violations.push('An accepted authority is listed twice.');
   const acceptable = equivalentAuthoritiesForLicense(offer.licenseAuthority, offer.licenseCode);

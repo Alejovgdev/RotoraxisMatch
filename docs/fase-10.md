@@ -391,6 +391,32 @@ instalado, sin rastro (1 fila de experiencia, 0 firmadas, igual que al aplicar).
    off. This offer only counts signed-off aircraft." Las equivalencias FAA
    (parte 3) no se tocan.
 
+**FAA como autoridad equivalente, parte 3** (29 septiembre 2026). Migración
+095, **aplicada y registrada** como `20260929164834` (md5 de `statements`
+idéntico al fichero). Después: `npm test` (con la paridad de la tabla FAA) y
+`npm run test:db` (23 + 26, H3 412) en verde contra lo instalado, sin rastro.
+
+1. **Oferta:** la FAA aparece en "Also accept licences from:" junto a UK CAA,
+   CASA y GCAA, salvo con la C; pasar a C la quita. Una oferta FAA sigue sin
+   aceptadas. En base, el CHECK de la 088 admite 'FAA' y el trigger la rechaza
+   con una C (23514).
+2. **Tabla** (`faaEquivalentLicenseCodes` en TS, `faa_equivalent_license_codes`
+   en SQL, comparadas por `validate:authority-licenses`): A1–A4 → A o A&P;
+   B1.x, B2, B2L, B3, L → A&P; C → ninguno. B2L como la B2, por decisión del
+   29 de septiembre.
+3. **Matching:** quien entra por la FAA puntúa como equivalente (20 % menos).
+   Con aeronaves, la aeronave firmada (094) hace de type rating con las mismas
+   reglas; declarada sin firmar cuenta como sin type rating (tope de 39, no se
+   descarta) y lleva la línea de la 094. Ofertas de motor: sólo la tabla; la
+   vía (b) no cambia. En el perfil a favor: exacta 100, A&P 87.
+
+Ensayo (todo revertido, producción idéntica después): autocomprobación de 14
+casos; `testApplicationSecurity` 23/23, `testTransactionalWrites` 26/26 (3
+nuevas), H3 412/412; cinco mutantes rechazados por la autocomprobación; la
+suite sin la regla de la C ve exactamente esa regresión, y sin la 095, las
+dos que dependen de ella; paridad TS↔SQL de la tabla en modo ensayo, con un
+control (la B2L quitada en SQL) que el validador detecta.
+
 ## 3. Pendientes (fuera de esta fase)
 
 - **Fila 5 (más adelante):** añadir un miembro a una empresa tiene que
@@ -477,4 +503,6 @@ instalado, sin rastro (1 fila de experiencia, 0 firmadas, igual que al aplicar).
 - Sesión 6: **cerrada** (29 septiembre 2026). 093 aplicada y registrada.
   Seguridad cerrada por ahora; filas 5 y 6 de la auditoría, en pendientes.
 - Firma FAA, parte 2: **cerrada** (29 septiembre 2026). 094 aplicada y
-  registrada. La parte 3 (equivalencias FAA) no ha empezado.
+  registrada.
+- FAA como autoridad equivalente, parte 3: **cerrada** (29 septiembre 2026).
+  095 aplicada y registrada.
