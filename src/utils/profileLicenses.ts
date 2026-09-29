@@ -11,7 +11,7 @@
 // que lo usa, pero las reglas —qué implica oficio, de qué credencial puede
 // colgar una habilitación— no son decisiones de pantalla.
 import { AuthorityCode, AuthorityLicenseCode } from '../types/catalog';
-import { AUTHORITIES } from '../constants/licenses';
+import { AUTHORITIES, FAA_SIGN_OFF_LICENSE_CODES } from '../constants/licenses';
 import { licenseAllowsIndividualTypeRatings } from './individualTypeRatingScope';
 
 export interface HeldLicense {
@@ -61,6 +61,28 @@ export function heldLicenseCodes(held: readonly HeldLicense[]): AuthorityLicense
  */
 export function licensesForHabilitations(held: readonly HeldLicense[]): HeldLicense[] {
   return held.filter((l) => licenseAllowsIndividualTypeRatings(l.authority, l.code));
+}
+
+/**
+ * ¿Puede marcar aeronaves como firmadas? Con FAA A o A&P (094). Se pregunta por
+ * las licencias que el perfil tiene AHORA, guardadas o no: el guardado escribe
+ * las licencias antes que la experiencia.
+ */
+export function canSignOffAircraft(held: readonly Pick<HeldLicense, 'authority' | 'code'>[]): boolean {
+  return held.some((l) => l.authority === 'FAA' && (FAA_SIGN_OFF_LICENSE_CODES as readonly string[]).includes(l.code));
+}
+
+/**
+ * La experiencia tras un cambio de licencias: sin FAA A ni A&P, ninguna
+ * aeronave queda firmada — lo mismo que hará la base al guardar. Devuelve la
+ * misma lista si no hay nada que quitar.
+ */
+export function aircraftExperienceAfterLicenseChange<T extends { signed?: boolean }>(
+  rows: T[],
+  held: readonly Pick<HeldLicense, 'authority' | 'code'>[],
+): T[] {
+  if (canSignOffAircraft(held) || !rows.some((r) => r.signed)) return rows;
+  return rows.map((r) => ({ ...r, signed: false }));
 }
 
 /** Cuántas credenciales tiene bajo cada autoridad, para el selector. */

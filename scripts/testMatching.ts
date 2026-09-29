@@ -61,6 +61,8 @@ import { offerKindForTechnicianType, offerShapeViolations } from '../src/utils/o
 import { engineRemovalWarning, showsEngineExperience, typeChangeDropsEngines } from '../src/utils/profileEngines';
 import { compareOfferCandidates, OfferCandidateOrderEntry } from '../src/utils/offerCandidateOrder';
 import {
+  aircraftExperienceAfterLicenseChange,
+  canSignOffAircraft,
   heldCountByAuthority,
   heldLicenseCodes,
   holdsLicense,
@@ -396,12 +398,14 @@ function makeTechnician(overrides: TechnicianOverrides = {}): TechnicianWithRela
 
 // Fase 6 tanda B. Existe para poder ASEVERAR que el scorer la ignora: sin un
 // constructor, "ningún score cambia" sería una afirmación sin prueba.
-function makeAircraftExperience(aircraftTypeRatingId: string, years?: number): TechnicianAircraftExperience {
+// 094: `signed` desmarcado por defecto, como en la base.
+function makeAircraftExperience(aircraftTypeRatingId: string, years?: number, signed = false): TechnicianAircraftExperience {
   return {
     id: `exp-${aircraftTypeRatingId}-${years ?? 'na'}`,
     technicianId: 'tech-test',
     aircraftTypeRatingId,
     years,
+    signed,
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -3728,7 +3732,8 @@ async function main() {
       'licencia 40 + experiencia 25',
     );
     const aYp = () => makeLicense('A&P', { authority: 'FAA' });
-    const con737 = makeTechnician({ ...PERFIL_A_FAVOR, id: 'faa-con-737', licenses: [aYp()], aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 6)] });
+    // 094: en una oferta A&P sólo cuenta la experiencia firmada.
+    const con737 = makeTechnician({ ...PERFIL_A_FAVOR, id: 'faa-con-737', licenses: [aYp()], aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 6, true)] });
     const sin737 = makeTechnician({ ...PERFIL_A_FAVOR, id: 'faa-sin-737', licenses: [aYp()], aircraftExperience: [makeAircraftExperience('fx-a320-cfm56', 6)] });
 
     const r1 = puntuar(oferta, con737);
@@ -3766,14 +3771,16 @@ async function main() {
   });
 
   await test('Sesión 2 · FAA + 737 — sin la licencia FAA la experiencia no basta; las ofertas Part-66 no cambian', () => {
-    const oferta = ofertaFaa737();
+    // 094: con la P, donde la experiencia sin firmar sigue contando. En una
+    // oferta A o A&P, sin licencia no hay firma posible (la base la rechaza).
+    const oferta = ofertaFaa737({ licenseCode: 'P' });
     const soloExperiencia = makeTechnician({ ...PERFIL_A_FAVOR, aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 12)] });
     const r = puntuar(oferta, soloExperiencia);
     assert.equal(r.breakdown.license, 0);
     assert.ok(r.breakdown.habilitation > 0, 'la experiencia se ve en el desglose');
     assert.ok(r.total <= ZERO_QUALIFICATION_CAP, `la licencia es el eje pedido: tope de 39, got ${r.total}`);
     assert.equal(r.level, 'not_met');
-    assert.deepEqual(r.missingRequirements, ['Required license: A&P']);
+    assert.deepEqual(r.missingRequirements, ['Required license: P']);
 
     // Part-66: la misma experiencia declarada sigue sin valer en una oferta que
     // certifica con type rating.
@@ -3783,6 +3790,78 @@ async function main() {
     const part66 = puntuar(easa737, makeTechnician({ ...PERFIL_A_FAVOR, licenses: [b11], aircraftExperience: [makeAircraftExperience('fx-b737ng-cfm56-7b', 12)] }));
     assert.equal(part66.breakdown.habilitation, 0);
     assert.ok(part66.total <= ZERO_QUALIFICATION_CAP, `got ${part66.total}`);
+  });
+
+  // ── 094: firma FAA en la experiencia en aeronaves ─────────────────────
+
+  const ofertaFaaA320 = (extra: OfferOverrides = {}) =>
+    makeOffer({ licenseCode: 'A&P', licenseAuthority: 'FAA', requiredHabilitations: [makeHabReq('fx-a320-cfm56')], ...extra });
+  const tecnicoFaa = (code: 'A' | 'P' | 'A&P', experiencia: TechnicianAircraftExperience[]) =>
+    makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense(code, { authority: 'FAA' })], aircraftExperience: experiencia });
+
+  await test('Firma FAA · oferta A&P con A320: firmado cumple; declarado sin firmar cuenta como sin experiencia, y el texto lo dice sin invitar a nada', () => {
+    const oferta = ofertaFaaA320();
+    const label = getAircraftTypeRatingLabel('fx-a320-cfm56', RATING_INDEX_MOTORES);
+
+    const firmado = puntuar(oferta, tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-cfm56', 8, true)]));
+    assert.equal(firmado.breakdown.habilitation, 25, 'la experiencia firmada es el eje entero');
+    assert.equal(firmado.total, 100);
+    assert.ok(firmado.matches.includes(`Signed off on ${label} — 8 years declared`), firmado.matches.join(' | '));
+
+    const sinFirmar = puntuar(oferta, tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-cfm56', 8, false)]));
+    const nadaDeA320 = puntuar(oferta, tecnicoFaa('A&P', []));
+    assert.equal(sinFirmar.breakdown.habilitation, 0);
+    assert.deepEqual(sinFirmar.breakdown, nadaDeA320.breakdown, 'sin firmar puntúa igual que no tenerla');
+    assert.equal(sinFirmar.total, nadaDeA320.total);
+    const texto = `${label} declared but not signed off. This offer only counts signed-off aircraft.`;
+    assert.ok(sinFirmar.clarifications.includes(texto), sinFirmar.clarifications.join(' | '));
+    assert.ok(!sinFirmar.clarifications.some((c) => c.includes('not present in the profile')), 'no es verdad que no esté');
+    assert.ok(!sinFirmar.clarifications.some((c) => /\bmark\b|improve|to get|to raise/i.test(c)), 'describe el hecho, no invita a marcar la firma');
+
+    // "Hacen falta todas": el mismo hecho, en la lista de requisitos incumplidos.
+    const todas = puntuar(ofertaFaaA320({ requiresAllAircraft: true }), tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-cfm56', 8, false)]));
+    assert.ok(todas.missingRequirements.includes(texto), todas.missingRequirements.join(' | '));
+  });
+
+  await test('Firma FAA · la A sola se comporta como la A&P; la P no cambia (cuenta sin firmar)', () => {
+    const sinFirmar = [makeAircraftExperience('fx-a320-cfm56', 8, false)];
+    assert.equal(puntuar(ofertaFaaA320({ licenseCode: 'A' }), tecnicoFaa('A', sinFirmar)).breakdown.habilitation, 0, 'oferta A');
+    assert.equal(
+      puntuar(ofertaFaaA320({ licenseCode: 'A' }), tecnicoFaa('A', [makeAircraftExperience('fx-a320-cfm56', 8, true)])).breakdown.habilitation,
+      25,
+      'oferta A, firmado',
+    );
+    const p = puntuar(ofertaFaaA320({ licenseCode: 'P' }), tecnicoFaa('P', sinFirmar));
+    assert.equal(p.breakdown.habilitation, 25, 'oferta P: la experiencia declarada cuenta como antes');
+    assert.ok(p.matches.some((m) => m.startsWith('Worked on')), p.matches.join(' | '));
+  });
+
+  await test('Firma FAA · la familia también cuenta sólo firmada; sin certificar y Part-66 no miran la firma', () => {
+    // A320 V2500 frente a una oferta de A320 CFM56: misma familia.
+    const familiaSinFirmar = puntuar(ofertaFaaA320(), tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-v2500', 5, false)]));
+    const familiaFirmada = puntuar(ofertaFaaA320(), tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-v2500', 5, true)]));
+    assert.equal(familiaSinFirmar.breakdown.habilitation, 0);
+    assert.ok(familiaFirmada.breakdown.habilitation > 0 && familiaFirmada.breakdown.habilitation < 25, `familia firmada: ${familiaFirmada.breakdown.habilitation}`);
+
+    // Oferta sin certificar: la experiencia sin firmar sigue valiendo.
+    const sinCertificar = makeOffer({ requiresCertification: false, licenseCode: undefined, requiredHabilitations: [makeHabReq('fx-a320-cfm56')] });
+    const conSin = puntuar(sinCertificar, tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-cfm56', 8, false)]));
+    const conFirmada = puntuar(sinCertificar, tecnicoFaa('A&P', [makeAircraftExperience('fx-a320-cfm56', 8, true)]));
+    assert.ok(conSin.breakdown.habilitation > 0);
+    assert.deepEqual(conSin.breakdown, conFirmada.breakdown, 'sin certificar, firmar no cambia nada');
+  });
+
+  await test('Firma FAA · perfil — firma quien tiene FAA A o A&P; quitarla desmarca las firmas en pantalla', () => {
+    assert.equal(canSignOffAircraft([{ authority: 'FAA', code: 'A&P' }]), true);
+    assert.equal(canSignOffAircraft([{ authority: 'FAA', code: 'A' }]), true);
+    assert.equal(canSignOffAircraft([{ authority: 'FAA', code: 'P' }]), false, 'con la P sola no');
+    assert.equal(canSignOffAircraft([{ authority: 'EASA', code: 'B1.1' }]), false);
+
+    const filas = [{ aircraftTypeRatingId: 'r1', signed: true }, { aircraftTypeRatingId: 'r2', signed: false }];
+    assert.deepEqual(aircraftExperienceAfterLicenseChange(filas, [{ authority: 'FAA', code: 'P' }]).map((f) => f.signed), [false, false]);
+    assert.equal(aircraftExperienceAfterLicenseChange(filas, [{ authority: 'FAA', code: 'A' }]), filas, 'con la A se quedan, y la lista es la misma');
+    const sinFirmas = [{ aircraftTypeRatingId: 'r1', signed: false }];
+    assert.equal(aircraftExperienceAfterLicenseChange(sinFirmas, []), sinFirmas, 'nada que quitar: la misma lista');
   });
 
   await test('Sesión 2 · Aviónica FAA — una oferta de aviónica puede pedir A o A&P, y los dos puntúan', () => {

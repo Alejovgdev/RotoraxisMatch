@@ -21,6 +21,8 @@ BEGIN
     VALUES(cid,'selftest-082','rollback',src.contract_type,product,'mechanic',false,src.location_country,src.location_country_code) RETURNING id INTO o;
   -- 091: el técnico arranca SIN el tipo Engine Technician, y sin motores.
   DELETE FROM technician_profile_types WHERE technician_id=t AND type_code='engine_technician';
+  -- 094: y sin licencias FAA (la firma de aeronaves depende de ellas).
+  DELETE FROM technician_licenses WHERE technician_id=t AND authority='FAA';
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',tu,'role','authenticated')::text,true);
   SET LOCAL ROLE authenticated;
   -- 091: sin el tipo, la RPC rechaza motores antes de borrar nada; la lista vacía pasa.
@@ -68,6 +70,19 @@ BEGIN
   failed:=false;
   BEGIN PERFORM replace_technician_aircraft_experience(other_t,'[]'); EXCEPTION WHEN insufficient_privilege THEN failed:=true; END;
   INSERT INTO transaction_results VALUES('cannot replace another technician aircraft experience',failed);
+  -- 094: firmar una aeronave exige FAA A o A&P; perderla se lleva las firmas.
+  SELECT jsonb_agg(to_jsonb(a) ORDER BY id) INTO saved FROM technician_aircraft_experience a WHERE technician_id=t;
+  failed:=false;
+  BEGIN PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating,'signed',true)));
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE 'Only a technician with an FAA A or A&P licence%'; END;
+  INSERT INTO transaction_results SELECT 'signed aircraft without FAA A or A&P rejected without data loss',
+    failed AND saved=(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM technician_aircraft_experience a WHERE technician_id=t);
+  INSERT INTO technician_licenses(technician_id,authority,license_code) VALUES(t,'FAA','A&P');
+  PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating,'years',70,'signed',true)));
+  INSERT INTO transaction_results SELECT 'FAA A&P technician saves a signed aircraft',signed FROM technician_aircraft_experience WHERE technician_id=t AND aircraft_type_rating_id=rating;
+  DELETE FROM technician_licenses WHERE technician_id=t AND authority='FAA' AND license_code='A&P';
+  INSERT INTO transaction_results SELECT 'removing FAA A&P clears signed aircraft',
+    EXISTS(SELECT 1 FROM technician_aircraft_experience WHERE technician_id=t) AND NOT EXISTS(SELECT 1 FROM technician_aircraft_experience WHERE technician_id=t AND signed);
   RESET ROLE;
   -- Fail AFTER the delete in each RPC: the original rows must survive exactly.
   EXECUTE $fn$CREATE FUNCTION pg_temp.fail_insert() RETURNS trigger LANGUAGE plpgsql AS $body$

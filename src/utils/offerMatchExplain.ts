@@ -53,6 +53,7 @@ import { ENGINE_TECHNICIAN_TYPE_CODE, TECHNICIAN_TYPES } from '../constants/tech
 import { AircraftRatingIndex, areRatingsRelated, getAircraftTypeRatingLabel } from '../constants/aircraftTypeRatings';
 import { EngineIndex, getEngineLabel } from '../constants/engines';
 import {
+  FAA_SIGN_OFF_LICENSE_CODES,
   LicenseSatisfaction,
   authorityLicenseCanExpire,
   credentialLabel,
@@ -420,6 +421,11 @@ interface RequirementOutcome {
   // que exige certificar. Se distingue de "no la tiene" porque el mensaje es
   // distinto y accionable — renovar, no formarse.
   expiredText?: string;
+  // 094: la aeronave está declarada pero sin firmar, en una oferta FAA A o A&P
+  // que sólo cuenta la firmada. Frase completa ("A320 declared but not signed
+  // off. This offer only counts signed-off aircraft."), que sustituye a "not
+  // present in the profile", que sería falso. Describe el hecho y nada más.
+  unsignedText?: string;
 }
 
 function toYearMonth(iso: string): string {
@@ -720,15 +726,26 @@ function evaluateHabilitationRequirement(
 // mismo ("¿ha trabajado en esto?") pero SÓLO a la experiencia declarada. Es el
 // mismo evaluador con una fuente menos, no una copia: false quita las
 // habilitaciones de las dos búsquedas (exacta y de familia) y nada más.
+//
+// 094 — `sources.signedOnly`: si la oferta FAA pide A o A&P, de esa
+// experiencia sólo cuenta la FIRMADA, en las dos búsquedas. Declarada sin
+// firmar es, para esta oferta, no tenerla; lo único que cambia es el texto,
+// que dice el hecho en vez de "not present in the profile".
 function evaluateAircraftKnowledgeRequirement(
   req: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>,
   technician: TechnicianWithRelations,
   ratingIndex: AircraftRatingIndex,
   today: string,
-  sources: { habilitations: boolean },
+  sources: { habilitations: boolean; signedOnly?: boolean },
 ): RequirementOutcome {
   const reqLabel = getAircraftTypeRatingLabel(req.aircraftTypeRatingId, ratingIndex);
   const habilitations = sources.habilitations ? technician.habilitations : [];
+  const experience = sources.signedOnly ? technician.aircraftExperience.filter((e) => e.signed) : technician.aircraftExperience;
+  const unsignedText =
+    sources.signedOnly &&
+    technician.aircraftExperience.some((e) => e.aircraftTypeRatingId === req.aircraftTypeRatingId && !e.signed)
+      ? `${reqLabel} declared but not signed off. This offer only counts signed-off aircraft.`
+      : undefined;
 
   // T1 — la aeronave pedida está en la unión. Se busca PRIMERO en las
   // habilitaciones para poder arrastrar su vigencia (la experiencia declarada
@@ -750,14 +767,12 @@ function evaluateAircraftKnowledgeRequirement(
     };
   }
 
-  const exactExperience = technician.aircraftExperience.find((e) => e.aircraftTypeRatingId === req.aircraftTypeRatingId);
+  const exactExperience = experience.find((e) => e.aircraftTypeRatingId === req.aircraftTypeRatingId);
   if (exactExperience) {
+    const worked = sources.signedOnly ? `Signed off on ${reqLabel}` : `Worked on ${reqLabel}`;
     return {
       tier: 'exact',
-      matchText:
-        exactExperience.years != null
-          ? `Worked on ${reqLabel} — ${exactExperience.years} years declared`
-          : `Worked on ${reqLabel}`,
+      matchText: exactExperience.years != null ? `${worked} — ${exactExperience.years} years declared` : worked,
     };
   }
 
@@ -765,17 +780,25 @@ function evaluateAircraftKnowledgeRequirement(
   // que en la rama que certifica: evidencia real, nunca igual a la exacta.
   const relatedIds = [
     ...habilitations.map((h) => h.aircraftTypeRatingId),
-    ...technician.aircraftExperience.map((e) => e.aircraftTypeRatingId),
+    ...experience.map((e) => e.aircraftTypeRatingId),
   ].filter((id): id is string => Boolean(id));
   const relatedId = relatedIds.find((id) => areRatingsRelated(id, req.aircraftTypeRatingId, ratingIndex));
   if (relatedId) {
     return {
       tier: 'related_family',
       clarificationText: `Same family, different engine: ${reqLabel} vs ${getAircraftTypeRatingLabel(relatedId, ratingIndex)}.`,
+      unsignedText,
     };
   }
 
-  return { tier: 'not_met' };
+  return { tier: 'not_met', unsignedText };
+}
+
+// 094: ¿esta oferta sólo cuenta la experiencia firmada? Sí cuando sus
+// aeronaves son experiencia (FAA, sin type ratings) y la licencia que pide es
+// una de las que firman: A o A&P. Con la P, o fuera de la FAA, no.
+function experienceMustBeSignedOff(evidence: AircraftEvidence, offerLicenseCode: AuthorityLicenseCode | undefined): boolean {
+  return evidence === 'experience' && offerLicenseCode != null && (FAA_SIGN_OFF_LICENSE_CODES as readonly string[]).includes(offerLicenseCode);
 }
 
 // El evaluador de UNA aeronave según la evidencia que la oferta admite (ver
@@ -793,7 +816,10 @@ function evaluateAircraftRequirement(
   if (evidence === 'rating' && offerLicenseCode) {
     return evaluateHabilitationRequirement(req, offerLicenseCode, license, technician, ratingIndex, today);
   }
-  return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, { habilitations: evidence !== 'experience' });
+  return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, {
+    habilitations: evidence !== 'experience',
+    signedOnly: experienceMustBeSignedOff(evidence, offerLicenseCode),
+  });
 }
 
 // The fallback branch, used only when an offer states NO exact
@@ -1270,14 +1296,16 @@ function scoreWithSelectedLicense(
           evidence === 'rating' && outcome.tier === 'not_met' && !outcome.expiredText
             ? ratingHeldElsewhereText(offer, technician, req.aircraftTypeRatingId, ratingLabel, selectedLicense?.license, today)
             : undefined;
+        // 094: declarada pero sin firmar, en una oferta FAA A o A&P. La frase
+        // ya nombra la aeronave y va tal cual en las dos listas.
         if (offer.requiresAllAircraft) {
           // La oferta dijo que hacen falta TODAS: esto es lo que dispara el
           // cap y hay que nombrarlo.
-          missingRequirements.push(heldElsewhere ? `${aircraftLabel} — ${heldElsewhere}` : aircraftLabel);
+          missingRequirements.push(outcome.unsignedText ?? (heldElsewhere ? `${aircraftLabel} — ${heldElsewhere}` : aircraftLabel));
         } else if (outcome.tier === 'not_met') {
           // Basta con una: no cumplir ésta no es un fallo, es información.
           clarifications.push(
-            `The offer also lists ${aircraftLabel}; ${heldElsewhere ?? 'not present in the profile'}`,
+            outcome.unsignedText ?? `The offer also lists ${aircraftLabel}; ${heldElsewhere ?? 'not present in the profile'}`,
           );
         }
       }

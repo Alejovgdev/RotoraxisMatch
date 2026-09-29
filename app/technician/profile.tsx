@@ -44,6 +44,8 @@ import {
 } from '../../src/constants/licenses';
 import {
   HeldLicense,
+  aircraftExperienceAfterLicenseChange,
+  canSignOffAircraft,
   heldCountByAuthority,
   heldLicenseCodes,
   holdsLicense,
@@ -346,7 +348,7 @@ export default function TechnicianProfileScreen() {
           .order('type_code'),
         supabase
           .from('technician_aircraft_experience')
-          .select('id, aircraft_type_rating_id, years')
+          .select('id, aircraft_type_rating_id, years, signed')
           .eq('technician_id', techRow.id)
           .order('created_at'),
         supabase
@@ -450,11 +452,13 @@ export default function TechnicianProfileScreen() {
         id: string;
         aircraft_type_rating_id: string;
         years: number | null;
+        signed: boolean;
       }[];
       const normalizedExperience: AircraftExperienceRow[] = expRows.map((r) => ({
         id: r.id,
         aircraftTypeRatingId: r.aircraft_type_rating_id,
         years: r.years ?? undefined,
+        signed: r.signed === true,
       }));
       setAircraftExperience(normalizedExperience);
       setExperienceDirty(false);
@@ -636,6 +640,13 @@ export default function TechnicianProfileScreen() {
     setHeldLicenses(next);
     updateField('licenseCategories', nextCodes);
     setTechnicianTypes((prev) => typesAfterLicenseChange(prev, form.licenseCategories, nextCodes));
+    // 094: sin FAA A ni A&P no queda ninguna aeronave firmada, igual que hará
+    // la base al quitar la licencia.
+    const nextExperience = aircraftExperienceAfterLicenseChange(aircraftExperience, next);
+    if (nextExperience !== aircraftExperience) {
+      setAircraftExperience(nextExperience);
+      setExperienceDirty(true);
+    }
   }
 
   function updateLicenseDetail(authority: string, code: string, patch: Pick<HeldLicense, 'issuedAt' | 'expiresAt'>) {
@@ -921,6 +932,9 @@ export default function TechnicianProfileScreen() {
           aircraftExperience.map((e) => ({
             aircraftTypeRatingId: e.aircraftTypeRatingId,
             years: e.years,
+            // 094: las licencias ya están escritas (paso 2), así que una FAA
+            // A/A&P añadida en este mismo guardado ya permite firmar.
+            signed: e.signed,
           })),
         );
         setExperienceDirty(false);
@@ -1390,6 +1404,7 @@ export default function TechnicianProfileScreen() {
           <AircraftExperienceEditor
             value={aircraftExperience}
             onChange={onChangeAircraftExperience}
+            canSignOff={canSignOffAircraft(heldLicenses)}
             habilitatedRatingIds={habilitations.map((h) => h.aircraftTypeRatingId)}
             ratingsById={ratingsById}
             onRatingResolved={(r) => setRatingsById((prev) => new Map(prev).set(r.id, r))}

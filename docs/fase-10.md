@@ -372,6 +372,25 @@ participantes. El ensayo destapó dos fallos, ya corregidos: en la función, un
 IF con `AND` que PL/pgSQL prepara entero (`NEW.cover_note` no existe en una
 oferta directa: 42703), y en la suite, dos tests que dependían uno del otro.
 
+**Firma FAA, parte 2** (29 septiembre 2026). Migración 094, **aplicada y
+registrada** como `20260929124513` (md5 de `statements` idéntico al fichero).
+Después: `npm test` y `npm run test:db` (23 + 23, H3 412) en verde contra lo
+instalado, sin rastro (1 fila de experiencia, 0 firmadas, igual que al aplicar).
+
+1. **`technician_aircraft_experience.signed`** (`boolean not null default
+   false`). Sólo puede ser true con una licencia FAA A o A&P (P sola no): el
+   trigger `enforce_signed_aircraft_requires_faa_license` rechaza con 23514 y
+   `DETAIL 'not_faa_sign_off_licensed'`; si el técnico pierde las dos, el
+   trigger de `technician_licenses` las desmarca. La RPC de la 084 guarda la
+   firma y rechaza antes de borrar nada.
+2. **Perfil:** casilla "I have signed off on this aircraft" por aeronave, sólo
+   con FAA A o A&P; al quitar la licencia se desmarcan en el formulario.
+3. **Matching:** en una oferta FAA con aeronaves que pide A o A&P sólo cuenta
+   la experiencia firmada; con P, igual que antes. Declarada sin firmar puntúa
+   como no tenerla y el texto describe el hecho: "A320 declared but not signed
+   off. This offer only counts signed-off aircraft." Las equivalencias FAA
+   (parte 3) no se tocan.
+
 ## 3. Pendientes (fuera de esta fase)
 
 - **Fila 5 (más adelante):** añadir un miembro a una empresa tiene que
@@ -457,3 +476,5 @@ oferta directa: 42703), y en la suite, dos tests que dependían uno del otro.
 - Sesión 5: **cerrada** (29 septiembre 2026). 092 aplicada y registrada.
 - Sesión 6: **cerrada** (29 septiembre 2026). 093 aplicada y registrada.
   Seguridad cerrada por ahora; filas 5 y 6 de la auditoría, en pendientes.
+- Firma FAA, parte 2: **cerrada** (29 septiembre 2026). 094 aplicada y
+  registrada. La parte 3 (equivalencias FAA) no ha empezado.

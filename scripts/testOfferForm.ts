@@ -647,6 +647,20 @@ async function main() {
     assert.deepEqual(calls[0].data!.p_entries, []);
   });
 
+  // 094: la firma FAA viaja a la RPC; sin marcar, false (nunca undefined).
+  await test('Repositorio de técnico — replaceAircraftExperience manda la firma a la RPC', async () => {
+    calls.length = 0;
+    await technicianRepositoryV2.replaceAircraftExperience('tech-1', [
+      { aircraftTypeRatingId: 'rating-a320', years: 8, signed: true },
+      { aircraftTypeRatingId: 'rating-737' },
+    ]);
+    assert.deepEqual(calls.map((c) => c.table), ['replace_technician_aircraft_experience']);
+    assert.deepEqual(calls[0].data!.p_entries, [
+      { aircraft_type_rating_id: 'rating-a320', years: 8, signed: true },
+      { aircraft_type_rating_id: 'rating-737', years: null, signed: false },
+    ]);
+  });
+
   // ── Candidaturas: el rechazo de la base llega como el texto de siempre ──
 
   const { NO_LONGER_ELIGIBLE_TO_ACCEPT, offerApplicationRepository } = require('../src/repositories/v2/offerApplicationRepository') as typeof import('../src/repositories/v2/offerApplicationRepository');

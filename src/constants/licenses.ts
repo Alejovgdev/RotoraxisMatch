@@ -213,6 +213,15 @@ export const FAA_LICENSE_CATEGORIES = [
 export const FAA_LICENSE_CODES: FaaLicenseCode[] = FAA_LICENSE_CATEGORIES.map((l) => l.code);
 
 /**
+ * Los certificados FAA con los que se FIRMA trabajo en una aeronave (migración
+ * 094): A (célula) y A&P. La P sola no. Espejo de
+ * technician_can_sign_off_aircraft en la base, que es quien lo hace cumplir.
+ * Sirve para las dos caras: quién puede marcar una aeronave como firmada, y en
+ * qué ofertas FAA sólo cuenta la experiencia firmada.
+ */
+export const FAA_SIGN_OFF_LICENSE_CODES: readonly FaaLicenseCode[] = ['A', 'A&P'];
+
+/**
  * Las cinco autoridades, con el texto con el que se pintan (Fase 10, paso 5b).
  *
  * Espejo de la tabla `authorities` (migración 064) —etiquetas incluidas: el

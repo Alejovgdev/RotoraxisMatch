@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { spacing } from '../../theme';
+import { colors, spacing } from '../../theme';
 import { TechnicianCard, techUi } from './TechnicianUI';
 import { AircraftTypeRatingPicker } from '../AircraftTypeRatingPicker';
 import { AircraftRatingIndex, getAircraftTypeRatingLabel } from '../../constants/aircraftTypeRatings';
@@ -10,11 +10,19 @@ export interface AircraftExperienceRow {
   id?: string;
   aircraftTypeRatingId: string;
   years?: number;
+  /** 094: ha firmado trabajo en esta aeronave. Sólo con FAA A o A&P. */
+  signed?: boolean;
 }
 
 interface Props {
   value: AircraftExperienceRow[];
   onChange: (next: AircraftExperienceRow[]) => void;
+  /**
+   * 094: el técnico tiene FAA A o A&P (guardada o no), así que puede marcar
+   * aeronaves como firmadas. Sin ella el check no aparece; la base rechaza la
+   * firma igualmente.
+   */
+  canSignOff: boolean;
   /**
    * Ratings en los que el técnico YA tiene habilitación (Fase 6 tanda E).
    *
@@ -49,6 +57,7 @@ interface Props {
 export function AircraftExperienceEditor({
   value,
   onChange,
+  canSignOff,
   habilitatedRatingIds,
   ratingsById,
   onRatingResolved,
@@ -75,6 +84,10 @@ export function AircraftExperienceEditor({
     onChange(value.filter((_, i) => i !== index));
   }
 
+  function toggleSigned(index: number) {
+    onChange(value.map((e, i) => (i === index ? { ...e, signed: !e.signed } : e)));
+  }
+
   const alreadyDeclared = newRating !== null && value.some((e) => e.aircraftTypeRatingId === newRating);
 
   return (
@@ -96,6 +109,22 @@ export function AircraftExperienceEditor({
             <Text style={styles.itemYears}>
               {e.years != null ? `${e.years} years` : 'Years not specified'}
             </Text>
+            {/* 094: sólo con FAA A o A&P. */}
+            {canSignOff ? (
+              <TouchableOpacity
+                style={styles.signedRow}
+                onPress={() => toggleSigned(index)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: Boolean(e.signed) }}
+                accessibilityLabel="I have signed off on this aircraft"
+                activeOpacity={0.75}
+              >
+                <View style={[styles.signedBox, e.signed && styles.signedBoxOn]}>
+                  {e.signed ? <Text style={styles.signedMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.signedLabel}>I have signed off on this aircraft</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
           <TouchableOpacity onPress={() => removeExperience(index)} accessibilityRole="button">
             <Text style={styles.itemRemove}>Remove</Text>
@@ -172,6 +201,20 @@ const styles = StyleSheet.create({
   itemRating: { fontSize: 13, lineHeight: 17, fontWeight: '700', color: techUi.text },
   itemYears: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: techUi.textSoft },
   itemRemove: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: techUi.red },
+  signedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 2, alignSelf: 'flex-start' },
+  signedBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: techUi.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: techUi.surfaceSoft,
+  },
+  signedBoxOn: { borderColor: techUi.accent, backgroundColor: techUi.accent },
+  signedMark: { fontSize: 11, lineHeight: 13, fontWeight: '800', color: colors.white },
+  signedLabel: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: techUi.textSoft },
   input: {
     minHeight: 46,
     borderWidth: 1,

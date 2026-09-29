@@ -190,6 +190,15 @@ BEGIN
   INSERT INTO security_results SELECT '093 company cannot swap technician on accepted direct offer',
     observed='42501:Direct offer participants cannot be changed.:' AND technician_id=t,observed FROM offer_requests WHERE id=rq;
 
+  -- 094: el INSERT directo que permite tae_insert_own no rodea la firma FAA.
+  DELETE FROM technician_licenses WHERE technician_id=t AND authority='FAA';
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',tu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  observed:=pg_temp.attempt(format('INSERT INTO technician_aircraft_experience(technician_id,aircraft_type_rating_id,signed) VALUES(%L,%L,true)',t,rating));
+  INSERT INTO security_results VALUES('094 direct signed aircraft insert requires FAA A or A&P',
+    observed='23514:Only a technician with an FAA A or A&P licence can mark an aircraft as signed off.:not_faa_sign_off_licensed',observed);
+  RESET ROLE;
+
   -- A sentinel proves unauthorized callers never reach private qualification reads.
   EXECUTE $fn$CREATE OR REPLACE FUNCTION public.offer_application_ineligibility_reason(p_offer_id uuid,p_technician_id uuid)
     RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO public AS $body$

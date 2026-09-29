@@ -610,7 +610,7 @@ export const technicianRepositoryV2 = {
    */
   async replaceAircraftExperience(
     technicianId: string,
-    entries: { aircraftTypeRatingId: string; years?: number }[],
+    entries: { aircraftTypeRatingId: string; years?: number; signed?: boolean }[],
   ): Promise<void> {
     const { error } = await supabase.rpc('replace_technician_aircraft_experience', {
       p_technician_id: technicianId,
@@ -619,6 +619,8 @@ export const technicianRepositoryV2 = {
         // `?? null` y no `?? 0`: NULL es "no declarado", 0 sería una
         // declaración de "sin años", que no es lo mismo.
         years: entry.years ?? null,
+        // 094: la base rechaza true sin licencia FAA A o A&P.
+        signed: entry.signed === true,
       })),
     });
     throwIfError(error);

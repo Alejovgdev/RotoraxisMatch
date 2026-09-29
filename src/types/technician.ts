@@ -208,6 +208,13 @@ export interface TechnicianAircraftExperience {
    * nunca penaliza. Misma regla que TechnicianProfile.yearsExperience.
    */
   years?: number;
+  /**
+   * Ha FIRMADO trabajo en esta aeronave (migración 094). Sólo puede ser true
+   * con licencia FAA A o A&P: la base lo rechaza sin ella y lo pone a false al
+   * perderla. En una oferta FAA A o A&P con aeronaves sólo cuenta la
+   * experiencia firmada; en el resto de ofertas no cambia nada.
+   */
+  signed: boolean;
   createdAt: string;
 }
 

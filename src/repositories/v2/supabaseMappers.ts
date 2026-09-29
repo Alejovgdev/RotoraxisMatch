@@ -355,7 +355,8 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
     supabase.from('technician_licenses').select('id, technician_id, authority, license_code, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
     supabase.from('technician_habilitations').select('id, technician_id, technician_license_id, license_code, aircraft_type_rating_id, experience_years, is_current, issued_at, expires_at, created_at').in('technician_id', uniqueIds),
     loadTechnicianProfileTypes(uniqueIds),
-    supabase.from('technician_aircraft_experience').select('id, technician_id, aircraft_type_rating_id, years, created_at').in('technician_id', uniqueIds),
+    // `signed` existe desde la 094: aplicar la migración antes de desplegar esto.
+    supabase.from('technician_aircraft_experience').select('id, technician_id, aircraft_type_rating_id, years, signed, created_at').in('technician_id', uniqueIds),
     supabase.from('technician_engine_experience').select('id, technician_id, engine_id, years, created_at').in('technician_id', uniqueIds),
   ]);
   throwIfError(licensesRes.error);
@@ -372,6 +373,7 @@ export async function loadTechnicianRelations(technicianIds: string[]): Promise<
       // `?? undefined` y NO `?? 0`: NULL es "no declarado" y 0 es "declarado
       // sin años". Convertirlo a 0 inventaría una declaración.
       years: row.years ?? undefined,
+      signed: row.signed === true,
       createdAt: row.created_at,
     });
   }
