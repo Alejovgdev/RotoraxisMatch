@@ -22,6 +22,7 @@ import {
   isTechnicianEligibleForOffer,
   rankTechniciansForOffer,
   rankOffersForTechnician,
+  technicianIneligibilityReason,
 } from '../src/utils/offerMatchExplain';
 import { OfferWithRequirements, OfferRequiredHabilitation } from '../src/types/offer';
 import {
@@ -56,7 +57,8 @@ import {
   visibleBreakdownRows,
 } from '../src/utils/matchBreakdownRows';
 import { loadSearchOfferResults, visibleSearchResults } from '../src/utils/searchOfferResults';
-import { offerShapeViolations } from '../src/utils/offerShape';
+import { offerKindForTechnicianType, offerShapeViolations } from '../src/utils/offerShape';
+import { engineRemovalWarning, showsEngineExperience, typeChangeDropsEngines } from '../src/utils/profileEngines';
 import { compareOfferCandidates, OfferCandidateOrderEntry } from '../src/utils/offerCandidateOrder';
 import {
   heldCountByAuthority,
@@ -87,7 +89,7 @@ import {
 } from '../src/utils/offerRelationStateMachine';
 import { canHold, getCompatiblePropulsion } from '../src/utils/habilitationScope';
 import { HabilitationScope } from '../src/types/habilitationScope';
-import { isLicensedTechnicianType, offerTargetsLicensedProfiles } from '../src/constants/technicianTypes';
+import { TECHNICIAN_TYPES, isLicensedTechnicianType, offerTargetsLicensedProfiles } from '../src/constants/technicianTypes';
 import {
   AUTHORITY_LICENSES,
   LICENSE_CODES,
@@ -3575,7 +3577,7 @@ async function main() {
     assert.deepEqual(retainApplicableAuthorities(['UK_CAA'], 'FAA', 'A&P'), []);
 
     // El espejo de forma rechaza lo mismo que la 088.
-    const forma = { offerKind: 'aircraft' as const, requiresCertification: true, licenseCode: 'B1.1' as const, licenseAuthority: 'EASA' as const,
+    const forma = { offerKind: 'aircraft' as const, technicianType: 'mechanic' as const, requiresCertification: true, licenseCode: 'B1.1' as const, licenseAuthority: 'EASA' as const,
       requiredEngineId: undefined, onlyUnlicensed: false, requiredHabilitations: [] as unknown[] };
     assert.deepEqual(offerShapeViolations({ ...forma, acceptedAuthorities: ['UK_CAA', 'CASA'] }), []);
     assert.ok(offerShapeViolations({ ...forma, acceptedAuthorities: ['EASA'] }).length > 0, 'la exigida no se acepta a sí misma');
@@ -3894,18 +3896,27 @@ async function main() {
     }
   });
 
-  await test('Fase 10 · Motores — el oficio no cambia el score: un B1.1 y un engine_technician con el mismo motor empatan', () => {
+  // Sesión 4 (091). Sustituye a "el oficio no cambia el score", que fijaba lo
+  // contrario: la oferta de motor es ahora la del tipo Engine Technician, y
+  // quien no lo es tiene un tipo de perfil distinto, como en aeronave.
+  await test('Sesión 4 · Motores — el tipo de perfil topa en ofertas de motor: con el mismo 737NG, el mecánico B1.1 queda en 19 y el Engine Technician no', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b');
-    const motor = [makeEngineDeclaration('eng-cfm56-7b')];
-    const mecanicoB11 = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], licenses: [makeLicense('B1.1')], engines: motor }));
-    const tecnicoMotor = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['engine_technician'], engines: motor }));
-    // Sin licencia de por medio, para aislar el oficio del todo.
-    const pintor = puntuar(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: motor }));
+    const b11 = makeLicense('B1.1');
+    const con737 = { ...PERFIL_A_FAVOR, licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })] };
+    const mecanico = puntuar(oferta, makeTechnician({ ...con737, technicianTypes: ['mechanic'] }));
+    const tecnicoMotor = puntuar(oferta, makeTechnician({ ...con737, technicianTypes: ['mechanic', 'engine_technician'] }));
 
-    assert.equal(mecanicoB11.total, tecnicoMotor.total, `B1.1 mecánico ${mecanicoB11.total} vs engine_technician ${tecnicoMotor.total}`);
-    assert.deepEqual(mecanicoB11.breakdown, tecnicoMotor.breakdown);
-    assert.equal(pintor.total, tecnicoMotor.total, `pintor ${pintor.total} vs engine_technician ${tecnicoMotor.total}`);
-    assert.deepEqual(mecanicoB11.blockers, []);
+    // El tipo no suma ni resta componentes: sólo pone el techo.
+    assert.deepEqual(mecanico.breakdown, tecnicoMotor.breakdown);
+    assert.ok(tecnicoMotor.total > 19, `control: sin el techo puntúa más (${tecnicoMotor.total})`);
+    assert.equal(mecanico.total, 19, 'PROFILE_TYPE_MISMATCH_CAP');
+    assert.ok(
+      mecanico.clarifications.includes('Profile type differs — the offer is for Engine Technician; this profile declares Mechanic.'),
+      mecanico.clarifications.join(' | '),
+    );
+    assert.deepEqual(mecanico.blockers, [], 'techo blando, no descalifica');
+    assert.ok(tecnicoMotor.matches.includes('Technician type: Engine Technician'), tecnicoMotor.matches.join(' | '));
+    assert.ok(!tecnicoMotor.clarifications.some((c) => c.startsWith('Profile type differs')));
   });
 
   await test('Fase 10 · Motores — la licencia no suma: un B2 con el motor no supera a uno sin licencia con el mismo motor', () => {
@@ -4090,7 +4101,8 @@ async function main() {
     const oferta = makeEngineOffer('eng-cfm56-7b');
     const b11 = makeLicense('B1.1');
     const tipos: TechnicianOverrides = { ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'] };
-    const declarado = makeTechnician({ ...tipos, engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    // Sesión 4 (091): sólo un Engine Technician declara motores.
+    const declarado = makeTechnician({ ...PERFIL_MOTOR, engines: [makeEngineDeclaration('eng-cfm56-7b')] });
     // Sin motores declarados ni oficio de motor: entra sólo por la vía (b).
     const implicito = makeTechnician({ ...tipos, licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })] });
 
@@ -4148,7 +4160,8 @@ async function main() {
     // Mecánico sin oficio de motor ni motores declarados: la B1 es su única vía.
     const b1Con = (ratingId: string) =>
       makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], licenses: [b11], habilitations: [makeHabOn(b11, { aircraftTypeRatingId: ratingId })] });
-    const declara = (engineId: string) => makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic'], engines: [makeEngineDeclaration(engineId)] });
+    // Sesión 4 (091): sólo un Engine Technician declara motores.
+    const declara = (engineId: string) => makeTechnician({ ...PERFIL_MOTOR, engines: [makeEngineDeclaration(engineId)] });
 
     // Oferta de CFM56-7B, los tres casos pedidos. ENGINE_WEIGHTS: motor 65.
     const oferta7b = makeEngineOffer('eng-cfm56-7b');
@@ -4162,7 +4175,11 @@ async function main() {
     assert.ok(ng.matches.some((m) => m.startsWith('Engine: CFM56-7B — from the B1.1')), ng.matches.join(' | '));
     assert.equal(a320.breakdown.engine, 36, 'B1 con A320 CFM: familia (0,55)');
     assert.ok(a320.clarifications.includes('Same engine family, different model: CFM56-7B vs CFM56.'), a320.clarifications.join(' | '));
-    assert.ok(declarado.total > ng.total && ng.total > a320.total, `declarado ${declarado.total} > implícito ${ng.total} > familia ${a320.total}`);
+    // Sesión 4 (091): el orden del eje es el de arriba. En el total, el
+    // mecánico que entra por su B1 sin ser Engine Technician topa en 19.
+    assert.ok(declarado.total > ng.total, `declarado ${declarado.total} > implícito ${ng.total}`);
+    assert.equal(ng.total, 19, 'mecánico B1 con 737NG: techo de tipo de perfil distinto');
+    assert.equal(a320.total, 19, 'mecánico B1 con A320 CFM: techo de tipo de perfil distinto');
     for (const [nombre, t] of [['737NG', b1Con('fx-b737ng-cfm56-7b')], ['A320 CFM', b1Con('fx-090-a320-cfm')]] as const) {
       assert.equal(elegible(oferta7b, t, opts), true, `${nombre}: entra por la vía (b), exacto o familia`);
     }
@@ -4211,10 +4228,11 @@ async function main() {
     const oferta = makeEngineOffer('eng-cfm56-7b', { id: 'offer-motor-elegibilidad' });
     const ofertaAeronave = makeOffer({ id: 'offer-aeronave-elegibilidad' });
 
+    // Sesión 4 (091): declarar un motor exige ser Engine Technician.
     const b1ConMotor = makeTechnician({
       ...PERFIL_A_FAVOR,
       id: 'tech-b1-con-motor',
-      technicianTypes: ['mechanic'],
+      technicianTypes: ['mechanic', 'engine_technician'],
       licenses: [makeLicense('B1.1')],
       engines: [makeEngineDeclaration('eng-cfm56-7b')],
     });
@@ -4227,11 +4245,13 @@ async function main() {
     });
 
     // Contraste primero: el B1 sin motores NO queda fuera por nota. Puntuado a
-    // mano saca lo mismo que el engine_technician sin motores; lo que lo saca
-    // de la lista es el filtro, y eso es lo que este test tiene que probar.
+    // mano saca el mismo escalón de motor que el engine_technician sin
+    // motores; lo que lo saca de la lista es el filtro, y eso es lo que este
+    // test tiene que probar. (El total ya no coincide desde la sesión 4: al
+    // mecánico le cae el techo de tipo de perfil distinto.)
     const b1SinMotoresPuntuado = puntuar(oferta, b1SinMotores);
     assert.ok(b1SinMotoresPuntuado.total > 0, 'el scorer sí lo puntúa');
-    assert.equal(b1SinMotoresPuntuado.total, puntuar(oferta, motorSinMotores).total, 'misma nota que el que sí aparece');
+    assert.equal(b1SinMotoresPuntuado.breakdown.engine, puntuar(oferta, motorSinMotores).breakdown.engine, 'mismo escalón de motor que el que sí aparece');
 
     assert.equal(elegible(oferta, b1ConMotor), true);
     assert.equal(elegible(oferta, motorSinMotores), true);
@@ -4266,6 +4286,9 @@ async function main() {
   // Sustituye al test del 5a que fijaba "el motor implícito no hace elegible a
   // nadie". La regla nueva: (a) motor declarado, (b) type rating colgado de
   // una B1 con el motor de la oferta o de su familia, (c) engine_technician.
+  // Sesión 4 (091): (a) se retira —sólo un engine_technician declara motores,
+  // así que ya estaba dentro de (c)— y quien entra por (b) sin ser
+  // engine_technician topa en 19.
   // ══════════════════════════════════════════════════════════════════════
 
   // Un técnico SIN motores declarados y SIN el oficio de motor: todo lo que
@@ -4328,10 +4351,15 @@ async function main() {
     assert.equal(elegible(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'] })), false);
   });
 
-  await test('Paso 5b · Elegibilidad de motor — (a) cualquier motor declarado y (c) engine_technician siguen valiendo; el filtro no toca ofertas de aeronave', () => {
+  // Sesión 4 (091): antes "(a) cualquier motor declarado y (c) siguen
+  // valiendo". El pintor con un motor declarado es una fila que la base ya no
+  // admite; si un perfil desfasado la trae, el filtro no la mira, igual que el
+  // núcleo SQL, que ya no recibe el número de motores.
+  await test('Sesión 4 · Elegibilidad de motor — la vía (a) ya no existe: un motor declarado sin el tipo no da entrada; (c) sigue valiendo; el filtro no toca ofertas de aeronave', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b');
-    const pintorConTurboeje = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-pt6c-67c')] });
-    assert.equal(elegible(oferta, pintorConTurboeje), true, '(a) aunque el motor no se parezca y el oficio no sea de motor');
+    const pintorConCfm = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    assert.equal(elegible(oferta, pintorConCfm), false, 'ni con el motor exacto declarado');
+    assert.equal(elegible(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter', 'engine_technician'], engines: [makeEngineDeclaration('eng-pt6c-67c')] })), true, '(c) con cualquier motor');
     assert.equal(elegible(oferta, makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['avionic', 'engine_technician'] })), true, '(c) combinado con otros oficios');
     // (c) con un rating B2: entra por el oficio, pero la B2 no puntúa motor.
     const motorConB2 = conRatingsBajo('tech-motor-b2', [['B2', 'fx-b737ng-cfm56-7b']], { technicianTypes: ['engine_technician'] });
@@ -4342,13 +4370,17 @@ async function main() {
 
   await test('Paso 5b · Escalera — declarado > type rating B1 > familia (declarado o B1) > sin relación > engine_technician sin motores (3)', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b');
+    // Sesión 4 (091): los seis son engine_technician. Declarar motores lo
+    // exige, y así el tipo —que ahora topa a quien no lo es— no puede
+    // explicar el orden: sólo el eje de motor lo hace.
+    const motorB1: TechnicianOverrides = { technicianTypes: ['mechanic', 'engine_technician'] };
     const escalones: { nombre: string; tecnico: TechnicianWithRelations }[] = [
-      { nombre: 'motor exacto declarado', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e1', engines: [makeEngineDeclaration('eng-cfm56-7b')] }) },
-      { nombre: 'motor exacto por type rating B1', tecnico: conRatingsBajo('e2', [['B1.1', 'fx-b737ng-cfm56-7b']]) },
-      { nombre: 'familia declarada', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e3', engines: [makeEngineDeclaration('eng-cfm56-5b')] }) },
-      { nombre: 'familia por type rating B1', tecnico: conRatingsBajo('e4', [['B1.1', 'fx-a320-cfm56-5b-limpia']]) },
-      { nombre: 'motor sin relación declarado (turboeje)', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e5', engines: [makeEngineDeclaration('eng-pt6c-67c')] }) },
-      { nombre: 'engine_technician sin motores', tecnico: makeTechnician({ ...PERFIL_A_FAVOR, id: 'e6', technicianTypes: ['engine_technician'] }) },
+      { nombre: 'motor exacto declarado', tecnico: makeTechnician({ ...PERFIL_MOTOR, id: 'e1', engines: [makeEngineDeclaration('eng-cfm56-7b')] }) },
+      { nombre: 'motor exacto por type rating B1', tecnico: conRatingsBajo('e2', [['B1.1', 'fx-b737ng-cfm56-7b']], motorB1) },
+      { nombre: 'familia declarada', tecnico: makeTechnician({ ...PERFIL_MOTOR, id: 'e3', engines: [makeEngineDeclaration('eng-cfm56-5b')] }) },
+      { nombre: 'familia por type rating B1', tecnico: conRatingsBajo('e4', [['B1.1', 'fx-a320-cfm56-5b-limpia']], motorB1) },
+      { nombre: 'motor sin relación declarado (turboeje)', tecnico: makeTechnician({ ...PERFIL_MOTOR, id: 'e5', engines: [makeEngineDeclaration('eng-pt6c-67c')] }) },
+      { nombre: 'engine_technician sin motores', tecnico: makeTechnician({ ...PERFIL_MOTOR, id: 'e6' }) },
     ];
     const motor = escalones.map(({ tecnico }) => puntuar(oferta, tecnico).breakdown.engine);
     const medido = escalones.map((e, i) => `${e.nombre}=${motor[i]}`).join(' / ');
@@ -4373,6 +4405,7 @@ async function main() {
   // falla si no las rechazan ESOS constraints (ver su autocomprobación).
   const formaBase = {
     offerKind: 'aircraft' as const,
+    technicianType: 'mechanic' as TechnicianTypeCode,
     requiresCertification: false,
     licenseCode: undefined,
     licenseAuthority: undefined,
@@ -4381,12 +4414,30 @@ async function main() {
     requiredHabilitations: [] as unknown[],
     acceptedAuthorities: [] as AuthorityCode[],
   };
+  // Sesión 4 (091): una oferta de motor es la del tipo Engine Technician.
+  const formaMotor = { ...formaBase, offerKind: 'engine' as const, technicianType: 'engine_technician' as TechnicianTypeCode, requiredEngineId: 'eng-cfm56-7b' };
 
   await test('Paso 5b · CHECK 077 — oferta de aeronave con motor: rechazada (y el motor sí vale en una de motor)', () => {
     const violaciones = offerShapeViolations({ ...formaBase, requiredEngineId: 'eng-cfm56-7b' });
     assert.ok(violaciones.some((v) => v.includes('Only an engine offer can name an engine')), JSON.stringify(violaciones));
-    assert.deepEqual(offerShapeViolations({ ...formaBase, offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b' }), [], 'control: la de motor es válida');
+    assert.deepEqual(offerShapeViolations(formaMotor), [], 'control: la de motor es válida');
     assert.deepEqual(offerShapeViolations(formaBase), [], 'control: la de aeronave sin motor es válida');
+  });
+
+  await test('Sesión 4 · CHECK 091 — la clase sale del tipo: motor ⇔ Engine Technician, en las dos direcciones', () => {
+    assert.equal(offerKindForTechnicianType('engine_technician'), 'engine');
+    for (const tipo of TECHNICIAN_TYPES.map((t) => t.code).filter((c) => c !== 'engine_technician')) {
+      assert.equal(offerKindForTechnicianType(tipo), 'aircraft', tipo);
+    }
+    assert.ok(
+      offerShapeViolations({ ...formaMotor, technicianType: 'mechanic' }).some((v) => v.includes('An engine offer is for an Engine Technician')),
+      'motor para un mecánico',
+    );
+    assert.ok(
+      offerShapeViolations({ ...formaBase, technicianType: 'engine_technician' }).some((v) => v.includes('An Engine Technician offer is an engine offer')),
+      'aeronave para un Engine Technician',
+    );
+    assert.deepEqual(offerShapeViolations(formaMotor), [], 'control');
   });
 
   await test('Paso 5b · CHECK 077 — "sólo sin licencia" con licencia: rechazada, en aeronave y en motor', () => {
@@ -4396,11 +4447,11 @@ async function main() {
 
     // Sin licencia, el filtro vale en las dos clases.
     assert.deepEqual(offerShapeViolations({ ...formaBase, onlyUnlicensed: true }), [], 'aeronave sin licencia + filtro');
-    assert.deepEqual(offerShapeViolations({ ...formaBase, offerKind: 'engine', requiredEngineId: 'eng-cfm56-7b', onlyUnlicensed: true }), [], 'motor + filtro');
+    assert.deepEqual(offerShapeViolations({ ...formaMotor, onlyUnlicensed: true }), [], 'motor + filtro');
   });
 
   await test('Paso 5b · Forma — motor con aeronaves o con licencia que no certifica motor, y autoridad que no emite el código: rechazadas', () => {
-    const motor = { ...formaBase, offerKind: 'engine' as const, requiredEngineId: 'eng-cfm56-7b' };
+    const motor = formaMotor;
     // Sesión 2 (087): la licencia es opcional en motor, pero sólo B1.x, P o A&P.
     for (const [authority, code] of [['FAA', 'A&P'], ['FAA', 'P'], ['EASA', 'B1.1'], ['UK_CAA', 'B1.3']] as const) {
       assert.deepEqual(offerShapeViolations({ ...motor, requiresCertification: true, licenseCode: code, licenseAuthority: authority }), [], `motor + ${authority} ${code}`);
@@ -4514,23 +4565,72 @@ async function main() {
     }
   });
 
-  await test('Paso 5b · Escalera — B1 con 737NG queda por encima de quien declara un motor sin relación', () => {
+  // ── Sesión 4 (091): los casos pedidos, juntos ────────────────────────
+  await test('Sesión 4 · Oferta de motor — Engine Technician sin motores entra; mecánico B1 con 737NG entra y puntúa como mucho 19; mecánico sin nada de motores no entra', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b');
-    const b1Con737 = conRatingsBajo('tech-z-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']]);
-    // Id que ordena ANTES, para que el orden no pueda salir del desempate.
-    const sinRelacion = makeTechnician({ ...PERFIL_A_FAVOR, id: 'tech-a-sin-relacion', engines: [makeEngineDeclaration('eng-pt6c-67c')] });
-    const mismoTipo = makeTechnician({ ...PERFIL_A_FAVOR, id: 'tech-a-mismo-tipo', engines: [makeEngineDeclaration('eng-v2500-a5')] });
 
-    const ranking = rankTechniciansForOffer(oferta, [sinRelacion, mismoTipo, b1Con737], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
-    assert.equal(ranking[0].technicianId, 'tech-z-b1-737', `ranking: ${ranking.map((s) => `${s.technicianId}=${s.total}`).join(', ')}`);
-    assert.ok(ranking[0].total > ranking[1].total);
+    const enginetechSinMotores = makeTechnician({ ...PERFIL_MOTOR, id: 's4-enginetech' });
+    assert.equal(elegible(oferta, enginetechSinMotores), true, 'vía (c)');
+
+    const mecanicoB1737 = conRatingsBajo('s4-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']]);
+    assert.equal(elegible(oferta, mecanicoB1737), true, 'vía (b)');
+    const r = puntuar(oferta, mecanicoB1737);
+    assert.ok(r.total <= 19, `como mucho 19, got ${r.total}`);
+    assert.ok(r.breakdown.engine > 0, 'el motor implícito sí puntúa: el techo es por el tipo, no por el eje');
+
+    const mecanicoSinNada = makeTechnician({ ...PERFIL_A_FAVOR, id: 's4-mecanico', technicianTypes: ['mechanic'], licenses: [makeLicense('B1.1')] });
+    assert.equal(elegible(oferta, mecanicoSinNada), false);
+    assert.equal(technicianIneligibilityReason(oferta, mecanicoSinNada, RATING_INDEX_MOTORES, ENGINE_INDEX), 'no_engine_experience');
+
+    assert.deepEqual(
+      rankTechniciansForOffer(oferta, [mecanicoSinNada, mecanicoB1737, enginetechSinMotores], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW).map((s) => s.technicianId),
+      ['s4-enginetech', 's4-b1-737'],
+    );
+  });
+
+  await test('Sesión 4 · Perfil — el editor de motores sólo con Engine Technician, y quitar el tipo con motores avisa', () => {
+    assert.equal(showsEngineExperience(['mechanic']), false);
+    assert.equal(showsEngineExperience(['mechanic', 'engine_technician']), true);
+
+    const con = ['mechanic', 'engine_technician'];
+    assert.equal(typeChangeDropsEngines(con, ['mechanic'], 2), true, 'quita el tipo con motores: avisa');
+    assert.equal(typeChangeDropsEngines(con, ['mechanic'], 0), false, 'sin motores no hay nada que perder');
+    assert.equal(typeChangeDropsEngines(con, ['engine_technician'], 2), false, 'quitar otro tipo no toca los motores');
+    assert.equal(typeChangeDropsEngines(['mechanic'], con, 0), false, 'marcarlo tampoco');
+
+    assert.ok(engineRemovalWarning(1).message.includes('1 declared engine will'));
+    assert.ok(engineRemovalWarning(3).message.includes('3 declared engines will'));
+  });
+
+  // Sesión 4 (091): antes "B1 con 737NG queda por encima de quien declara un
+  // motor sin relación", sin mirar el tipo. Ahora depende de él: siendo
+  // engine_technician sigue por encima; sin serlo, el techo de 19 lo deja por
+  // debajo de cualquier engine_technician. Es la consecuencia buscada.
+  await test('Sesión 4 · Escalera — B1 con 737NG: por encima de un motor sin relación si es engine_technician, por debajo si no lo es', () => {
+    const oferta = makeEngineOffer('eng-cfm56-7b');
+    // Id que ordena ANTES, para que el orden no pueda salir del desempate.
+    const sinRelacion = makeTechnician({ ...PERFIL_MOTOR, id: 'tech-a-sin-relacion', engines: [makeEngineDeclaration('eng-pt6c-67c')] });
+    const mismoTipo = makeTechnician({ ...PERFIL_MOTOR, id: 'tech-a-mismo-tipo', engines: [makeEngineDeclaration('eng-v2500-a5')] });
+    const orden = (b1: TechnicianWithRelations) =>
+      rankTechniciansForOffer(oferta, [sinRelacion, mismoTipo, b1], RATING_INDEX_MOTORES, ENGINE_INDEX, NOW);
+    const medido = (r: MatchScore[]) => r.map((s) => `${s.technicianId}=${s.total}`).join(', ');
+
+    const siendolo = orden(conRatingsBajo('tech-z-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']], { technicianTypes: ['mechanic', 'engine_technician'] }));
+    assert.equal(siendolo[0].technicianId, 'tech-z-b1-737', medido(siendolo));
+    assert.ok(siendolo[0].total > siendolo[1].total);
+
+    const sinSerlo = orden(conRatingsBajo('tech-z-b1-737', [['B1.1', 'fx-b737ng-cfm56-7b']]));
+    assert.equal(sinSerlo.length, 3, 'sigue entrando por la vía (b)');
+    assert.equal(sinSerlo[2].technicianId, 'tech-z-b1-737', medido(sinSerlo));
+    assert.equal(sinSerlo[2].total, 19);
   });
 
   await test('Paso 5a · Elegibilidad de motor — los dos filtros se suman: "sólo sin licencia" no rescata a quien no tiene motores', () => {
     const oferta = makeEngineOffer('eng-cfm56-7b', { onlyUnlicensed: true });
     const sinLicenciaNiMotores = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'] });
-    const sinLicenciaConMotor = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
-    const conLicenciaYMotor = makeTechnician({ ...PERFIL_A_FAVOR, licenses: [makeLicense('B1.1')], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    // Sesión 4 (091): quien declara motores es engine_technician.
+    const sinLicenciaConMotor = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['painter', 'engine_technician'], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
+    const conLicenciaYMotor = makeTechnician({ ...PERFIL_A_FAVOR, technicianTypes: ['mechanic', 'engine_technician'], licenses: [makeLicense('B1.1')], engines: [makeEngineDeclaration('eng-cfm56-7b')] });
 
     assert.equal(elegible(oferta, sinLicenciaNiMotores), false, 'cumple "sin licencia" pero no tiene nada de motor');
     assert.equal(elegible(oferta, sinLicenciaConMotor), true);
@@ -4555,10 +4655,19 @@ async function main() {
       habilitations: [makeHabOn(b11Servicio, { aircraftTypeRatingId: 'fx-a320-cfm56' })],
     }),
     // Motor exacto declarado, CON licencia: el que "sólo sin licencia" saca.
-    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-b2-cfm567b', technicianTypes: ['avionic'], licenses: [makeLicense('B2')], engines: [makeEngineDeclaration('eng-cfm56-7b')] }),
+    // Sesión 4 (091): quien declara motores es engine_technician.
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-b2-cfm567b', technicianTypes: ['avionic', 'engine_technician'], licenses: [makeLicense('B2')], engines: [makeEngineDeclaration('eng-cfm56-7b')] }),
     // Misma familia, sin licencia. Sin engineIndex caería a "tipo distinto":
     // es la prueba de que el envoltorio pasa el catálogo de motores.
-    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-familia-cfm565b', technicianTypes: ['painter'], engines: [makeEngineDeclaration('eng-cfm56-5b')] }),
+    makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-familia-cfm565b', technicianTypes: ['painter', 'engine_technician'], engines: [makeEngineDeclaration('eng-cfm56-5b')] }),
+    // Sesión 4: mecánico B1 con 737NG, sin el tipo. Entra por la vía (b) y
+    // topa en 19; las dos direcciones y matchPairs tienen que decir lo mismo.
+    makeTechnician({
+      ...PERFIL_A_FAVOR,
+      id: 'svc-b1-737-sin-tipo',
+      licenses: [b11Servicio],
+      habilitations: [makeHabOn(b11Servicio, { aircraftTypeRatingId: 'fx-b737ng-cfm56-7b' })],
+    }),
     // engine_technician sin motores: elegible, 3 puntos.
     makeTechnician({ ...PERFIL_A_FAVOR, id: 'svc-motor-sin-motores', technicianTypes: ['engine_technician'] }),
     // B1 sin motores: no elegible en ofertas de motor.
@@ -4662,6 +4771,7 @@ async function main() {
     assert.ok(familia.score.breakdown.engine > sinCatalogo.breakdown.engine, `con engineIndex la familia puntúa (${familia.score.breakdown.engine} vs ${sinCatalogo.breakdown.engine} sin él)`);
     assert.ok(!motor.some((r) => r.score.technicianId === 'svc-b1-sin-motores'), 'el B1 sin motores no aparece');
     assert.equal(motor.find((r) => r.score.technicianId === 'svc-motor-sin-motores')?.score.breakdown.engine, 3);
+    assert.equal(motor.find((r) => r.score.technicianId === 'svc-b1-737-sin-tipo')?.score.total, 19, 'sesión 4: entra por (b) y topa en 19');
 
     const soloSinLicencia = await service.getTechnicianMatchesForOffer('svc-offer-cfm567b-sin-licencia');
     assert.ok(!soloSinLicencia.some((r) => r.score.technicianId === 'svc-b2-cfm567b'), 'el licenciado con el motor exacto queda fuera');

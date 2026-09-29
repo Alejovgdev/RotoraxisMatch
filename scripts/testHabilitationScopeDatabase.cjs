@@ -40,7 +40,7 @@ async function main() {
   if (rows.length !== 1 || result.cases < 300 || result.failures !== 0) throw new Error(JSON.stringify(rows));
   console.log(`PASS H3 ${baseline ? 'baseline reproduction' : installed ? 'installed migration' : 'migration rehearsal'}: ${result.cases} cases; rollback restored exact data, functions and triggers`);
   if (!baseline) {
-    for (const [file, expected] of [['testApplicationSecurity.sql', 13], ['testTransactionalWrites.sql', 17]]) {
+    for (const [file, expected] of [['testApplicationSecurity.sql', 14], ['testTransactionalWrites.sql', 20]]) {
       const suite = fs.readFileSync(path.join(__dirname, file), 'utf8');
       if (!/\bBEGIN;/.test(suite) || !/ROLLBACK;\s*$/.test(suite)) throw new Error(`Missing rollback: ${file}`);
       const body = suite.replace(/\bBEGIN;/, '').replace(/ROLLBACK;\s*$/, '');

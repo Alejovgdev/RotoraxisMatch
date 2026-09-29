@@ -1,30 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
-import { CompanyCard, CompanyCheckRow, CompanyChip, companyUi } from './CompanyUI';
+import { CompanyCard, CompanyCheckRow, companyUi } from './CompanyUI';
 import { EnginePicker } from '../EnginePicker';
-import { OfferKind } from '../../types/offer';
 
-// Las tres secciones que la Fase 10 (paso 5b) añade al formulario de oferta,
+// Las secciones que la Fase 10 (paso 5b) añade al formulario de oferta,
 // compartidas por crear y editar. Las reglas de cuándo se enseñan y qué limpia
 // cada cambio NO viven aquí: están en src/utils/offerFormRules.ts.
-
-export function OfferKindSection({ value, onChange }: { value: OfferKind; onChange: (next: OfferKind) => void }) {
-  return (
-    <CompanyCard style={styles.card}>
-      <Text style={styles.title}>What does this offer ask for?</Text>
-      <Text style={styles.subtitle}>
-        {value === 'engine'
-          ? 'An engine. A licence is optional, and aircraft type ratings are never asked for: technicians are matched on the engines they have worked on.'
-          : 'A licence and/or aircraft type ratings, the usual way.'}
-      </Text>
-      <View style={styles.chipRow}>
-        <CompanyChip label="Aircraft & licence" selected={value === 'aircraft'} onPress={() => onChange('aircraft')} />
-        <CompanyChip label="Engine" selected={value === 'engine'} onPress={() => onChange('engine')} />
-      </View>
-    </CompanyCard>
-  );
-}
+//
+// Sesión 4 (091): aquí vivía OfferKindSection, el selector "Aircraft & licence"
+// / "Engine". Se retira: la clase sale del tipo de técnico, que se elige en
+// "Profile type".
 
 export function OfferEngineSection({
   value,
@@ -41,6 +27,8 @@ export function OfferEngineSection({
       <Text style={styles.subtitle}>
         One engine per offer. Engine points reflect the exact engine declared, evidence from a B1 type rating,
         the same family or another engine. The overall ranking also includes the other matching criteria.
+        Technicians who are not Engine Technicians only appear through a B1 type rating on this engine or its
+        family, and rank low.
       </Text>
       <EnginePicker value={value} onSelect={(engine) => onChange(engine.id)} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -66,5 +54,4 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
   subtitle: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
   error: { fontSize: 11, lineHeight: 16, fontWeight: '600', color: companyUi.red },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 });

@@ -1438,17 +1438,17 @@ function scoreWithSelectedLicense(
   // A technician can declare several types (Fase 6 tanda A), so this is a
   // membership check: matching ANY declared type is sufficient. The offer
   // always declares exactly one type (`offers.technician_type` is NOT NULL).
-  // Fase 10 — NO SE APLICA EN OFERTAS DE MOTOR, y no es una excepción de
-  // conveniencia: `offers.technician_type` es NOT NULL, así que TODA oferta
-  // nombra un oficio, incluidas las de motor, donde ese campo no describe nada
-  // que la oferta pida. Con el techo puesto, un mecánico con el CFM56 exacto
-  // caía a 19 frente a una oferta cuyo único requisito ya cumplía. Aquí el
-  // oficio se calla igual que se calla la habilitación: ni suma ni topa. La
-  // columna se queda como está — cambiarla a NULL era mover el esquema para
-  // arreglar un problema del scorer.
-  if (offer.offerKind === 'engine') {
-    // Nada: ni línea de match, ni aclaración, ni techo.
-  } else if (technician.technicianTypes.includes(offer.technicianType)) {
+  //
+  // Vale también en ofertas de motor desde la sesión 4 (091). Hasta entonces
+  // se saltaba: toda oferta de motor nombraba un oficio que no describía lo
+  // que pedía, y con el techo un mecánico con el CFM56 exacto caía a 19. Ahora
+  // la oferta de motor ES la del tipo Engine Technician (la clase se deriva
+  // del tipo, CHECK de la 091), así que el tipo sí dice lo que pide, y quien
+  // no es Engine Technician tiene un tipo de perfil distinto como en
+  // cualquier otra oferta. Ese mecánico ya no puede declarar el motor —sólo un
+  // Engine Technician declara motores—; entra por su type rating B1 (vía (b)
+  // de isTechnicianEligibleForOffer) y queda con el techo de 19.
+  if (technician.technicianTypes.includes(offer.technicianType)) {
     matches.push(`Technician type: ${technicianTypeLabel(offer.technicianType)}`);
   } else {
     const profileIs = technician.technicianTypes.map(technicianTypeLabel).join(', ');
@@ -1590,8 +1590,14 @@ export function ineligibilityReasonText(reason: IneligibilityReason): string {
 // fase el scorer no sabía que ese eje existía, y las tres consecuencias
 // hundían al candidato bueno — caía en la escala de 75, se comía el tope de
 // cero cualificación por no tener ni habilitación ni licencia, y el oficio le
-// topaba a 19 si no coincidía. Las tres se arreglan aquí y en las tres ramas
-// que llaman a esto, no con excepciones sueltas.
+// topaba a 19 si no coincidía. Las dos primeras se arreglan aquí y en las tres
+// ramas que llaman a esto, no con excepciones sueltas. La tercera se quitó y
+// volvió en la sesión 4 (091), con otro sentido: la oferta de motor es ahora
+// la del tipo Engine Technician, y el techo le cae a quien no lo es (ver
+// "Profile type" en calculateOfferTechnicianMatch).
+//
+// Desde la 091 sólo un Engine Technician tiene motores declarados. Los otros
+// tipos llegan aquí sólo con evidencia implícita de sus type ratings B1.
 //
 // LA ESCALERA, de más a menos evidencia:
 //   declared_exact  el técnico DECLARÓ ese motor.
@@ -1792,14 +1798,18 @@ function evaluateEngineRequirement(
  * filtro escrito aparte sería el que una de las dos direcciones olvide.
  *
  * ── 1. Oferta de motor: sólo quien tiene algo que ver con motores ────────
- * Elegible si cumple AL MENOS UNA (paso 5b, sustituye a la regla del 5a):
- *   (a) ha DECLARADO algún motor, sea cual sea su oficio;
+ * Elegible si cumple AL MENOS UNA:
  *   (b) tiene un type rating colgado de una B1 (B1.1–B1.4) cuyo motor es el de
  *       la oferta o de su familia — el 737NG de un B1 entra en una oferta de
- *       CFM56-7B sin haber declarado nada;
+ *       CFM56-7B sin haber declarado nada. Si no es Engine Technician, puntúa
+ *       con el techo de tipo de perfil distinto (19);
  *   (c) tiene 'engine_technician' entre sus oficios, aunque no declare motores.
  * Nadie más. Un type rating colgado sólo de B2, C u otra licencia no da
  * entrada: esas ramas no certifican el motor (regla 1b del eje de motores).
+ * La vía (a), "ha DECLARADO algún motor, sea cual sea su oficio", se retiró en
+ * la sesión 4 (091): desde entonces sólo un Engine Technician puede declarar
+ * motores, así que (a) quedaba dentro de (c). Las letras se conservan para que
+ * este comentario, el SQL y la documentación sigan hablando de lo mismo.
  *
  * Sin este filtro, una oferta de motor enseñaba a toda la plataforma: el eje
  * puntúa 3 a quien no tiene motores (ENGINE_TIER_FRACTIONS.none), así que
@@ -1825,7 +1835,7 @@ function evaluateEngineRequirement(
  */
 export function isTechnicianEligibleForOffer(
   offer: Pick<Offer, 'onlyUnlicensed' | 'offerKind' | 'requiredEngineId'>,
-  technician: Pick<TechnicianWithRelations, 'licenses' | 'engines' | 'technicianTypes' | 'habilitations'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'technicianTypes' | 'habilitations'>,
   ratingIndex: AircraftRatingIndex,
   engineIndex: EngineIndex,
 ): boolean {
@@ -1843,7 +1853,7 @@ export type IneligibilityReason = 'no_engine_experience' | 'licensed_technician'
  */
 export function technicianIneligibilityReason(
   offer: Pick<Offer, 'onlyUnlicensed' | 'offerKind' | 'requiredEngineId'>,
-  technician: Pick<TechnicianWithRelations, 'licenses' | 'engines' | 'technicianTypes' | 'habilitations'>,
+  technician: Pick<TechnicianWithRelations, 'licenses' | 'technicianTypes' | 'habilitations'>,
   ratingIndex: AircraftRatingIndex,
   engineIndex: EngineIndex,
 ): IneligibilityReason | null {
@@ -1884,20 +1894,22 @@ function eligibleScores(pairs: PairMatch[]): MatchScore[] {
   return pairs.flatMap((pair) => (pair.eligible ? [pair.score] : []));
 }
 
-// Filtro 1 de isTechnicianEligibleForOffer: las vías (a), (b) y (c), en orden
-// de coste — las dos baratas primero.
+// Filtro 1 de isTechnicianEligibleForOffer: las vías (c) y (b), la barata
+// primero.
 function isEngineOfferCandidate(
   offer: Pick<Offer, 'requiredEngineId'>,
-  technician: Pick<TechnicianWithRelations, 'engines' | 'technicianTypes' | 'habilitations'>,
+  technician: Pick<TechnicianWithRelations, 'technicianTypes' | 'habilitations'>,
   ratingIndex: AircraftRatingIndex,
   engineIndex: EngineIndex,
 ): boolean {
-  if (technician.engines.length > 0) return true; // (a)
   if (technician.technicianTypes.includes(ENGINE_TECHNICIAN_TYPE_CODE)) return true; // (c)
   if (!offer.requiredEngineId) return false;
-  // (b) Sin motores declarados, toda la evidencia que queda es implícita y B1
-  // (collectEngineEvidence ya descarta las demás ramas).
-  const { tier } = matchEngineEvidence(collectEngineEvidence(technician, ratingIndex), offer.requiredEngineId, engineIndex);
+  // (b) Sólo la evidencia implícita B1 (collectEngineEvidence descarta las
+  // demás ramas). Los motores declarados no entran, ni aunque un perfil
+  // desfasado los traiga: el núcleo SQL ya no los recibe, y las dos
+  // implementaciones tienen que decir lo mismo.
+  const implicitOnly = { engines: [], habilitations: technician.habilitations };
+  const { tier } = matchEngineEvidence(collectEngineEvidence(implicitOnly, ratingIndex), offer.requiredEngineId, engineIndex);
   return tier === 'implicit_exact' || tier === 'same_family';
 }
 

@@ -25,7 +25,7 @@ import {
 } from '../../../src/components/company/CompanyUI';
 import { TypeRatingRequirementsEditor } from '../../../src/components/company/TypeRatingRequirementsEditor';
 import { RequiredLicensesSection } from '../../../src/components/company/RequiredLicensesSection';
-import { OfferEngineSection, OfferKindSection, OnlyUnlicensedSection } from '../../../src/components/company/OfferEngineSections';
+import { OfferEngineSection, OnlyUnlicensedSection } from '../../../src/components/company/OfferEngineSections';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { TECHNICIAN_TYPES } from '../../../src/constants/technicianTypes';
@@ -39,7 +39,6 @@ import {
   requirementsErrors,
   selectAuthority,
   selectLicense,
-  selectOfferKind,
   selectProductType,
   selectTechnicianType,
   setRequiresCertification,
@@ -47,6 +46,7 @@ import {
   showsCertificationQuestion,
   showsLicenseSection,
   showsOnlyUnlicensed,
+  technicianTypeHelper,
   toggleAcceptedAuthority,
 } from '../../../src/utils/offerFormRules';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
@@ -121,7 +121,7 @@ export default function NewOfferScreen() {
     acceptedAuthorities: [],
     requiresAllAircraft: false,
     requiredHabilitations: [],
-    // Las ofertas de siempre son de aeronave; la de motor se elige.
+    // Sesión 4 (091): sale del tipo — `mechanic` es una oferta de aeronave.
     offerKind: 'aircraft',
     requiredEngineId: undefined,
     // Desmarcada por defecto: decisión tomada en la 070.
@@ -189,7 +189,6 @@ export default function NewOfferScreen() {
         acceptedAuthorities: form.acceptedAuthorities,
         requiresAllAircraft: form.requiresAllAircraft,
         requiredHabilitations: form.requiredHabilitations,
-        offerKind: form.offerKind,
         requiredEngineId: form.requiredEngineId,
         onlyUnlicensed: form.onlyUnlicensed,
       });
@@ -217,27 +216,20 @@ export default function NewOfferScreen() {
           onBack={goBack}
         />
 
-        {/* Paso 5b: 0) aeronave o motor, antes que nada — decide qué pasos
-            existen. Después el orden de la Fase 6 tanda C: 1) tipo de perfil,
-            2) ¿certificar?, 3) avión o helicóptero, 4) licencia, 5) aeronaves.
-            En una oferta de motor no hay 1 ni 5: hay motor, y 2 y 4 son opcionales (sesión 2). */}
-        <OfferKindSection value={form.offerKind} onChange={(kind) => applyRequirement((prev) => selectOfferKind(prev, kind))} />
-
-        {form.offerKind === 'aircraft' && (
-          <ChoiceSection
-            title="Profile type"
-            helper="One per offer. Two types in one advert are two jobs — publish them separately."
-          >
-            {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
-              <CompanyChip
-                key={t.code}
-                label={t.label}
-                selected={form.technicianType === t.code}
-                onPress={() => applyRequirement((prev) => selectTechnicianType(prev, t.code as TechnicianTypeCode))}
-              />
-            ))}
-          </ChoiceSection>
-        )}
+        {/* El orden de la Fase 6 tanda C: 1) tipo de perfil, 2) ¿certificar?,
+            3) avión o helicóptero, 4) licencia, 5) aeronaves. Sesión 4 (091):
+            el tipo decide también la clase — Engine Technician es la oferta de
+            motor, que no tiene 5 sino motor, y donde 2 y 4 son opcionales. */}
+        <ChoiceSection title="Profile type" helper={technicianTypeHelper(form)}>
+          {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
+            <CompanyChip
+              key={t.code}
+              label={t.label}
+              selected={form.technicianType === t.code}
+              onPress={() => applyRequirement((prev) => selectTechnicianType(prev, t.code as TechnicianTypeCode))}
+            />
+          ))}
+        </ChoiceSection>
 
         {/* La pregunta sólo existe para los oficios que tienen licencia. Para
             chapa, pintura y composite no hay eje Part-66 que abrir, así que

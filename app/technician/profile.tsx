@@ -51,6 +51,8 @@ import {
   toggleHeldLicense,
   updateHeldLicenseDates,
 } from '../../src/utils/profileLicenses';
+import { engineRemovalWarning, showsEngineExperience, typeChangeDropsEngines } from '../../src/utils/profileEngines';
+import { confirmAction } from '../../src/utils/platformAlert';
 import { EngineExperienceEditor, EngineExperienceRow } from '../../src/components/technician/EngineExperienceEditor';
 import { useEnginesCatalog } from '../../src/state/useEnginesCatalog';
 import { blockingHabilitationIssues, isHabilitationScopeRejection, profileHabilitationIssues } from '../../src/utils/profileHabilitationValidation';
@@ -581,7 +583,18 @@ export default function TechnicianProfileScreen() {
   // Unico punto de edicion de technicianTypes desde la UI. El minimo de uno
   // lo hace cumplir TechnicianTypeSelector, y el bloqueo de los implicados
   // tambien (con `lockedCodes`), no esto.
-  function updateTechnicianTypes(next: string[]) {
+  //
+  // Sesion 4 (091): quitar Engine Technician teniendo motores pregunta antes.
+  // Aceptar quita el tipo y vacia la lista (al guardar, la base borra las filas
+  // al quitar el tipo); cancelar deja el tipo marcado y no toca nada.
+  async function updateTechnicianTypes(next: string[]) {
+    if (typeChangeDropsEngines(technicianTypes, next, engines.length)) {
+      const warning = engineRemovalWarning(engines.length);
+      const confirmed = await confirmAction({ ...warning, destructive: true });
+      if (!confirmed) return;
+      setEngines([]);
+      setEnginesDirty(true);
+    }
     setTechnicianTypes(next);
     setIsDirty(true);
   }
@@ -913,8 +926,12 @@ export default function TechnicianProfileScreen() {
         setExperienceDirty(false);
       }
 
-      // 4b) Motores declarados (paso 5b). Tampoco tienen FK hacia licencias:
-      // su orden no importa.
+      // 4b) Motores declarados (paso 5b). No tienen FK hacia licencias, pero
+      // desde la 091 SÍ dependen del paso 1: sólo un Engine Technician puede
+      // tener motores, así que el tipo tiene que estar escrito antes (marcarlo
+      // y añadir motores en el mismo guardado funciona por este orden). Al
+      // quitar el tipo, el paso 1 ya ha borrado las filas en la base y aquí
+      // llega la lista vacía, que la RPC acepta.
       if (enginesDirty) {
         await technicianRepositoryV2.replaceEngineExperience(
           techId,
@@ -1201,7 +1218,7 @@ export default function TechnicianProfileScreen() {
             <TechnicianTypeSelector
               options={techTypeOptions}
               selected={technicianTypes}
-              onChange={updateTechnicianTypes}
+              onChange={(next) => void updateTechnicianTypes(next)}
               loading={techTypesLoading}
               lockedCodes={impliedTypes}
               palette={{
@@ -1380,9 +1397,11 @@ export default function TechnicianProfileScreen() {
           />
 
           {/* Paso 5b: motores, como sección propia bajo la experiencia en
-              aeronaves. Es lo que hace a un técnico elegible y bien
-              puntuado en una oferta de motor. */}
-          <EngineExperienceEditor value={engines} onChange={onChangeEngines} />
+              aeronaves. Sesión 4 (091): sólo para Engine Technician — la base
+              rechaza los motores de cualquier otro tipo. */}
+          {showsEngineExperience(technicianTypes) && (
+            <EngineExperienceEditor value={engines} onChange={onChangeEngines} />
+          )}
 
           {requestPanelOpen && (
             <TechnicianCard style={styles.sectionCard}>

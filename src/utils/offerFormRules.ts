@@ -1,8 +1,13 @@
 // Las reglas del formulario de oferta, puras (Fase 10, paso 5b).
 //
 // Crear y editar una oferta comparten TODAS las transiciones —qué se limpia al
-// cambiar de clase, de autoridad, de licencia— y difieren sólo en si preguntan
+// cambiar de tipo, de autoridad, de licencia— y difieren sólo en si preguntan
 // antes (editar confirma lo que ya está guardado; crear repinta sin aviso).
+//
+// Sesión 4 (091): la clase (aeronave/motor) ya no se elige. Sale del tipo de
+// técnico —Engine Technician es la oferta de motor— y `selectTechnicianType`
+// hace las dos cosas a la vez. `form.offerKind` sigue en el estado porque todo
+// lo demás pregunta por él; nadie lo escribe salvo esa transición.
 // Aquí vive lo compartido, y cada pantalla pone su diálogo delante. Antes de
 // este paso cada pantalla tenía su copia de cada transición; con tres campos
 // nuevos acoplados entre sí, dos copias habrían divergido en la primera
@@ -13,14 +18,14 @@
 // que la pantalla enseña y deja elegir.
 import { OfferKind, OfferProductType } from '../types/offer';
 import { AuthorityCode, AuthorityLicenseCode, TechnicianTypeCode } from '../types/catalog';
-import { ENGINE_TECHNICIAN_TYPE_CODE, isLicensedTechnicianType } from '../constants/technicianTypes';
+import { isLicensedTechnicianType } from '../constants/technicianTypes';
 import {
   equivalentAuthoritiesForLicense,
   licensesSelectableForOffer,
   retainApplicableAuthorities,
 } from '../constants/licenses';
 import { isLicenseCompatibleWithProductType } from './licenseCategoryProductType';
-import { offerAircraftAreExperience } from './offerShape';
+import { offerAircraftAreExperience, offerKindForTechnicianType } from './offerShape';
 
 export interface OfferRequirementsForm {
   offerKind: OfferKind;
@@ -36,11 +41,6 @@ export interface OfferRequirementsForm {
   requiresAllAircraft: boolean;
   requiredHabilitations: { aircraftTypeRatingId: string; notes?: string }[];
 }
-
-// El oficio al que vuelve una oferta que deja de ser de motor: el primero del
-// catálogo. `engine_technician` describe una oferta de motor; en una de
-// aeronave sería elegirlo por la empresa sin que lo haya elegido.
-const DEFAULT_AIRCRAFT_TECHNICIAN_TYPE: TechnicianTypeCode = 'mechanic';
 
 const CLEARED_AIRCRAFT = { requiredHabilitations: [], requiresAllAircraft: false };
 
@@ -59,6 +59,17 @@ function withApplicableAuthorities<T extends OfferRequirementsForm>(form: T): T 
 }
 
 // ── Qué se enseña ─────────────────────────────────────────────────────────
+
+/**
+ * El texto de ayuda de "Profile type", para las dos pantallas. Desde la sesión
+ * 4 el tipo decide la clase, y la empresa tiene que ver qué cambia al elegir
+ * Engine Technician antes de elegirlo.
+ */
+export function technicianTypeHelper(form: OfferRequirementsForm): string {
+  return form.offerKind === 'engine'
+    ? 'An Engine Technician offer asks for one engine and no aircraft. A licence is optional.'
+    : 'One per offer. Two types in one advert are two jobs — publish them separately. Engine Technician makes this an engine offer.';
+}
 
 /**
  * La pregunta de la licencia: en ofertas de aeronave de un oficio con
@@ -142,28 +153,6 @@ export function selectableAuthorities(form: OfferRequirementsForm, all: readonly
 
 // ── Transiciones ──────────────────────────────────────────────────────────
 
-export function selectOfferKind<T extends OfferRequirementsForm>(form: T, kind: OfferKind): T {
-  if (kind === form.offerKind) return form;
-  // Una oferta de motor pide UN motor y ninguna aeronave (076). El oficio no
-  // puntúa en ella, pero la columna es NOT NULL: se nombra el oficio de motor.
-  // Una oferta de aeronave no nombra motor (077), y el oficio de motor no se
-  // queda en ella.
-  const moved: T = kind === 'engine'
-    ? { ...form, offerKind: 'engine', technicianType: ENGINE_TECHNICIAN_TYPE_CODE, ...CLEARED_AIRCRAFT }
-    : {
-        ...form,
-        offerKind: 'aircraft',
-        requiredEngineId: undefined,
-        technicianType: form.technicianType === ENGINE_TECHNICIAN_TYPE_CODE ? DEFAULT_AIRCRAFT_TECHNICIAN_TYPE : form.technicianType,
-      };
-  // Sesión 2: la licencia sobrevive al cambio de clase si la clase nueva puede
-  // pedirla (una B1.1 vale para las dos; una B2 no vale para motor). Si no, se
-  // va con su autoridad y sus equivalencias, y la oferta queda sin licencia.
-  const licenseStays = Boolean(form.licenseCode) && selectableLicenses(moved).includes(form.licenseCode as AuthorityLicenseCode);
-  if (licenseStays) return moved;
-  return withApplicableAuthorities({ ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
-}
-
 export function setRequiresCertification<T extends OfferRequirementsForm>(form: T, next: boolean): T {
   if (next === form.requiresCertification) return form;
   if (next) {
@@ -176,12 +165,30 @@ export function setRequiresCertification<T extends OfferRequirementsForm>(form: 
   return withApplicableAuthorities({ ...form, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
 }
 
+/**
+ * Elegir el tipo de técnico elige también la clase (sesión 4, 091): Engine
+ * Technician ⇒ oferta de motor, cualquier otro ⇒ oferta de aeronave.
+ */
 export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, next: TechnicianTypeCode): T {
   if (next === form.technicianType) return form;
-  if (!isLicensedTechnicianType(next)) {
-    return withApplicableAuthorities({ ...form, technicianType: next, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
+  const offerKind: OfferKind = offerKindForTechnicianType(next);
+  if (offerKind === 'engine') {
+    // Una oferta de motor pide UN motor y ninguna aeronave (076). Sesión 2: la
+    // licencia sobrevive si una oferta de motor puede pedirla (una B1.1 sí, una
+    // B2 no). Si no, se va con su autoridad y sus equivalencias, y la oferta
+    // queda sin licencia —en motor es opcional—.
+    const moved: T = { ...form, offerKind, technicianType: next, ...CLEARED_AIRCRAFT };
+    const licenseStays = Boolean(form.licenseCode) && selectableLicenses(moved).includes(form.licenseCode as AuthorityLicenseCode);
+    if (licenseStays) return moved;
+    return withApplicableAuthorities({ ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
   }
-  const moved = { ...form, technicianType: next };
+  // Una oferta de aeronave no nombra motor (077). Desde ahí, las reglas de
+  // siempre del cambio de oficio.
+  const aircraft: T = { ...form, offerKind, technicianType: next, requiredEngineId: undefined };
+  if (!isLicensedTechnicianType(next)) {
+    return withApplicableAuthorities({ ...aircraft, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
+  }
+  const moved = aircraft;
   // La autoridad sobrevive si tiene algo que ofrecer al oficio nuevo (la FAA no
   // tiene nada para aviónica); la licencia, si ese oficio puede pedirla.
   const authorityStays = !form.licenseAuthority || licensesSelectableForOffer(moved, form.licenseAuthority).length > 0;

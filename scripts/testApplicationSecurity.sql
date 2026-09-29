@@ -75,10 +75,15 @@ BEGIN
   SET LOCAL ROLE authenticated;
   observed:=pg_temp.attempt(format('INSERT INTO offer_applications(technician_id,offer_id,company_id) VALUES(%L,%L,%L)',t,engine_o,cid));
   INSERT INTO security_results VALUES('engine application rejects missing experience',observed LIKE 'PT403:%:no_engine_experience',observed);
-  INSERT INTO technician_engine_experience(technician_id,engine_id) VALUES(t,engine);
+  -- 091: el INSERT directo que permite tee_insert_own no rodea la regla del tipo.
+  observed:=pg_temp.attempt(format('INSERT INTO technician_engine_experience(technician_id,engine_id) VALUES(%L,%L)',t,engine));
+  INSERT INTO security_results VALUES('direct engine insert requires engine technician',
+    observed='23514:Only an Engine Technician profile can declare engines.:not_engine_technician',observed);
+  -- 091: la vía (a) ya no existe; entra por (c), el tipo, y lo pierde al quitarlo.
+  INSERT INTO technician_profile_types(technician_id,type_code) VALUES(t,'engine_technician');
   INSERT INTO offer_applications(technician_id,offer_id,company_id) VALUES(t,engine_o,cid) RETURNING id INTO other_app;
   UPDATE offer_applications SET status='withdrawn' WHERE id=other_app;
-  DELETE FROM technician_engine_experience WHERE technician_id=t;
+  DELETE FROM technician_profile_types WHERE technician_id=t AND type_code='engine_technician';
   observed:=pg_temp.attempt(format('UPDATE offer_applications SET status=''pending'' WHERE id=%L',other_app));
   INSERT INTO security_results VALUES('engine reapply rechecks experience',observed LIKE 'PT403:%:no_engine_experience',observed);
   RESET ROLE;
@@ -92,6 +97,8 @@ BEGIN
     ON CONFLICT(technician_id,authority,license_code) DO UPDATE SET authority=excluded.authority RETURNING id INTO lic;
   INSERT INTO technician_habilitations(technician_id,technician_license_id,license_code,aircraft_type_rating_id)
     VALUES(other_t,lic,'B1.1',rating) ON CONFLICT DO NOTHING;
+  -- 091: sólo un Engine Technician tiene motores.
+  INSERT INTO technician_profile_types(technician_id,type_code) VALUES(other_t,'engine_technician') ON CONFLICT DO NOTHING;
   INSERT INTO technician_engine_experience(technician_id,engine_id) VALUES(other_t,engine) ON CONFLICT DO NOTHING;
   -- 085: las otras dos tablas de cualificación que lee loadTechnicianRelations.
   INSERT INTO technician_aircraft_experience(technician_id,aircraft_type_rating_id) VALUES(other_t,rating) ON CONFLICT DO NOTHING;

@@ -21,10 +21,11 @@ interface Props {
 // (technician_engine_experience, migración 068).
 //
 // Misma forma que AircraftExperienceEditor, y por lo mismo: motor y años, sin
-// licencia, sin fechas. Abierto a cualquier técnico. Declarar un motor es lo
-// que hace a un técnico elegible para CUALQUIER oferta de motor (vía (a)) y el
-// escalón más alto de la escalera cuando es el motor pedido. Los años se
-// guardan y se enseñan, pero no puntúan.
+// licencia, sin fechas. Sólo para perfiles Engine Technician desde la sesión 4
+// (091): el perfil no lo pinta a nadie más, y la base rechaza los motores de
+// quien no tenga el tipo. Un motor declarado es el escalón más alto de la
+// escalera cuando es el motor pedido; los años se guardan y se enseñan, pero
+// no puntúan.
 //
 // No hace falta declarar aquí el motor de un type rating B1: ése ya cuenta
 // solo (vía (b) y escalón "por type rating"). Declararlo lo sube al escalón

@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { Offer, OfferKind, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
+import { Offer, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
 import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCode } from '../../types/catalog';
 // Fase 10, paso 5b: aquí vivía DEFAULT_OFFER_AUTHORITY = 'EASA', el relleno de
 // la autoridad mientras el formulario no la pedía. Se retira con el selector:
@@ -7,7 +7,7 @@ import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCo
 // (offerShapeViolations, y detrás el CHECK de emparejamiento de la 075).
 import { OfferStatus } from '../../types/enums';
 import { credentialLabel, licensesSelectableForOffer, retainApplicableAuthorities } from '../../constants/licenses';
-import { assertOfferShape } from '../../utils/offerShape';
+import { assertOfferShape, offerKindForTechnicianType } from '../../utils/offerShape';
 import { isLicensedTechnicianType, technicianTypeLabel } from '../../constants/technicianTypes';
 import { LocationValue, PersistedLocation } from '../../types/location';
 import { locationColumns, persistedLocationFromValue } from '../../utils/locationBridge';
@@ -78,7 +78,9 @@ export function offerLocationFromValue(value: LocationValue): OfferLocationWrite
 export type OfferPatch = Partial<Omit<Offer, 'id' | 'createdAt'>>;
 
 const CERTIFICATION_KEYS = ['requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptedAuthorities', 'onlyUnlicensed'] as const;
-const KIND_KEYS = ['offerKind', 'requiredEngineId'] as const;
+// Sesión 4 (091): el tipo va en el grupo de la clase. Cambiarlo puede cambiar
+// la clase, y la clase arrastra el motor.
+const KIND_KEYS = ['offerKind', 'requiredEngineId', 'technicianType'] as const;
 
 function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolean {
   return keys.some((key) => patch[key] !== undefined);
@@ -99,6 +101,9 @@ function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolea
  *   - cambiar la autoridad o el código sin mandar la lista de aceptadas ->
  *     se quedan sólo las que siguen aplicando (sesión 2, 088). Si el patch
  *     manda la lista, se valida tal cual y la guarda lanza si no cabe;
+ *   - la clase sale del tipo (sesión 4, 091): Engine Technician -> motor, otro
+ *     tipo -> aeronave. Si el patch manda también la clase, se escribe tal
+ *     cual y la guarda lanza si contradice al tipo;
  *   - oferta de aeronave -> sin motor (077), con la misma salvedad;
  *   - motor -> sin aeronaves (076). Esas filas se borran en la misma RPC del
  *     UPDATE (ver update()); la pantalla de edición confirma antes. Sesión 2:
@@ -120,6 +125,7 @@ export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferP
       next.acceptedAuthorities = retainApplicableAuthorities(next.acceptedAuthorities, next.licenseAuthority, next.licenseCode);
     }
   }
+  if (patch.technicianType !== undefined && patch.offerKind === undefined) next.offerKind = offerKindForTechnicianType(next.technicianType);
   if (next.offerKind !== 'engine' && patch.requiredEngineId === undefined) {
     next.requiredEngineId = undefined;
   }
@@ -147,7 +153,6 @@ function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown>
     ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.contractType !== undefined ? { contract_type: patch.contractType } : {}),
     ...(patch.productType !== undefined ? { product_type: patch.productType } : {}),
-    ...(patch.technicianType !== undefined ? { technician_type: patch.technicianType } : {}),
     // `license_code` y `requires_certification` están ATADAS por
     // chk_offers_license_matches_certification (migración 053). Escribir una
     // sin la otra deja la fila en un estado que Postgres rechaza y tumba el
@@ -176,9 +181,10 @@ function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown>
           only_unlicensed: next.onlyUnlicensed,
         }
       : {}),
-    // Paso 5b: clase de oferta y motor, también juntos (076/077).
+    // Paso 5b: clase de oferta y motor, también juntos (076/077). Sesión 4: y
+    // el tipo, del que sale la clase (chk_offers_kind_matches_technician_type).
     ...(touches(patch, KIND_KEYS)
-      ? { offer_kind: next.offerKind, required_engine_id: next.requiredEngineId ?? null }
+      ? { technician_type: next.technicianType, offer_kind: next.offerKind, required_engine_id: next.requiredEngineId ?? null }
       : {}),
     ...(patch.requiresAllAircraft !== undefined ? { requires_all_aircraft: patch.requiresAllAircraft } : {}),
     ...(patch.locationCountry !== undefined ? { location_country: patch.locationCountry } : {}),
@@ -450,18 +456,19 @@ export const offerRepository = {
     acceptedAuthorities?: AuthorityCode[];
     requiresAllAircraft?: boolean;
     requiredHabilitations?: { aircraftTypeRatingId: string; notes?: string }[];
-    /** Fase 10: 'aircraft' si no se dice. */
-    offerKind?: OfferKind;
     requiredEngineId?: string;
     onlyUnlicensed?: boolean;
   }): Promise<OfferWithRequirements> {
     const status = data.status ?? 'draft';
     const habilitationRows = data.requiredHabilitations ?? [];
+    // Sesión 4 (091): la clase no se recibe, sale del tipo. Recibirla aparte
+    // sería una segunda fuente que podría contradecirlo.
+    const offerKind = offerKindForTechnicianType(data.technicianType);
     // Las mismas guardas que update(), sobre lo que se va a insertar. Aquí no
     // se acopla nada en silencio: una oferta nueva que se contradice es un
     // fallo de la pantalla, no un estado anterior que haya que arrastrar.
     assertOfferWritable({
-      offerKind: data.offerKind ?? 'aircraft',
+      offerKind,
       technicianType: data.technicianType,
       requiresCertification: data.requiresCertification,
       licenseCode: data.licenseCode,
@@ -492,7 +499,7 @@ export const offerRepository = {
         license_authority: data.licenseAuthority ?? null,
         accepted_authorities: data.acceptedAuthorities ?? [],
         requires_all_aircraft: data.requiresAllAircraft ?? false,
-        offer_kind: data.offerKind ?? 'aircraft',
+        offer_kind: offerKind,
         required_engine_id: data.requiredEngineId ?? null,
         only_unlicensed: data.onlyUnlicensed ?? false,
         location_country: location.locationCountry,

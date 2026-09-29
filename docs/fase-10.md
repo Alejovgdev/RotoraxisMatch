@@ -227,9 +227,57 @@ Después de los seis: `npm test` en verde (262 + 26 + 45 + 9 y los demás
 runners, más los dos validadores en PASS) y `npm run ts` limpio. Sigue sin
 desplegarse ningún cliente.
 
+**Sesión 4** (29 septiembre 2026) — todo lo de motores alrededor del tipo
+Engine Technician (`engine_technician`). Migración 091, **aplicada y
+registrada** como `20260929094519` (md5 de `statements` idéntico al fichero).
+
+1. **Técnico.** Sólo un Engine Technician tiene motores. En la base: trigger
+   de alta sobre `technician_engine_experience` (hace falta en la tabla porque
+   `tee_insert_own` deja insertar sin la RPC), guarda previa en
+   `replace_technician_engines` (la lista vacía pasa) y trigger que borra los
+   motores al quitar el tipo. En el perfil: el editor sólo aparece con el tipo,
+   y desmarcarlo teniendo motores pide confirmación (`profileEngines.ts`);
+   cancelar deja el tipo marcado.
+2. **Oferta.** La clase sale del tipo: Engine Technician ⇒ motor, cualquier
+   otro ⇒ aeronave. CHECK `chk_offers_kind_matches_technician_type`, espejo en
+   `offerShape.ts` (`offerKindForTechnicianType`), derivación en `create` y en
+   `resolveOfferPatch`. Se retiran `selectOfferKind` y `OfferKindSection`; el
+   selector de tipo está siempre visible. Las 12 ofertas cumplían ya el CHECK
+   (1 de motor con `engine_technician`), así que no se migra ninguna.
+3. **Elegibilidad y techo.** Sale la vía (a) (motor declarado de cualquier
+   oficio) de `isEngineOfferCandidate` y del núcleo SQL, que pierde
+   `p_engine_count`. Quien entra por (b) sin ser Engine Technician puntúa con
+   `PROFILE_TYPE_MISMATCH_CAP` (19) y la aclaración de tipo distinto: se quita
+   la excepción que lo saltaba en ofertas de motor (ver CLAUDE.md, punto 4 de
+   las ofertas de motor, para el porqué).
+
+Ensayo de la 091, todo dentro de transacciones que revierten, sobre la base
+real: la migración se aplica y su autocomprobación (8 pasos) pasa;
+`testApplicationSecurity` 14/14, `testTransactionalWrites` 20/20 (las dos
+suites crecen en 1 y 3 regresiones), H3 412/412; borrado de cuenta de un
+Engine Technician con motor, y cascada desde `technician_profiles`, igual con
+y sin la 091; paridad TS↔SQL 386/386 con
+`validate:application-eligibility -- --rehearse=supabase/migrations/091_engine_technician_owns_engines.sql`.
+Controles negativos: sin la 091 fallan las 4 regresiones nuevas y las 2 de
+elegibilidad que dependían de la vía (a); cuatro mutantes de la 091 (el
+trigger de retirada no borra; ni la RPC ni el trigger de alta rechazan; sin
+el CHECK; núcleo que admite a cualquiera) no pasan su autocomprobación.
+Después de cada ensayo, producción idéntica (datos, funciones, triggers,
+CHECKs, comentario, última migración 090).
+
+Tests: `test:matching` 285 (282 + 3), `test:offer-form` 27 (26 + 1),
+`npm run ts` limpio. Aplicada la 091 tras confirmación: su autocomprobación
+pasó al aplicarse; después, `npm test` en verde (validador 386/386 contra el
+núcleo instalado) y `npm run test:db` en verde (14 + 20 regresiones, H3 412),
+sin rastro: 0 ofertas `selftest-*`, 0 triggers de prueba, 0 transacciones
+colgadas, la función privada intacta.
+
 ## 3. Pendientes (fuera de esta fase)
 
-- Avisos de candidaturas cuando una oferta cambia sus requisitos.
+- Avisos de candidaturas cuando una oferta cambia sus requisitos. Incluye el
+  cambio de clase por cambio de tipo (sesión 4): las candidaturas existentes
+  no se revisan; la empresa ve "Not eligible" o la nota nueva, y puede
+  aceptar igualmente una pendiente que ya no es elegible.
 - Rendimiento de la búsqueda.
 - Paginación de relaciones (H12).
 - Guardado del perfil completo en una sola transacción.
@@ -278,6 +326,12 @@ desplegarse ningún cliente.
 - **089 y 090 están aplicadas** (21 septiembre 2026) y también son de
   aplicación única: sus post-condiciones cuentan el estado previo (17
   genéricas, 164 motores, siete ratings en las agregadas). No reejecutarlas.
+- **091 está aplicada** (29 septiembre 2026) y también es de aplicación
+  única: su post-condición exige que no haya motores fuera del tipo ni ofertas
+  incoherentes. No reejecutarla. Un cliente anterior a la sesión 4 sigue
+  funcionando con ella salvo en dos cosas que pasan a rechazarse: guardar
+  motores en un perfil sin el tipo Engine Technician, y una oferta de aeronave
+  con ese tipo.
 - **`npm run test:db` escribe en producción**, dentro de transacciones que
   revierten. Inyecta triggers y reemplaza funciones mientras dura. No
   ejecutarlo en paralelo consigo mismo. `npm test` no lo incluye: se queda con
@@ -290,3 +344,4 @@ desplegarse ningún cliente.
 - Sesión 3: **cerrada**. 089 y 090 aplicadas y registradas.
 - Final: ajustes de las pruebas manuales **hechos** (los seis, 23 septiembre
   2026, sin migraciones). Quedan el merge y el despliegue.
+- Sesión 4: **cerrada** (29 septiembre 2026). 091 aplicada y registrada.

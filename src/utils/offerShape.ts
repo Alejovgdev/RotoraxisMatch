@@ -15,12 +15,14 @@
 //   chk_offers_aircraft_without_engine       (077)  aeronave ⇒ sin motor
 //   chk_offers_only_unlicensed_without_license (077) "sólo sin licencia" ⇒ no exige licencia
 //   chk_offers_accepted_authorities + trigger (088) aceptadas ⊆ otras Part-66 que emiten el código
+//   chk_offers_kind_matches_technician_type   (091) motor ⇔ Engine Technician
 //
 // La usan offerRepository (antes de escribir, sobre el estado RESULTANTE) y los
 // fixtures de scripts/testMatching.ts (una oferta de test que la base no
 // aceptaría no debe llegar al scorer).
-import { OfferWithRequirements } from '../types/offer';
-import { AuthorityLicenseCode } from '../types/catalog';
+import { OfferKind, OfferWithRequirements } from '../types/offer';
+import { AuthorityLicenseCode, TechnicianTypeCode } from '../types/catalog';
+import { ENGINE_TECHNICIAN_TYPE_CODE } from '../constants/technicianTypes';
 import {
   ENGINE_OFFER_LICENSE_CODES,
   authorityHasTypeRatings,
@@ -47,9 +49,27 @@ export function offerAircraftAreExperience(
   return offer.requiresCertification && offer.licenseAuthority != null && !authorityHasTypeRatings(offer.licenseAuthority);
 }
 
+/**
+ * La clase de una oferta, que desde la sesión 4 (091) no se elige: sale del
+ * tipo de técnico. Engine Technician ⇒ motor; cualquier otro ⇒ aeronave. La
+ * usan el formulario (al elegir el tipo) y el repositorio (al crear y al
+ * aplicar un patch que cambia el tipo), y la base exige lo mismo con
+ * chk_offers_kind_matches_technician_type.
+ */
+export function offerKindForTechnicianType(technicianType: TechnicianTypeCode | string): OfferKind {
+  return technicianType === ENGINE_TECHNICIAN_TYPE_CODE ? 'engine' : 'aircraft';
+}
+
 export type OfferShape = Pick<
   OfferWithRequirements,
-  'offerKind' | 'requiresCertification' | 'licenseCode' | 'licenseAuthority' | 'requiredEngineId' | 'onlyUnlicensed' | 'acceptedAuthorities'
+  | 'offerKind'
+  | 'technicianType'
+  | 'requiresCertification'
+  | 'licenseCode'
+  | 'licenseAuthority'
+  | 'requiredEngineId'
+  | 'onlyUnlicensed'
+  | 'acceptedAuthorities'
 > & {
   requiredHabilitations: readonly unknown[];
 };
@@ -73,6 +93,14 @@ export function offerShapeViolations(offer: OfferShape): string[] {
   }
   if (hasLicense && hasAuthority && !isValidAuthorityLicense(offer.licenseAuthority as string, offer.licenseCode as string)) {
     violations.push(`${offer.licenseAuthority} does not issue a ${offer.licenseCode} licence.`);
+  }
+
+  if (offer.offerKind !== offerKindForTechnicianType(offer.technicianType)) {
+    violations.push(
+      offer.offerKind === 'engine'
+        ? 'An engine offer is for an Engine Technician.'
+        : 'An Engine Technician offer is an engine offer: it names one engine and no aircraft.',
+    );
   }
 
   if (offer.offerKind === 'engine') {

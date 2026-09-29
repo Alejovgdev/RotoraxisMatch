@@ -27,10 +27,14 @@ export type OfferProductType = Exclude<
  * Qué pide una oferta (`offers.offer_kind`, migración 070).
  *
  *   'aircraft'  licencia y/o aeronaves. Todo lo anterior a la Fase 10.
- *   'engine'    UN motor y nada más: ni licencia ni aeronaves.
+ *   'engine'    UN motor, sin aeronaves; licencia opcional desde la sesión 2.
+ *
+ * Desde la sesión 4 (091) no se elige: se deriva del tipo de técnico. Una
+ * oferta es de motor si y sólo si es para Engine Technician
+ * (`offerKindForTechnicianType`, CHECK chk_offers_kind_matches_technician_type).
  *
  * No es una etiqueta decorativa: decide la tabla de pesos, qué eje mira el
- * tope de cero cualificación y si el oficio puntúa. Ver offerMatchExplain.ts.
+ * tope de cero cualificación y quién es elegible. Ver offerMatchExplain.ts.
  */
 export type OfferKind = 'aircraft' | 'engine';
 

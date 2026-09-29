@@ -365,6 +365,9 @@ export interface TechnicianWithRelations extends TechnicianProfile {
    * Vacía es un estado NORMAL, no un dato que falte: el eje arranca vacío
    * para todos los perfiles y quien no declara motores puntúa bajo, nunca
    * cero.
+   *
+   * Sólo un Engine Technician la tiene no vacía (091): la base rechaza los
+   * motores de los demás tipos y los borra al quitar el tipo.
    */
   engines: TechnicianEngineExperience[];
 }

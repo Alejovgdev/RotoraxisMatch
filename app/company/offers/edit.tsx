@@ -26,7 +26,7 @@ import {
 } from '../../../src/components/company/CompanyUI';
 import { TypeRatingRequirementsEditor } from '../../../src/components/company/TypeRatingRequirementsEditor';
 import { RequiredLicensesSection } from '../../../src/components/company/RequiredLicensesSection';
-import { OfferEngineSection, OfferKindSection, OnlyUnlicensedSection } from '../../../src/components/company/OfferEngineSections';
+import { OfferEngineSection, OnlyUnlicensedSection } from '../../../src/components/company/OfferEngineSections';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { TECHNICIAN_TYPES, technicianTypeLabel } from '../../../src/constants/technicianTypes';
 import { CONTRACT_TYPES } from '../../../src/constants/contractTypes';
@@ -41,7 +41,6 @@ import {
   requirementsErrors,
   selectAuthority,
   selectLicense,
-  selectOfferKind,
   selectProductType,
   selectTechnicianType,
   setRequiresCertification,
@@ -49,10 +48,10 @@ import {
   showsCertificationQuestion,
   showsLicenseSection,
   showsOnlyUnlicensed,
+  technicianTypeHelper,
   toggleAcceptedAuthority,
 } from '../../../src/utils/offerFormRules';
-import { OfferKind } from '../../../src/types/offer';
-import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
+import { offerAircraftAreExperience, offerKindForTechnicianType } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
 import { OfferProductType, OfferWithRequirements } from '../../../src/types/offer';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
@@ -184,16 +183,6 @@ export default function EditOfferScreen() {
     setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined }));
   }
 
-  function onSelectOfferKind(kind: OfferKind) {
-    if (!form) return;
-    void applyTransition(selectOfferKind(form, kind), {
-      title: kind === 'engine' ? 'Make this an engine offer?' : 'Make this an aircraft offer?',
-      why: kind === 'engine'
-        ? 'An engine offer names one engine and no aircraft. A licence is optional there, and only a Part-66 B1 or an FAA P or A&P.'
-        : 'An aircraft offer does not name an engine.',
-    });
-  }
-
   function onToggleCertification(next: boolean) {
     if (!form) return;
     // Encenderla nunca pregunta: no destruye nada (desmarca "sólo sin
@@ -207,11 +196,20 @@ export default function EditOfferScreen() {
     });
   }
 
+  // Sesión 4 (091): cambiar el tipo puede cambiar la clase, y lo que se pierde
+  // entonces no es por la licencia sino por la clase. El diálogo lo dice.
   function onSelectTechnicianType(next: TechnicianTypeCode) {
     if (!form) return;
+    const nextKind = offerKindForTechnicianType(next);
+    const why =
+      nextKind === form.offerKind
+        ? 'The current licence is not one that trade can require.'
+        : nextKind === 'engine'
+          ? 'An Engine Technician offer is an engine offer: it names one engine and no aircraft. A licence is optional there, and only a Part-66 B1 or an FAA P or A&P.'
+          : `An offer for ${technicianTypeLabel(next).toLowerCase()} work is an aircraft offer and does not name an engine.`;
     void applyTransition(selectTechnicianType(form, next), {
       title: `Switch this offer to ${technicianTypeLabel(next).toLowerCase()}?`,
-      why: 'The current licence is not one that trade can require.',
+      why,
     });
   }
 
@@ -276,10 +274,10 @@ export default function EditOfferScreen() {
         licenseCode: form.licenseCode,
         acceptedAuthorities: form.acceptedAuthorities,
         requiresAllAircraft: form.requiresAllAircraft,
-        // Paso 5b: clase y motor. El repositorio retira las aeronaves ANTES de
-        // cambiar a motor (los triggers de la 076 lo exigen), igual que con el
-        // producto.
-        offerKind: form.offerKind,
+        // Paso 5b: el motor. La RPC retira las aeronaves en la misma
+        // transacción al pasar a motor (los triggers de la 076 lo exigen),
+        // igual que con el producto. Sesión 4 (091): la clase no se manda; el
+        // repositorio la deriva de technicianType, arriba.
         requiredEngineId: form.requiredEngineId,
         onlyUnlicensed: form.onlyUnlicensed,
         // Igual que productType: va en el update() y no en
@@ -341,26 +339,19 @@ export default function EditOfferScreen() {
           onBack={goBack}
         />
 
-        {/* Mismo orden que la pantalla de creación: 0) aeronave o motor,
-            1) tipo de perfil, 2) ¿certificar?, 3) avión o helicóptero,
-            4) licencia o motor, 5) aeronaves. */}
-        <OfferKindSection value={form.offerKind} onChange={onSelectOfferKind} />
-
-        {form.offerKind === 'aircraft' && (
-          <ChoiceSection
-            title="Profile type"
-            helper="One per offer. Two types in one advert are two jobs — publish them separately."
-          >
-            {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
-              <CompanyChip
-                key={t.code}
-                label={t.label}
-                selected={form.technicianType === t.code}
-                onPress={() => onSelectTechnicianType(t.code as TechnicianTypeCode)}
-              />
-            ))}
-          </ChoiceSection>
-        )}
+        {/* Mismo orden que la pantalla de creación: 1) tipo de perfil, que
+            desde la sesión 4 decide también si es de motor, 2) ¿certificar?,
+            3) avión o helicóptero, 4) licencia o motor, 5) aeronaves. */}
+        <ChoiceSection title="Profile type" helper={technicianTypeHelper(form)}>
+          {TECHNICIAN_TYPES.filter((t) => t.isActive).map((t) => (
+            <CompanyChip
+              key={t.code}
+              label={t.label}
+              selected={form.technicianType === t.code}
+              onPress={() => onSelectTechnicianType(t.code as TechnicianTypeCode)}
+            />
+          ))}
+        </ChoiceSection>
 
         {/* La pregunta sólo existe para los oficios que tienen licencia — ver
             la pantalla de creación. */}

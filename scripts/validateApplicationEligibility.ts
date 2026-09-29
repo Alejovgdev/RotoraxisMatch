@@ -20,8 +20,17 @@
 //   la autocomprobación de la migración 080  -> el trigger sobre filas reales
 //
 // Run: npm run validate:application-eligibility
+//
+// Ensayo de una migración que cambia el núcleo, ANTES de aplicarla:
+//   npm run validate:application-eligibility -- --rehearse=supabase/migrations/NNN_x.sql
+// Aplica la migración y evalúa todos los casos en UNA transacción que termina
+// en ROLLBACK, por la Management API (necesita SUPABASE_TEST_ACCESS_TOKEN o el
+// SUPABASE_ACCESS_TOKEN del .env, igual que los runners de test:db). Sin la
+// opción, pregunta al núcleo instalado por RPC con la clave publicable.
+import fs from 'node:fs';
+import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { loadEnvFile } from './lib/loadEnv';
+import { findRepoRoot, loadEnvFile } from './lib/loadEnv';
 import { technicianIneligibilityReason, IneligibilityReason } from '../src/utils/offerMatchExplain';
 import { AircraftTypeRatingRow, buildAircraftRatingIndex, mapAircraftTypeRatingRow } from '../src/constants/aircraftTypeRatings';
 import { EngineRow, buildEngineIndex, mapEngineRow } from '../src/constants/engines';
@@ -71,9 +80,55 @@ interface Case {
   requiredEngineId?: string;
   onlyUnlicensed: boolean;
   licenseCount: number;
+  /**
+   * Sólo los ve TS. Desde la 091 el núcleo no recibe motores declarados (la vía
+   * (a) se retiró), y la dimensión se conserva para probar que TS tampoco los
+   * mira: con o sin motores, los dos lados tienen que decir lo mismo.
+   */
   declaredEngineIds: string[];
   typeCodes: string[];
   habilitations: { licenseCode: string; ratingId: string }[];
+}
+
+const rehearseArg = process.argv.find((a) => a.startsWith('--rehearse='));
+const rehearseFile = rehearseArg?.slice('--rehearse='.length);
+
+// Mismo orden de preferencia que scripts/testDatabaseRegressions.cjs: el token
+// de test explícito, luego el del .env del proyecto, luego el heredado.
+function managementToken(): string | undefined {
+  const envPath = path.join(findRepoRoot(__dirname), '.env');
+  const fromFile = fs.existsSync(envPath)
+    ? fs.readFileSync(envPath, 'utf8').split(/\r?\n/).find((l) => l.startsWith('SUPABASE_ACCESS_TOKEN='))?.slice('SUPABASE_ACCESS_TOKEN='.length).trim().replace(/^['"]|['"]$/g, '')
+    : undefined;
+  return process.env.SUPABASE_TEST_ACCESS_TOKEN ?? fromFile ?? process.env.SUPABASE_ACCESS_TOKEN;
+}
+
+const sqlText = (s: string) => `'${s.replace(/'/g, "''")}'`;
+const sqlArray = (items: string[], type: 'text' | 'uuid') => `ARRAY[${items.map(sqlText).join(',')}]::${type}[]`;
+
+/** Todos los casos contra el núcleo de `migrationFile`, en una transacción que se deshace. */
+async function rehearsedReasons(cases: Case[], migrationFile: string): Promise<(string | null)[]> {
+  const token = managementToken();
+  const host = new URL(SUPABASE_URL as string).hostname;
+  if (!token || !/^[a-z0-9]+\.supabase\.co$/.test(host)) throw new Error('--rehearse necesita un proyecto alojado y un token de la Management API');
+  const migration = fs.readFileSync(path.resolve(findRepoRoot(__dirname), migrationFile), 'utf8');
+  const rows = cases.map((c, i) =>
+    `(${i}, ${sqlText(c.offerKind)}, ${c.requiredEngineId ? `${sqlText(c.requiredEngineId)}::uuid` : 'NULL::uuid'}, ${c.onlyUnlicensed}, ${c.licenseCount}, ` +
+    `${sqlArray(c.typeCodes, 'text')}, ${sqlArray(c.habilitations.map((h) => h.licenseCode), 'text')}, ${sqlArray(c.habilitations.map((h) => h.ratingId), 'uuid')})`,
+  );
+  const query = `BEGIN;\n${migration}\nSELECT coalesce(jsonb_agg(public.offer_eligibility_reason(c.kind, c.engine, c.only_unlicensed, c.licenses, c.types, c.codes, c.ratings) ORDER BY c.i), '[]') AS reasons
+FROM (VALUES ${rows.join(',\n')}) AS c(i, kind, engine, only_unlicensed, licenses, types, codes, ratings);\nROLLBACK;`;
+  const response = await fetch(`https://api.supabase.com/v1/projects/${host.split('.')[0]}/database/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout(90000),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`ensayo de ${migrationFile}: HTTP ${response.status}: ${data.message ?? 'SQL failed'}`);
+  const reasons = data?.[0]?.reasons;
+  if (!Array.isArray(reasons) || reasons.length !== cases.length) throw new Error(`ensayo de ${migrationFile}: respuesta incompleta`);
+  return reasons as (string | null)[];
 }
 
 async function main() {
@@ -186,7 +241,6 @@ async function main() {
       p_required_engine_id: c.requiredEngineId ?? null,
       p_only_unlicensed: c.onlyUnlicensed,
       p_license_count: c.licenseCount,
-      p_engine_count: c.declaredEngineIds.length,
       p_type_codes: c.typeCodes,
       p_habilitation_license_codes: c.habilitations.map((h) => h.licenseCode),
       p_habilitation_rating_ids: c.habilitations.map((h) => h.ratingId),
@@ -197,16 +251,21 @@ async function main() {
     return (data as string | null) ?? null;
   }
 
-  const outcomes = { eligible: 0, no_engine_experience: 0, licensed_technician: 0 };
-  for (let i = 0; i < cases.length; i += 20) {
-    const batch = cases.slice(i, i + 20);
-    const sql = await Promise.all(batch.map(sqlReason));
-    batch.forEach((c, j) => {
-      const ts = tsReason(c);
-      outcomes[(ts ?? 'eligible') as keyof typeof outcomes] += 1;
-      if (ts !== sql[j]) errors.push(`${c.name}: TS=${ts ?? 'elegible'} SQL=${sql[j] ?? 'elegible'}`);
-    });
+  let sqlReasons: (string | null)[];
+  if (rehearseFile) {
+    console.log(`Ensayo: el núcleo de ${rehearseFile}, dentro de BEGIN … ROLLBACK.`);
+    sqlReasons = await rehearsedReasons(cases, rehearseFile);
+  } else {
+    sqlReasons = [];
+    for (let i = 0; i < cases.length; i += 20) sqlReasons.push(...(await Promise.all(cases.slice(i, i + 20).map(sqlReason))));
   }
+
+  const outcomes = { eligible: 0, no_engine_experience: 0, licensed_technician: 0 };
+  cases.forEach((c, i) => {
+    const ts = tsReason(c);
+    outcomes[(ts ?? 'eligible') as keyof typeof outcomes] += 1;
+    if (ts !== sqlReasons[i]) errors.push(`${c.name}: TS=${ts ?? 'elegible'} SQL=${sqlReasons[i] ?? 'elegible'}`);
+  });
 
   // Los casos que el paso 5b fijó, dichos explícitamente para que no dependan
   // de leer la matriz. Deben dar lo mismo en los dos lados (ya comprobado
@@ -220,6 +279,8 @@ async function main() {
   expect('B2 con el mismo type rating no entra', { ...motor, licenseCount: 1, typeCodes: ['avionic'], habilitations: [{ licenseCode: 'B2', ratingId: R.exact }] }, 'no_engine_experience');
   expect('engine_technician sin motores entra', { ...motor, licenseCount: 0, typeCodes: ['engine_technician'], habilitations: [] }, null);
   expect('B1 sin motores ni ratings no entra', { ...motor, licenseCount: 1, typeCodes: ['mechanic'], habilitations: [] }, 'no_engine_experience');
+  // 091: la vía (a) ya no existe. Un motor declarado sin el tipo no da entrada.
+  expect('motor declarado sin engine_technician no entra', { ...motor, licenseCount: 0, declaredEngineIds: [required.id], typeCodes: ['mechanic'], habilitations: [] }, 'no_engine_experience');
 
   // Una matriz que sólo produjera un resultado no probaría nada.
   if (Object.values(outcomes).some((n) => n === 0)) {

@@ -19,8 +19,17 @@ BEGIN
     ON CONFLICT(technician_id,authority,license_code) DO UPDATE SET authority=excluded.authority RETURNING id INTO lic;
   INSERT INTO offers(company_id,title,description,contract_type,product_type,technician_type,requires_certification,location_country,location_country_code)
     VALUES(cid,'selftest-082','rollback',src.contract_type,product,'mechanic',false,src.location_country,src.location_country_code) RETURNING id INTO o;
+  -- 091: el técnico arranca SIN el tipo Engine Technician, y sin motores.
+  DELETE FROM technician_profile_types WHERE technician_id=t AND type_code='engine_technician';
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',tu,'role','authenticated')::text,true);
   SET LOCAL ROLE authenticated;
+  -- 091: sin el tipo, la RPC rechaza motores antes de borrar nada; la lista vacía pasa.
+  failed:=false;
+  BEGIN PERFORM replace_technician_engines(t,jsonb_build_array(jsonb_build_object('engine_id',engine)));
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM='Only an Engine Technician profile can declare engines.'; END;
+  PERFORM replace_technician_engines(t,'[]');
+  INSERT INTO transaction_results SELECT 'non-engine technician cannot save engines',failed AND NOT EXISTS(SELECT 1 FROM technician_engine_experience WHERE technician_id=t);
+  INSERT INTO technician_profile_types(technician_id,type_code) VALUES(t,'engine_technician');
   payload:=jsonb_build_array(jsonb_build_object('authority','EASA','license_code','B1.1','aircraft_type_rating_id',rating,'experience_years',5));
   PERFORM replace_technician_habilitations(t,payload);
   SELECT jsonb_agg(to_jsonb(h) ORDER BY id) INTO saved FROM technician_habilitations h WHERE technician_id=t;
@@ -44,6 +53,12 @@ BEGIN
   INSERT INTO transaction_results VALUES('cannot replace another technician ratings',failed);
   PERFORM replace_technician_engines(t,jsonb_build_array(jsonb_build_object('engine_id',engine,'years',0)));
   INSERT INTO transaction_results SELECT 'zero engine years preserved',years=0 FROM technician_engine_experience WHERE technician_id=t AND engine_id=engine;
+  -- 091: quitar el tipo (como el técnico, por su política) se lleva los motores.
+  DELETE FROM technician_profile_types WHERE technician_id=t AND type_code='engine_technician';
+  INSERT INTO transaction_results SELECT 'removing engine technician type deletes engines',NOT EXISTS(SELECT 1 FROM technician_engine_experience WHERE technician_id=t);
+  -- Se repone para que la inyección de fallos de abajo parta de una fila guardada.
+  INSERT INTO technician_profile_types(technician_id,type_code) VALUES(t,'engine_technician');
+  PERFORM replace_technician_engines(t,jsonb_build_array(jsonb_build_object('engine_id',engine,'years',0)));
   -- 084: la experiencia en aeronaves, el último reemplazo que borraba desde el cliente.
   PERFORM replace_technician_aircraft_experience(t,jsonb_build_array(jsonb_build_object('aircraft_type_rating_id',rating,'years',70)));
   SELECT jsonb_agg(to_jsonb(a) ORDER BY id) INTO saved FROM technician_aircraft_experience a WHERE technician_id=t;
@@ -102,7 +117,14 @@ BEGIN
   INSERT INTO transaction_results SELECT 'FAA offer keeps aircraft as experience',
     EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT license_authority='FAA' FROM offers WHERE id=o);
   PERFORM update_offer_with_habilitations(o,'{"requires_certification":false,"license_code":null,"license_authority":null}',NULL);
-  PERFORM update_offer_with_habilitations(o,jsonb_build_object('offer_kind','engine','required_engine_id',engine),NULL);
+  -- 091: la clase va con el tipo. Motor sin Engine Technician: la RPC lo rechaza
+  -- antes de tocar las aeronaves.
+  failed:=false;
+  BEGIN PERFORM update_offer_with_habilitations(o,jsonb_build_object('offer_kind','engine','required_engine_id',engine),NULL);
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE '%chk_offers_kind_matches_technician_type%'; END;
+  INSERT INTO transaction_results SELECT 'engine kind without engine technician type rejected',
+    failed AND EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT offer_kind='aircraft' AND technician_type='mechanic' FROM offers WHERE id=o);
+  PERFORM update_offer_with_habilitations(o,jsonb_build_object('offer_kind','engine','required_engine_id',engine,'technician_type','engine_technician'),NULL);
   INSERT INTO transaction_results SELECT 'engine transition clears aircraft atomically',NOT EXISTS(SELECT 1 FROM offer_required_habilitations WHERE offer_id=o) AND (SELECT offer_kind='engine' FROM offers WHERE id=o);
   RESET ROLE;
 END $test$;
