@@ -43,7 +43,7 @@ import {
   companyStyles,
   companyUi,
 } from '../../../src/components/company/CompanyUI';
-import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
+import { NO_LONGER_ELIGIBLE_TO_ACCEPT, offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
@@ -109,6 +109,8 @@ export default function ApplicationDetailScreen() {
   // Paso 5b: el par entero, no sólo el score. Un par que el filtro saca llega
   // como { eligible: false } y se pinta como tal, con su motivo.
   const [match, setMatch] = useState<PairMatch | null>(null);
+  // 092: un par que el filtro saca ya no se puede aceptar (la base lo rechaza).
+  const acceptBlocked = Boolean(match && !match.eligible);
   const score: MatchScore | null = match?.eligible ? match.score : null;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -494,6 +496,14 @@ export default function ApplicationDetailScreen() {
           </CompanyCard>
         ) : null}
 
+        {/* Sesión 5 (092): la base rechaza aceptar a quien ya no es elegible
+            (la oferta pudo cambiar después de recibir la candidatura). Aquí
+            no se ofrece el botón que va a fallar; rechazar sigue abierto. */}
+        {app.status === 'pending' && canReviewApplications(companyMemberRole) && acceptBlocked ? (
+          <CompanyCard style={styles.errorCard}>
+            <Text style={styles.errorText}>{NO_LONGER_ELIGIBLE_TO_ACCEPT}</Text>
+          </CompanyCard>
+        ) : null}
         {app.status === 'pending' && canReviewApplications(companyMemberRole) ? (
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -506,9 +516,9 @@ export default function ApplicationDetailScreen() {
               <Text style={styles.rejectButtonText}>Reject</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.acceptButton, actioning && styles.disabled]}
+              style={[styles.acceptButton, (actioning || acceptBlocked) && styles.disabled]}
               onPress={handleAccept}
-              disabled={actioning}
+              disabled={actioning || acceptBlocked}
               activeOpacity={0.75}
             >
               {actioning ? <ActivityIndicator color={colors.white} size="small" /> : <CheckCircle color={colors.white} size={16} strokeWidth={2} />}

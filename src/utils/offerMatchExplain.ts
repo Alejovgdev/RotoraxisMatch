@@ -1576,7 +1576,9 @@ export function getMatchDisplayLabel(
 export function ineligibilityReasonText(reason: IneligibilityReason): string {
   switch (reason) {
     case 'no_engine_experience':
-      return 'This engine offer is for technicians with engine experience: a declared engine, a B1 type rating on this engine or its family, or the Engine Technician trade.';
+      // 091: declarar motores exige el tipo Engine Technician, así que "a
+      // declared engine" ya no es una vía propia.
+      return 'This engine offer is for Engine Technicians, or for technicians with a B1 type rating on this engine or its family.';
     case 'licensed_technician':
       return 'This offer is only for technicians without a licence.';
   }

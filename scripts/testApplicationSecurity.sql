@@ -17,7 +17,7 @@ END $$;
 DO $test$
 DECLARE
   t uuid; tu uuid; other_t uuid; other_u uuid; cu uuid; cid uuid; other_c uuid; admin_u uuid;
-  src offers%ROWTYPE; o uuid; engine_o uuid; app uuid; other_app uuid;
+  src offers%ROWTYPE; o uuid; engine_o uuid; app uuid; other_app uuid; o2 uuid; app2 uuid; rq uuid;
   engine uuid; lic uuid; rating uuid; observed text; before_counts bigint[];
 BEGIN
   SELECT id INTO admin_u FROM profiles WHERE role='admin' AND status='active' LIMIT 1;
@@ -135,6 +135,34 @@ BEGIN
   -- Company status transitions are still allowed (must not demand technician auth).
   observed:=pg_temp.attempt(format('UPDATE offer_applications SET status=''accepted'' WHERE id=%L',app));
   INSERT INTO security_results VALUES('company can accept application',observed='OK',observed);
+  RESET ROLE;
+
+  -- 092: quién hace cada cambio de estado, y aceptar re-comprueba la elegibilidad.
+  INSERT INTO security_results SELECT '092 accept records who and when',
+    status_changed_by=cu AND status_changed_at IS NOT NULL, coalesce(status_changed_by::text,'null') FROM offer_applications WHERE id=app;
+  INSERT INTO technician_licenses(technician_id,authority,license_code) VALUES(t,'EASA','B1.1')
+    ON CONFLICT(technician_id,authority,license_code) DO NOTHING;
+  INSERT INTO offers(company_id,title,description,contract_type,product_type,technician_type,requires_certification,
+    location_country,location_country_code,status,visible)
+    VALUES(cid,'selftest-092','rollback',src.contract_type,src.product_type,'mechanic',false,src.location_country,src.location_country_code,'published',true)
+    RETURNING id INTO o2;
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',tu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  INSERT INTO offer_applications(technician_id,offer_id,company_id) VALUES(t,o2,cid) RETURNING id INTO app2;
+  observed:=pg_temp.attempt(format('UPDATE offer_applications SET status=''accepted'' WHERE id=%L',app2));
+  INSERT INTO security_results VALUES('092 technician cannot accept own application',observed='42501:Not authorized.:',observed);
+  RESET ROLE;
+  -- La oferta cambia después de recibir la candidatura.
+  UPDATE offers SET only_unlicensed=true WHERE id=o2;
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',cu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  observed:=pg_temp.attempt(format('UPDATE offer_applications SET status=''accepted'' WHERE id=%L',app2));
+  INSERT INTO security_results SELECT '092 company accept rechecks eligibility',
+    observed LIKE 'PT403:%:licensed_technician' AND status='pending',observed FROM offer_applications WHERE id=app2;
+  INSERT INTO offer_requests(technician_id,offer_id,company_id) VALUES(t,engine_o,cid) RETURNING id INTO rq;
+  observed:=pg_temp.attempt(format('UPDATE offer_requests SET status=''accepted'' WHERE id=%L',rq));
+  INSERT INTO security_results SELECT '092 company cannot accept its own direct offer',
+    observed='42501:Not authorized.:' AND NOT identity_revealed,observed FROM offer_requests WHERE id=rq;
   RESET ROLE;
 
   -- A sentinel proves unauthorized callers never reach private qualification reads.

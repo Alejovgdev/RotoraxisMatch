@@ -649,7 +649,7 @@ async function main() {
 
   // ── Candidaturas: el rechazo de la base llega como el texto de siempre ──
 
-  const { offerApplicationRepository } = require('../src/repositories/v2/offerApplicationRepository') as typeof import('../src/repositories/v2/offerApplicationRepository');
+  const { NO_LONGER_ELIGIBLE_TO_ACCEPT, offerApplicationRepository } = require('../src/repositories/v2/offerApplicationRepository') as typeof import('../src/repositories/v2/offerApplicationRepository');
   const { ineligibilityReasonText } = require('../src/utils/offerMatchExplain') as typeof import('../src/utils/offerMatchExplain');
   const aplicar = () =>
     offerApplicationRepository.create({ technicianId: 'tech-1', offerId: 'offer-1', companyId: 'company-1', coverNote: 'hola' });
@@ -686,6 +686,23 @@ async function main() {
     applicationRows = [];
     applicationRejection = { code: '42501', message: 'new row violates row-level security policy', details: '' };
     await assert.rejects(aplicar(), /row-level security/);
+  });
+
+  // Sesión 5 (092): la base también rechaza ACEPTAR a quien ya no es elegible.
+  await test('Candidatura — aceptar a quien ya no es elegible: la empresa lee por qué, y rechazar no se traduce', async () => {
+    applicationRows = [{ id: 'app-1', technician_id: 'tech-1', offer_id: 'offer-1', company_id: 'company-1', status: 'pending', created_at: '2026-09-01', updated_at: '2026-09-01' }];
+    applicationRejection = { code: 'PT403', message: 'The technician is no longer eligible for this offer.', details: 'licensed_technician' };
+    await assert.rejects(
+      offerApplicationRepository.updateStatus('app-1', 'accepted'),
+      (err: Error) => err.message === `${NO_LONGER_ELIGIBLE_TO_ACCEPT} ${ineligibilityReasonText('licensed_technician')}`,
+    );
+    assert.equal(applicationRows[0].status, 'pending', 'sigue pendiente');
+    // Un 42501 (no es tu parte de la relación) no se disfraza de motivo.
+    applicationRejection = { code: '42501', message: 'Not authorized.', details: '' };
+    await assert.rejects(offerApplicationRepository.updateStatus('app-1', 'accepted'), /Not authorized/);
+    applicationRejection = null;
+    const rechazada = await offerApplicationRepository.updateStatus('app-1', 'rejected');
+    assert.equal(rechazada?.status, 'rejected');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

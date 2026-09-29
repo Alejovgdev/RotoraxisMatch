@@ -272,7 +272,83 @@ núcleo instalado) y `npm run test:db` en verde (14 + 20 regresiones, H3 412),
 sin rastro: 0 ofertas `selftest-*`, 0 triggers de prueba, 0 transacciones
 colgadas, la función privada intacta.
 
+**Sesión 5** (29 septiembre 2026) — quién cambia el estado de una relación, y
+aceptar vuelve a comprobar la elegibilidad. Migración 092, **aplicada y
+registrada** como `20260929105432` (md5 de `statements` idéntico al fichero).
+Después: `npm test`, `npm run test:db` (18 + 20, H3 412) y
+`validate:state-machine` (40/40) en verde contra lo instalado, sin rastro.
+
+El fallo, comprobado en vivo con transacciones revertidas: la máquina de
+estados (033) decía qué transición es válida pero no quién la hace. Con un
+UPDATE directo, una empresa aceptaba su propia oferta directa (identidad y
+documentos del técnico a la vista sin que él aceptara) y un técnico se
+aceptaba su propia candidatura (identidad, documentos y chat sin decisión de
+la empresa).
+
+1. **Quién.** `offer_relation_transition_actor` (núcleo puro) y su
+   cumplimiento en `handle_offer_relation_status_transition`: la candidatura la
+   deciden la empresa (admin o recruiter) y la retira o reactiva el técnico; la
+   oferta directa la decide el técnico y la retira la empresa; caducar, sólo el
+   mantenimiento. Un admin de la plataforma no actúa en nombre de nadie.
+   Espejo `TRANSITION_ACTORS`, comparado por `validate:state-machine`.
+2. **Aceptar re-comprueba la elegibilidad** de la candidatura (PT403 con el
+   motivo), tras autorizar a la empresa. Rechazar y retirar, nunca. Las
+   ofertas directas no se comprueban (decisión).
+3. **Auditoría:** `status_changed_by` y `status_changed_at` en las dos tablas,
+   escritos sólo por la base (al crear y en cada cambio de estado; un UPDATE sin
+   cambio de estado conserva los anteriores). Las filas previas quedan a NULL.
+4. **Cliente:** el detalle de candidatura no ofrece "Accept" si el par ya no
+   es elegible y lo explica; el repositorio traduce el PT403 al aceptar. Se
+   corrige también el texto de `no_engine_experience`, que seguía citando "a
+   declared engine" como vía propia (retirada en la 091).
+
+Ensayo (todo revertido, producción idéntica después): autocomprobación de 13
+pasos; `testApplicationSecurity` 18/18 (4 nuevas), `testTransactionalWrites`
+20/20, H3 412/412; `validate:state-machine -- --rehearse` 40/40 en
+transiciones y en quién; paridad de elegibilidad 386/386. Controles: cuatro
+mutantes (sin la regla de quién, aceptar sin re-comprobar, auditoría
+falseable, admin que acepta), cada uno señalado en el paso que rompe; y la
+suite, sin la regla de quién, vuelve a ver a la empresa aceptando su propia
+oferta directa. El primer mutante destapó un fallo de la propia 092, ya
+corregido: `can_act_for_company` devuelve NULL para quien no es miembro, y la
+guarda de aceptar no autorizaba a nadie sin `COALESCE`.
+
+Tests: `test:matching` 287 (285 + 2), `test:offer-form` 28 (27 + 1).
+
+**Auditoría de UPDATE directos** (pedida en la sesión 5; sólo la fila 1 cae en
+el trigger de esta migración, las demás NO se arreglan en ella):
+
+| # | Tabla | Qué permite hoy | Gravedad | Estado |
+|---|---|---|---|---|
+| 1 | `offer_applications`, `offer_requests` | Aceptar la parte equivocada (ver arriba) | Crítica | 092 |
+| 2 | `offer_requests` | La empresa cambia `technician_id` de una oferta directa YA aceptada: ve identidad y documentos de otro técnico cualquiera (comprobado). La 081 sólo hizo inmutables los participantes de las candidaturas | Crítica | Pendiente |
+| 3 | `offer_requests` | El técnico cambia `company_id`/`offer_id` de una oferta directa pendiente y la acepta: relación y chat con una empresa que no le envió nada (comprobado) | Alta | Pendiente (mismo arreglo que la 2) |
+| 4 | `offer_applications`, `offer_requests` | Cada parte reescribe el texto de la otra: la empresa, la `cover_note` del técnico; el técnico, el `message` de la empresa (las dos comprobadas) | Media (integridad, no revela) | Pendiente |
+| 5 | `company_members` | Un admin de empresa inserta o reasigna filas de su empresa con cualquier `user_id`. No puede moverlas a otra empresa (sin `WITH CHECK`, el `USING` se aplica también a la fila nueva; comprobado), pero sí colgar de la suya a un usuario ajeno; y `my_company_id()` usa `LIMIT 1`, así que a un usuario con dos empresas le cambia cuál ve. Leído de las políticas, no probado | Baja | Pendiente |
+| 6 | `technician_profiles` | El técnico edita su `anonymous_code`, el identificador que ve la empresa. Leído de las políticas, no probado | Baja | Pendiente |
+
+Revisadas y sin hallazgos: `profiles` (sólo admin), `documents` (sólo admin
+actualiza; el alta fuerza `pending`; la empresa lee sólo con
+`documents_unlocked`), `chat_rooms` (sin alta ni cambios desde el cliente),
+`chat_messages` (alta sólo como participante, sin UPDATE), `companies`
+(`verification_status` protegido), `offers` (el `USING` como check mantiene
+`company_id` dentro de las empresas propias), `technician_licenses` (con
+`WITH CHECK`), `technician_profiles.verification_status` (protegido). El
+INSERT de las dos relaciones fuerza `pending` e identidad oculta (011).
+
 ## 3. Pendientes (fuera de esta fase)
+
+- **Filas 2–4 de la auditoría de la sesión 5** → migración 093 (en
+  preparación): participantes de `offer_requests` inmutables, como la 081 en
+  candidaturas, y cada parte edita sólo su propio texto.
+- **Fila 5 (más adelante):** añadir un miembro a una empresa tiene que
+  requerir que esa persona acepte una invitación; hoy un admin de empresa
+  inserta la fila con cualquier `user_id`.
+- **Fila 6 (más adelante):** el `anonymous_code` del técnico lo escribe sólo
+  la base; hoy el técnico puede cambiarlo.
+- `offerRequestRepository.withdraw(id, technicianId)` no tiene llamadas y,
+  desde la 092, la base rechazaría esa retirada (la oferta directa la retira la
+  empresa).
 
 - Avisos de candidaturas cuando una oferta cambia sus requisitos. Incluye el
   cambio de clase por cambio de tipo (sesión 4): las candidaturas existentes
@@ -345,3 +421,4 @@ colgadas, la función privada intacta.
 - Final: ajustes de las pruebas manuales **hechos** (los seis, 23 septiembre
   2026, sin migraciones). Quedan el merge y el despliegue.
 - Sesión 4: **cerrada** (29 septiembre 2026). 091 aplicada y registrada.
+- Sesión 5: **cerrada** (29 septiembre 2026). 092 aplicada y registrada.

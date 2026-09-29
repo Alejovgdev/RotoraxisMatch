@@ -20,14 +20,26 @@ const INELIGIBILITY_REASONS: readonly IneligibilityReason[] = ['no_engine_experi
  *
  * Se mira el motivo y no sólo el código porque es lo que dice QUÉ texto poner;
  * un PT403 con un motivo desconocido cae al error genérico de throwIfError.
+ *
+ * Sesión 5 (092): la base también lo rechaza al ACEPTAR una candidatura cuyo
+ * técnico ya no es elegible (la oferta cambió después). `prefix` dice a quién
+ * se le habla: el texto del motivo describe la oferta, no la situación.
  */
-export function throwIfIneligible(error: { code?: string; details?: string | null } | null | undefined): void {
+export function throwIfIneligible(
+  error: { code?: string; details?: string | null } | null | undefined,
+  prefix?: string,
+): void {
   if (!error) return;
   const reason = error.details as IneligibilityReason;
   if (INELIGIBILITY_REASONS.includes(reason)) {
-    throw new Error(ineligibilityReasonText(reason));
+    const text = ineligibilityReasonText(reason);
+    throw new Error(prefix ? `${prefix} ${text}` : text);
   }
 }
+
+/** Lo que ve la empresa si la base rechaza aceptar (092). */
+export const NO_LONGER_ELIGIBLE_TO_ACCEPT =
+  'This technician no longer meets the requirements of this offer, so the application cannot be accepted. You can still reject it.';
 
 export const offerApplicationRepository = {
   async getAll(): Promise<OfferApplication[]> {
@@ -165,6 +177,8 @@ export const offerApplicationRepository = {
       .eq('id', id)
       .select(SELECT_FIELDS)
       .maybeSingle();
+    // 092: aceptar vuelve a comprobar la elegibilidad en la base.
+    if (status === 'accepted') throwIfIneligible(error, NO_LONGER_ELIGIBLE_TO_ACCEPT);
     throwIfError(error);
     return data ? mapOfferApplicationRow(data as any) : null;
   },

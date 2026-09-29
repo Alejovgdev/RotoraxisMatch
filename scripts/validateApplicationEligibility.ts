@@ -27,10 +27,9 @@
 // en ROLLBACK, por la Management API (necesita SUPABASE_TEST_ACCESS_TOKEN o el
 // SUPABASE_ACCESS_TOKEN del .env, igual que los runners de test:db). Sin la
 // opción, pregunta al núcleo instalado por RPC con la clave publicable.
-import fs from 'node:fs';
-import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { findRepoRoot, loadEnvFile } from './lib/loadEnv';
+import { loadEnvFile } from './lib/loadEnv';
+import { queryWithRehearsedMigration, rehearseArgument, sqlText } from './lib/rehearseMigration';
 import { technicianIneligibilityReason, IneligibilityReason } from '../src/utils/offerMatchExplain';
 import { AircraftTypeRatingRow, buildAircraftRatingIndex, mapAircraftTypeRatingRow } from '../src/constants/aircraftTypeRatings';
 import { EngineRow, buildEngineIndex, mapEngineRow } from '../src/constants/engines';
@@ -90,45 +89,25 @@ interface Case {
   habilitations: { licenseCode: string; ratingId: string }[];
 }
 
-const rehearseArg = process.argv.find((a) => a.startsWith('--rehearse='));
-const rehearseFile = rehearseArg?.slice('--rehearse='.length);
+const rehearseFile = rehearseArgument();
 
-// Mismo orden de preferencia que scripts/testDatabaseRegressions.cjs: el token
-// de test explícito, luego el del .env del proyecto, luego el heredado.
-function managementToken(): string | undefined {
-  const envPath = path.join(findRepoRoot(__dirname), '.env');
-  const fromFile = fs.existsSync(envPath)
-    ? fs.readFileSync(envPath, 'utf8').split(/\r?\n/).find((l) => l.startsWith('SUPABASE_ACCESS_TOKEN='))?.slice('SUPABASE_ACCESS_TOKEN='.length).trim().replace(/^['"]|['"]$/g, '')
-    : undefined;
-  return process.env.SUPABASE_TEST_ACCESS_TOKEN ?? fromFile ?? process.env.SUPABASE_ACCESS_TOKEN;
-}
-
-const sqlText = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const sqlArray = (items: string[], type: 'text' | 'uuid') => `ARRAY[${items.map(sqlText).join(',')}]::${type}[]`;
 
 /** Todos los casos contra el núcleo de `migrationFile`, en una transacción que se deshace. */
 async function rehearsedReasons(cases: Case[], migrationFile: string): Promise<(string | null)[]> {
-  const token = managementToken();
-  const host = new URL(SUPABASE_URL as string).hostname;
-  if (!token || !/^[a-z0-9]+\.supabase\.co$/.test(host)) throw new Error('--rehearse necesita un proyecto alojado y un token de la Management API');
-  const migration = fs.readFileSync(path.resolve(findRepoRoot(__dirname), migrationFile), 'utf8');
   const rows = cases.map((c, i) =>
     `(${i}, ${sqlText(c.offerKind)}, ${c.requiredEngineId ? `${sqlText(c.requiredEngineId)}::uuid` : 'NULL::uuid'}, ${c.onlyUnlicensed}, ${c.licenseCount}, ` +
     `${sqlArray(c.typeCodes, 'text')}, ${sqlArray(c.habilitations.map((h) => h.licenseCode), 'text')}, ${sqlArray(c.habilitations.map((h) => h.ratingId), 'uuid')})`,
   );
-  const query = `BEGIN;\n${migration}\nSELECT coalesce(jsonb_agg(public.offer_eligibility_reason(c.kind, c.engine, c.only_unlicensed, c.licenses, c.types, c.codes, c.ratings) ORDER BY c.i), '[]') AS reasons
-FROM (VALUES ${rows.join(',\n')}) AS c(i, kind, engine, only_unlicensed, licenses, types, codes, ratings);\nROLLBACK;`;
-  const response = await fetch(`https://api.supabase.com/v1/projects/${host.split('.')[0]}/database/query`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(90000),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(`ensayo de ${migrationFile}: HTTP ${response.status}: ${data.message ?? 'SQL failed'}`);
-  const reasons = data?.[0]?.reasons;
+  const result = await queryWithRehearsedMigration<{ reasons: (string | null)[] }>(
+    SUPABASE_URL as string,
+    migrationFile,
+    `SELECT coalesce(jsonb_agg(public.offer_eligibility_reason(c.kind, c.engine, c.only_unlicensed, c.licenses, c.types, c.codes, c.ratings) ORDER BY c.i), '[]') AS reasons
+FROM (VALUES ${rows.join(',\n')}) AS c(i, kind, engine, only_unlicensed, licenses, types, codes, ratings)`,
+  );
+  const reasons = result[0]?.reasons;
   if (!Array.isArray(reasons) || reasons.length !== cases.length) throw new Error(`ensayo de ${migrationFile}: respuesta incompleta`);
-  return reasons as (string | null)[];
+  return reasons;
 }
 
 async function main() {

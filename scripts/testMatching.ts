@@ -86,6 +86,8 @@ import {
   getStatusActivityType,
   evaluateDirectOfferConflict,
   evaluateApplicationConflict,
+  ALLOWED_TRANSITIONS,
+  transitionActor,
 } from '../src/utils/offerRelationStateMachine';
 import { canHold, getCompatiblePropulsion } from '../src/utils/habilitationScope';
 import { HabilitationScope } from '../src/types/habilitationScope';
@@ -1872,6 +1874,33 @@ async function main() {
       /send a new one instead/,
       'una oferta directa retirada NO se reactiva',
     );
+  });
+
+  // 092: quién hace cada transición.
+  await test('Sesión 5 · TRANSITION_ACTORS — cada transición válida tiene su parte, y ninguna inválida tiene ninguna', () => {
+    const estados = ['pending', 'accepted', 'rejected', 'expired', 'withdrawn'] as const;
+    for (const kind of ['application', 'direct_offer'] as const) {
+      for (const from of estados) for (const to of estados) {
+        const valida = from !== to && ALLOWED_TRANSITIONS[kind][from].includes(to);
+        assert.equal(transitionActor(kind, from, to) !== null, valida, `${kind} ${from} -> ${to}`);
+      }
+    }
+  });
+
+  await test('Sesión 5 · TRANSITION_ACTORS — decide quien recibe la propuesta; retira quien la hizo; caducar es del sistema', () => {
+    // Candidatura: la hace el técnico, la decide la empresa.
+    assert.equal(transitionActor('application', 'pending', 'accepted'), 'company');
+    assert.equal(transitionActor('application', 'pending', 'rejected'), 'company');
+    assert.equal(transitionActor('application', 'pending', 'withdrawn'), 'technician');
+    assert.equal(transitionActor('application', 'withdrawn', 'pending'), 'technician');
+    // Oferta directa: la hace la empresa, la decide el técnico.
+    assert.equal(transitionActor('direct_offer', 'pending', 'accepted'), 'technician');
+    assert.equal(transitionActor('direct_offer', 'pending', 'rejected'), 'technician');
+    assert.equal(transitionActor('direct_offer', 'pending', 'withdrawn'), 'company');
+    for (const kind of ['application', 'direct_offer'] as const) {
+      assert.equal(transitionActor(kind, 'pending', 'expired'), 'system', kind);
+      assert.equal(transitionActor(kind, 'pending', 'pending'), null, 'sin cambio no hay parte');
+    }
   });
 
   await test('evaluateApplicationConflict — una aplicacion retirada NO bloquea: permite reactivar', () => {

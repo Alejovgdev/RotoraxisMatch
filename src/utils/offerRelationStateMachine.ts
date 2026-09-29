@@ -67,6 +67,51 @@ export const ALLOWED_TRANSITIONS: Record<OfferRelationKind, Record<OfferRequestS
   },
 };
 
+/**
+ * QUIÉN hace cada transición (migración 092). `ALLOWED_TRANSITIONS` dice qué
+ * cambio es válido; esto, qué parte de la relación puede hacerlo:
+ *
+ *   - 'company'    la empresa de la fila (admin o recruiter: can_act_for_company);
+ *   - 'technician' el técnico de la fila;
+ *   - 'system'     sólo el mantenimiento, nunca un usuario de la app.
+ *
+ * Aceptar o rechazar lo hace siempre la parte que RECIBE la propuesta —la
+ * empresa en una candidatura, el técnico en una oferta directa— y retirar,
+ * la que la hizo. Un admin de la plataforma no es ninguna de las dos partes y
+ * no hace ninguna de estas transiciones en nombre de nadie.
+ *
+ * Mismo régimen que ALLOWED_TRANSITIONS: el enforcer es la base
+ * (`offer_relation_transition_actor`, dentro de
+ * handle_offer_relation_status_transition), esto es la declaración, y
+ * `scripts/validateOfferStateMachine.ts` compara las dos sobre las 40
+ * combinaciones. Una transición válida sin parte aquí es un error que el
+ * validador y los tests señalan.
+ */
+export type OfferRelationActor = 'company' | 'technician' | 'system';
+
+export const TRANSITION_ACTORS: Record<
+  OfferRelationKind,
+  Partial<Record<OfferRequestStatus, Partial<Record<OfferRequestStatus, OfferRelationActor>>>>
+> = {
+  application: {
+    pending: { accepted: 'company', rejected: 'company', withdrawn: 'technician', expired: 'system' },
+    withdrawn: { pending: 'technician' },
+  },
+  direct_offer: {
+    pending: { accepted: 'technician', rejected: 'technician', withdrawn: 'company', expired: 'system' },
+  },
+};
+
+/** La parte que puede hacer `from -> to`, o null si no hay cambio o la transición no existe. */
+export function transitionActor(
+  kind: OfferRelationKind,
+  from: OfferRequestStatus,
+  to: OfferRequestStatus,
+): OfferRelationActor | null {
+  if (from === to) return null;
+  return TRANSITION_ACTORS[kind][from]?.[to] ?? null;
+}
+
 export function isActiveOfferRelationStatus(status: OfferRequestStatus): boolean {
   return status === 'pending' || status === 'accepted';
 }
