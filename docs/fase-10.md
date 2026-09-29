@@ -321,9 +321,9 @@ el trigger de esta migración, las demás NO se arreglan en ella):
 | # | Tabla | Qué permite hoy | Gravedad | Estado |
 |---|---|---|---|---|
 | 1 | `offer_applications`, `offer_requests` | Aceptar la parte equivocada (ver arriba) | Crítica | 092 |
-| 2 | `offer_requests` | La empresa cambia `technician_id` de una oferta directa YA aceptada: ve identidad y documentos de otro técnico cualquiera (comprobado). La 081 sólo hizo inmutables los participantes de las candidaturas | Crítica | Pendiente |
-| 3 | `offer_requests` | El técnico cambia `company_id`/`offer_id` de una oferta directa pendiente y la acepta: relación y chat con una empresa que no le envió nada (comprobado) | Alta | Pendiente (mismo arreglo que la 2) |
-| 4 | `offer_applications`, `offer_requests` | Cada parte reescribe el texto de la otra: la empresa, la `cover_note` del técnico; el técnico, el `message` de la empresa (las dos comprobadas) | Media (integridad, no revela) | Pendiente |
+| 2 | `offer_requests` | La empresa cambia `technician_id` de una oferta directa YA aceptada: ve identidad y documentos de otro técnico cualquiera (comprobado). La 081 sólo hizo inmutables los participantes de las candidaturas | Crítica | 093 |
+| 3 | `offer_requests` | El técnico cambia `company_id`/`offer_id` de una oferta directa pendiente y la acepta: relación y chat con una empresa que no le envió nada (comprobado) | Alta | 093 |
+| 4 | `offer_applications`, `offer_requests` | Cada parte reescribe el texto de la otra: la empresa, la `cover_note` del técnico; el técnico, el `message` de la empresa (las dos comprobadas) | Media (integridad, no revela) | 093 |
 | 5 | `company_members` | Un admin de empresa inserta o reasigna filas de su empresa con cualquier `user_id`. No puede moverlas a otra empresa (sin `WITH CHECK`, el `USING` se aplica también a la fila nueva; comprobado), pero sí colgar de la suya a un usuario ajeno; y `my_company_id()` usa `LIMIT 1`, así que a un usuario con dos empresas le cambia cuál ve. Leído de las políticas, no probado | Baja | Pendiente |
 | 6 | `technician_profiles` | El técnico edita su `anonymous_code`, el identificador que ve la empresa. Leído de las políticas, no probado | Baja | Pendiente |
 
@@ -336,11 +336,44 @@ actualiza; el alta fuerza `pending`; la empresa lee sólo con
 `WITH CHECK`), `technician_profiles.verification_status` (protegido). El
 INSERT de las dos relaciones fuerza `pending` e identidad oculta (011).
 
+**Sesión 6** (29 septiembre 2026) — filas 2–4 de esa auditoría. Migración
+093, **aplicada y registrada** como `20260929121105` (md5 de `statements`
+idéntico al fichero). Después: `npm test` y `npm run test:db` (22 + 20, H3
+412) en verde contra lo instalado, sin rastro. Con esto se cierra el trabajo
+de seguridad de la fase; las filas 5 y 6 quedan en pendientes.
+
+1. **Participantes de las ofertas directas inmutables:**
+   `guard_offer_request_participants` (trigger
+   `a_guard_offer_request_participants`), espejo de la 081. Un usuario de la
+   app —cualquiera de las partes, y también un admin de la plataforma— no
+   cambia `offer_id`, `technician_id` ni `company_id`.
+2. **Cada parte, sólo su texto:** `guard_offer_relation_texts` (trigger
+   `a_guard_offer_relation_texts` en las dos tablas, sólo cuando el UPDATE toca
+   la columna). `cover_note` la cambia sólo el técnico de la fila; `message`,
+   sólo la empresa (admin o recruiter). Un admin de la plataforma no edita el
+   texto de nadie.
+3. **Mantenimiento exento**, como en la 081 y la 092: service_role, SQL sin
+   rol de la app y el borrado de cuenta (`handle_deleted_user` vacía la
+   `cover_note`; el servicio de Auth entra como `supabase_auth_admin`, sin
+   `role` configurado).
+
+Sin cambios de cliente: los únicos caminos que escriben estas tablas son
+cambios de estado, la reactivación de una candidatura (el técnico reescribe
+su propia carta) y los INSERT, que la 093 no toca.
+
+Ensayo (todo revertido, producción idéntica después): autocomprobación de 11
+pasos más estado final; `testApplicationSecurity` 22/22 (4 nuevas),
+`testTransactionalWrites` 20/20, H3 412/412; borrado de cuenta de un técnico
+con carta, igual con y sin la 093. Controles: cuatro mutantes (participantes
+mutables, la empresa reescribe la carta, el técnico reescribe el mensaje,
+admin que reasigna y reescribe), cada uno señalado en el paso que rompe; y la
+suite, con los participantes mutables, ve exactamente los dos tests de
+participantes. El ensayo destapó dos fallos, ya corregidos: en la función, un
+IF con `AND` que PL/pgSQL prepara entero (`NEW.cover_note` no existe en una
+oferta directa: 42703), y en la suite, dos tests que dependían uno del otro.
+
 ## 3. Pendientes (fuera de esta fase)
 
-- **Filas 2–4 de la auditoría de la sesión 5** → migración 093 (en
-  preparación): participantes de `offer_requests` inmutables, como la 081 en
-  candidaturas, y cada parte edita sólo su propio texto.
 - **Fila 5 (más adelante):** añadir un miembro a una empresa tiene que
   requerir que esa persona acepte una invitación; hoy un admin de empresa
   inserta la fila con cualquier `user_id`.
@@ -422,3 +455,5 @@ INSERT de las dos relaciones fuerza `pending` e identidad oculta (011).
   2026, sin migraciones). Quedan el merge y el despliegue.
 - Sesión 4: **cerrada** (29 septiembre 2026). 091 aplicada y registrada.
 - Sesión 5: **cerrada** (29 septiembre 2026). 092 aplicada y registrada.
+- Sesión 6: **cerrada** (29 septiembre 2026). 093 aplicada y registrada.
+  Seguridad cerrada por ahora; filas 5 y 6 de la auditoría, en pendientes.

@@ -17,7 +17,7 @@ END $$;
 DO $test$
 DECLARE
   t uuid; tu uuid; other_t uuid; other_u uuid; cu uuid; cid uuid; other_c uuid; admin_u uuid;
-  src offers%ROWTYPE; o uuid; engine_o uuid; app uuid; other_app uuid; o2 uuid; app2 uuid; rq uuid;
+  src offers%ROWTYPE; o uuid; engine_o uuid; app uuid; other_app uuid; o2 uuid; app2 uuid; rq uuid; rq2 uuid;
   engine uuid; lic uuid; rating uuid; observed text; before_counts bigint[];
 BEGIN
   SELECT id INTO admin_u FROM profiles WHERE role='admin' AND status='active' LIMIT 1;
@@ -163,7 +163,32 @@ BEGIN
   observed:=pg_temp.attempt(format('UPDATE offer_requests SET status=''accepted'' WHERE id=%L',rq));
   INSERT INTO security_results SELECT '092 company cannot accept its own direct offer',
     observed='42501:Not authorized.:' AND NOT identity_revealed,observed FROM offer_requests WHERE id=rq;
+  observed:=pg_temp.attempt(format('UPDATE offer_applications SET cover_note=%L WHERE id=%L','reescrita por la empresa',app));
+  INSERT INTO security_results VALUES('093 company cannot rewrite cover note',observed='42501:Only the technician can edit the cover note.:',observed);
   RESET ROLE;
+
+  -- 093: participantes de la oferta directa inmutables; cada parte, su texto.
+  -- Dos ofertas directas, una por lado, para que un fallo no arrastre al otro
+  -- test (si el técnico pudiera llevarse una a otra empresa, la empresa ya no
+  -- la vería). El estado final se lee sin RLS.
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',cu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  INSERT INTO offer_requests(technician_id,offer_id,company_id,message) VALUES(t,o2,cid,'mensaje') RETURNING id INTO rq2;
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',tu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  UPDATE offer_requests SET status='accepted' WHERE id=rq;
+  observed:=pg_temp.attempt(format('UPDATE offer_requests SET company_id=%L WHERE id=%L',other_c,rq2));
+  INSERT INTO security_results VALUES('093 technician cannot repoint direct offer',observed='42501:Direct offer participants cannot be changed.:',observed);
+  observed:=pg_temp.attempt(format('UPDATE offer_requests SET message=%L WHERE id=%L','reescrito por el tecnico',rq2));
+  INSERT INTO security_results VALUES('093 technician cannot rewrite message',observed='42501:Only the company can edit the message.:',observed);
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',cu,'role','authenticated')::text,true);
+  SET LOCAL ROLE authenticated;
+  observed:=pg_temp.attempt(format('UPDATE offer_requests SET technician_id=%L WHERE id=%L',other_t,rq));
+  RESET ROLE;
+  INSERT INTO security_results SELECT '093 company cannot swap technician on accepted direct offer',
+    observed='42501:Direct offer participants cannot be changed.:' AND technician_id=t,observed FROM offer_requests WHERE id=rq;
 
   -- A sentinel proves unauthorized callers never reach private qualification reads.
   EXECUTE $fn$CREATE OR REPLACE FUNCTION public.offer_application_ineligibility_reason(p_offer_id uuid,p_technician_id uuid)
