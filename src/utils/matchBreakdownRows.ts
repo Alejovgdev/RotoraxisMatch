@@ -27,8 +27,9 @@ export interface BreakdownRowSpec {
 }
 
 // El rótulo, en un único sitio. Ajustes finales de Fase 10: en una oferta FAA
-// la fila de habilitación mide la experiencia de aeronave declarada —la FAA no
-// emite type ratings (`offerAircraftAreExperience`)— y se rotula así. En las
+// la fila de habilitación mide la aeronave como experiencia —la FAA no emite
+// type ratings (`offerAircraftAreExperience`); desde el 2026-10-04 cuenta la
+// declarada o un type rating de cualquier autoridad— y se rotula así. En las
 // ofertas sin certificar sigue diciendo `Habilitation` aunque allí cuentan las
 // dos fuentes: está en los Pendientes de docs/fase-10.md.
 const AIRCRAFT_EXPERIENCE_LABEL = 'Aircraft experience';

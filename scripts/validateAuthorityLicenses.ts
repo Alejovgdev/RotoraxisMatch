@@ -18,11 +18,16 @@
 // la oferta), código a código. Para comprobar una migración antes de aplicarla:
 //   npm run validate:authority-licenses -- --rehearse=supabase/migrations/NNN_x.sql
 //
+// 096: y el filtro de qué categoría Part-66 puede aceptar una oferta FAA, en TS
+// (faaOfferAcceptableLicenseCodes) y en SQL (public.faa_offer_acceptable_license_codes),
+// en todas las combinaciones de clase, oficio y producto.
+//
 // Run: npm run validate:authority-licenses
 import { createClient } from '@supabase/supabase-js';
 import { loadEnvFile } from './lib/loadEnv';
 import { queryWithRehearsedMigration, rehearseArgument, sqlText } from './lib/rehearseMigration';
 import * as licensesModule from '../src/constants/licenses';
+import { TECHNICIAN_TYPES } from '../src/constants/technicianTypes';
 
 loadEnvFile();
 
@@ -153,6 +158,53 @@ async function main() {
     console.log(`FAA equivalences compared: ${faaProbeCodes.length} codes`);
   } catch (err) {
     errors.push(`No se pudo leer faa_equivalent_license_codes: ${(err as Error).message}`);
+  }
+
+  // 6. 096: qué categoría Part-66 puede aceptar una oferta FAA, en TS
+  // (faaOfferAcceptableLicenseCodes) y en SQL (faa_offer_acceptable_license_codes,
+  // la que usa el trigger), en todas las combinaciones de clase, oficio y
+  // producto. Se comparan como conjuntos: el orden no decide nada.
+  const filterCombos = (['aircraft', 'engine'] as const).flatMap((offerKind) =>
+    TECHNICIAN_TYPES.flatMap((t) =>
+      (['Aeroplane', 'Helicopter'] as const).map((productType) => ({ offerKind, technicianType: t.code, productType })),
+    ),
+  );
+  const comboKey = (c: { offerKind: string; technicianType: string; productType: string }) =>
+    `${c.offerKind}|${c.technicianType}|${c.productType}`;
+  try {
+    const dbFilter = new Map<string, string[]>();
+    if (rehearseFile) {
+      const values = filterCombos
+        .map((c) => `(${sqlText(c.offerKind)}, ${sqlText(c.technicianType)}, ${sqlText(c.productType)})`)
+        .join(', ');
+      const result = await queryWithRehearsedMigration<{ codes: Record<string, string[]> }>(
+        SUPABASE_URL!,
+        rehearseFile,
+        `SELECT json_object_agg(k || '|' || t || '|' || p, public.faa_offer_acceptable_license_codes(k, t, p)) AS codes ` +
+          `FROM (VALUES ${values}) AS v(k, t, p)`,
+      );
+      for (const [key, codes] of Object.entries(result[0]?.codes ?? {})) dbFilter.set(key, codes);
+    } else {
+      for (const c of filterCombos) {
+        const { data: codes, error: rpcError } = await supabase.rpc('faa_offer_acceptable_license_codes', {
+          p_offer_kind: c.offerKind,
+          p_technician_type: c.technicianType,
+          p_product_type: c.productType,
+        });
+        if (rpcError) throw new Error(rpcError.message);
+        dbFilter.set(comboKey(c), (codes ?? []) as string[]);
+      }
+    }
+    for (const c of filterCombos) {
+      const ts = [...licensesModule.faaOfferAcceptableLicenseCodes(c)].sort();
+      const db = dbFilter.get(comboKey(c));
+      if (JSON.stringify(db ? [...db].sort() : undefined) !== JSON.stringify(ts)) {
+        errors.push(`Categorías aceptables en oferta FAA ${comboKey(c)}: TS [${ts.join(', ')}], SQL [${db?.join(', ') ?? 'sin respuesta'}]`);
+      }
+    }
+    console.log(`FAA offer acceptable categories compared: ${filterCombos.length} combinations`);
+  } catch (err) {
+    errors.push(`No se pudo leer faa_offer_acceptable_license_codes: ${(err as Error).message}`);
   }
 
   console.log('\n=== AUTHORITY LICENSES VALIDATION ===');

@@ -11,7 +11,7 @@
 // que lo usa, pero las reglas —qué implica oficio, de qué credencial puede
 // colgar una habilitación— no son decisiones de pantalla.
 import { AuthorityCode, AuthorityLicenseCode } from '../types/catalog';
-import { AUTHORITIES, FAA_SIGN_OFF_LICENSE_CODES } from '../constants/licenses';
+import { AUTHORITIES, FAA_SIGN_OFF_LICENSE_CODES, typesLockedByLicenses } from '../constants/licenses';
 import { licenseAllowsIndividualTypeRatings } from './individualTypeRatingScope';
 
 export interface HeldLicense {
@@ -70,6 +70,34 @@ export function licensesForHabilitations(held: readonly HeldLicense[]): HeldLice
  */
 export function canSignOffAircraft(held: readonly Pick<HeldLicense, 'authority' | 'code'>[]): boolean {
   return held.some((l) => l.authority === 'FAA' && (FAA_SIGN_OFF_LICENSE_CODES as readonly string[]).includes(l.code));
+}
+
+/**
+ * La etiqueta del check de firma, o null si no puede firmar. Nombra el
+ * certificado bajo el que firma: la A sola, "A"; la A&P, o la A y la P en filas
+ * separadas (que el matching ya trata como A&P, H8), "A&P".
+ */
+export function signOffLabel(held: readonly Pick<HeldLicense, 'authority' | 'code'>[]): string | null {
+  if (!canSignOffAircraft(held)) return null;
+  const faa = held.filter((l) => l.authority === 'FAA').map((l) => l.code);
+  return `Signed off under my FAA ${faa.includes('A&P') || faa.includes('P') ? 'A&P' : 'A'}`;
+}
+
+/**
+ * La nota que va debajo del selector de tipos de perfil cuando el técnico
+ * tiene FAA A o A&P (o la A y la P en filas separadas, que incluyen la A), o
+ * null. Esas licencias marcan Mechanic pero no lo bloquean
+ * (typesLockedByLicenses, 2026-10-02), y la nota general del selector no lo
+ * dice. Sólo sale si Mechanic se puede desmarcar de verdad: si otra licencia
+ * lo bloquea (una B1.1), la nota diría algo falso. Describe lo que se puede
+ * hacer, sin empujar a hacerlo.
+ */
+export function faaMechanicTypeNote(held: readonly Pick<HeldLicense, 'authority' | 'code'>[]): string | null {
+  const holdsFaaAirframe = held.some((l) => l.authority === 'FAA' && (l.code === 'A' || l.code === 'A&P'));
+  const mechanicLocked = typesLockedByLicenses(held.map((l) => l.code)).includes('mechanic');
+  return holdsFaaAirframe && !mechanicLocked
+    ? 'An FAA A or A&P ticks Mechanic, but you can untick it if you only do avionics.'
+    : null;
 }
 
 /**

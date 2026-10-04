@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
-import { CompanyCard, CompanyChip, companyUi } from './CompanyUI';
+import { CompanyCard, companyUi } from './CompanyUI';
 import { AircraftTypeRatingPicker } from '../AircraftTypeRatingPicker';
 import { useAircraftTypeRatingsCatalog } from '../../state/useAircraftTypeRatingsCatalog';
 import { catalogRepository } from '../../repositories/v2/catalogRepository';
 import { AircraftRatingIndex, buildAircraftRatingIndex, getAircraftTypeRatingLabel } from '../../constants/aircraftTypeRatings';
-import { isLicenseCompatibleWithProductType } from '../../utils/licenseCategoryProductType';
-import { LICENSE_CATEGORIES } from '../../constants/licenses';
 import { getOfferProductTypeLabel } from '../../constants/offerProductTypes';
-import { AuthorityLicenseCode, LicenseCode } from '../../types/catalog';
+import { AuthorityLicenseCode } from '../../types/catalog';
 import { OfferProductType } from '../../types/offer';
+import { AircraftRequirementsCopy } from '../../utils/offerFormRules';
 
 // Fase 6 tanda D: una fila es UNA AERONAVE. Perdió `licenseCode` (la licencia
 // es de la oferta, una sola) y `requirementLevel` (la exigencia es de la
@@ -29,9 +28,12 @@ interface Props {
   // cruza con ella. El selector de licencia vive en el formulario, no aquí.
   licenseCode?: AuthorityLicenseCode;
   // Sesión 2: bajo la FAA las aeronaves son experiencia, no type ratings de la
-  // licencia (offerAircraftAreExperience). Cambia el texto y quita el prefijo
-  // "A&P + " de las filas, que prometería un rating que la FAA no emite.
+  // licencia (offerAircraftAreExperience). Quita el prefijo "A&P + " de las
+  // filas, que prometería un rating que la FAA no emite.
   asExperience?: boolean;
+  // Título, subtítulo y etiqueta de fila según con qué se compara cada
+  // aeronave (aircraftRequirementsCopy).
+  copy: AircraftRequirementsCopy;
   // ¿Basta con una de las aeronaves, o hacen falta todas? La casilla vive
   // BAJO la lista (paso 6 del formulario), no como un paso propio.
   requiresAll: boolean;
@@ -41,10 +43,12 @@ interface Props {
 // Fase 3b screen 1 — the PRIMARY requirements block on the offer form
 // (shared by new.tsx and edit.tsx so the two screens can no longer drift,
 // which they had — see commit message). Search-and-add via
-// AircraftTypeRatingPicker (product-type pre-filtered once a category is
-// picked) + rows with a per-row Mandatory/Preferred badge, editable in
-// place — no separate "Level" step and no remove+re-add just to change a
-// level, unlike the previous design.
+// AircraftTypeRatingPicker, locked to the offer's product type. Each row is
+// one aircraft with a small tag saying what it is matched against ("Type
+// rating" or "Experience", from aircraftRequirementsCopy) and a Remove
+// action. Whether ONE aircraft is enough or ALL are needed is a single
+// offer-level checkbox under the list (requiresAllAircraft), not a per-row
+// level: Fase 6 tanda D removed the per-row Mandatory/Preferred badge.
 //
 // Resolves rating labels for every referenced id itself (including
 // inactive ones an existing offer might reference) — new.tsx/edit.tsx no
@@ -63,6 +67,7 @@ export function TypeRatingRequirementsEditor({
   productType,
   licenseCode,
   asExperience = false,
+  copy,
   requiresAll,
   onChangeRequiresAll,
 }: Props) {
@@ -87,7 +92,6 @@ export function TypeRatingRequirementsEditor({
 
   const labelIndex = useMemo(() => new Map([...activeRatingIndex, ...resolvedIndex]), [activeRatingIndex, resolvedIndex]);
 
-  const [newLicense, setNewLicense] = useState<LicenseCode | null>(null);
   const [newRatingId, setNewRatingId] = useState<string | null>(null);
   const [newNotes, setNewNotes] = useState('');
 
@@ -117,14 +121,8 @@ export function TypeRatingRequirementsEditor({
 
   return (
     <CompanyCard style={styles.card}>
-      <Text style={styles.title}>Aircraft</Text>
-      <Text style={styles.subtitle}>
-        {asExperience
-          ? `Search and add the aircraft this role works on. They are matched against declared aircraft experience, not type ratings. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`
-          : rowLicense
-          ? `Search and add the aircraft this role works on. All of them count against the offer's ${rowLicense} licence. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`
-          : `Search and add the aircraft this role works on. Limited to ${getOfferProductTypeLabel(productType).toLowerCase()}, as set above.`}
-      </Text>
+      <Text style={styles.title}>{copy.title}</Text>
+      <Text style={styles.subtitle}>{copy.subtitle}</Text>
 
       {value.map((h, index) => (
         <View key={h.aircraftTypeRatingId} style={styles.row}>
@@ -134,6 +132,9 @@ export function TypeRatingRequirementsEditor({
               {getAircraftTypeRatingLabel(h.aircraftTypeRatingId, labelIndex)}
             </Text>
             {h.notes ? <Text style={styles.rowNotes}>{h.notes}</Text> : null}
+          </View>
+          <View style={styles.rowTag}>
+            <Text style={styles.rowTagText}>{copy.rowTag}</Text>
           </View>
           <TouchableOpacity onPress={() => removeRow(index)} accessibilityRole="button">
             <Text style={styles.removeText}>Remove</Text>
@@ -163,7 +164,7 @@ export function TypeRatingRequirementsEditor({
       ) : null}
 
       <View style={styles.addBlock}>
-        <Text style={styles.fieldLabel}>Aircraft + engine rating</Text>
+        <Text style={styles.fieldLabel}>{copy.pickerLabel}</Text>
         <AircraftTypeRatingPicker
           value={newRatingId}
           onSelect={(r) => setNewRatingId(r.id)}
@@ -207,6 +208,15 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1, minWidth: 0, gap: 2 },
   rowText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.text },
   rowNotes: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: companyUi.textSoft },
+  rowTag: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderColor: companyUi.border,
+    backgroundColor: companyUi.surfaceSoft,
+  },
+  rowTagText: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: companyUi.textSoft },
   requiresAllRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   checkbox: {
     width: 18,
@@ -220,25 +230,10 @@ const styles = StyleSheet.create({
   checkboxOn: { borderColor: companyUi.accent, backgroundColor: companyUi.accentSoft },
   checkboxMark: { fontSize: 12, lineHeight: 14, fontWeight: '700', color: companyUi.accent },
   requiresAllText: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: '600', color: companyUi.textSoft },
-  levelToggle: { flexDirection: 'row', gap: 6 },
-  levelPill: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  levelPillOff: { borderColor: companyUi.border, backgroundColor: companyUi.surfaceSoft },
-  levelPillMandatoryOn: { borderColor: companyUi.red, backgroundColor: companyUi.redSoft },
-  levelPillPreferredOn: { borderColor: companyUi.blue, backgroundColor: companyUi.blueSoft },
-  levelPillText: { fontSize: 11, fontWeight: '700' },
-  levelPillTextOff: { color: companyUi.textMuted },
-  levelPillTextMandatoryOn: { color: companyUi.red },
-  levelPillTextPreferredOn: { color: companyUi.blue },
   removeText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: companyUi.red },
   emptyText: { fontSize: 13, lineHeight: 18, fontWeight: '500', color: companyUi.textMuted },
   addBlock: { gap: spacing.xs, marginTop: spacing.xs },
   fieldLabel: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: companyUi.textSoft, marginTop: spacing.xs },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   input: {
     minHeight: 46,
     borderWidth: 1,

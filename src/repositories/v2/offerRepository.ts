@@ -1,12 +1,17 @@
 import { supabase } from '../../lib/supabase';
 import { Offer, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
-import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCode } from '../../types/catalog';
+import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCode, LicenseCode } from '../../types/catalog';
 // Fase 10, paso 5b: aquí vivía DEFAULT_OFFER_AUTHORITY = 'EASA', el relleno de
 // la autoridad mientras el formulario no la pedía. Se retira con el selector:
 // una licencia sin autoridad ya no se completa en silencio, falla a la vista
 // (offerShapeViolations, y detrás el CHECK de emparejamiento de la 075).
 import { OfferStatus } from '../../types/enums';
-import { credentialLabel, licensesSelectableForOffer, retainApplicableAuthorities } from '../../constants/licenses';
+import {
+  credentialLabel,
+  licensesSelectableForOffer,
+  retainApplicableAuthorities,
+  retainFaaOfferEquivalence,
+} from '../../constants/licenses';
 import { assertOfferShape, offerKindForTechnicianType } from '../../utils/offerShape';
 import { isLicensedTechnicianType, technicianTypeLabel } from '../../constants/technicianTypes';
 import { LocationValue, PersistedLocation } from '../../types/location';
@@ -46,7 +51,7 @@ import {
 // verificado). En cuanto hubiera una oferta, el scorer estaría puntuando su
 // licencia como si no existiera.
 const OFFER_COLUMNS =
-  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepted_authorities, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
+  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepted_authorities, accepted_license_code, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
 
 /**
  * La localización de una oferta, tal y como la produce el selector.
@@ -77,7 +82,13 @@ export function offerLocationFromValue(value: LocationValue): OfferLocationWrite
 
 export type OfferPatch = Partial<Omit<Offer, 'id' | 'createdAt'>>;
 
-const CERTIFICATION_KEYS = ['requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptedAuthorities', 'onlyUnlicensed'] as const;
+const CERTIFICATION_KEYS = [
+  'requiresCertification', 'licenseCode', 'licenseAuthority', 'acceptedAuthorities', 'acceptedLicenseCode', 'onlyUnlicensed',
+] as const;
+// 096: la categoría aceptada de una oferta FAA depende de la clase, el oficio
+// y el producto. Un patch que toca cualquiera de ellos escribe también el
+// grupo de certificación, porque resolveOfferPatch puede haberla retirado.
+const FAA_EQUIVALENCE_INPUT_KEYS = ['offerKind', 'technicianType', 'productType'] as const;
 // Sesión 4 (091): el tipo va en el grupo de la clase. Cambiarlo puede cambiar
 // la clase, y la clase arrastra el motor.
 const KIND_KEYS = ['offerKind', 'requiredEngineId', 'technicianType'] as const;
@@ -101,6 +112,10 @@ function touches(patch: OfferPatch, keys: readonly (keyof OfferPatch)[]): boolea
  *   - cambiar la autoridad o el código sin mandar la lista de aceptadas ->
  *     se quedan sólo las que siguen aplicando (sesión 2, 088). Si el patch
  *     manda la lista, se valida tal cual y la guarda lanza si no cabe;
+ *   - oferta FAA (096): cambiar la clase, el oficio o el producto sin mandar
+ *     lista ni categoría -> la categoría aceptada se va si deja de caber, y
+ *     las autoridades con ella; pasar de FAA a Part-66 o al revés vacía las
+ *     dos; una categoría sin oferta FAA o sin autoridades se va;
  *   - la clase sale del tipo (sesión 4, 091): Engine Technician -> motor, otro
  *     tipo -> aeronave. Si el patch manda también la clase, se escribe tal
  *     cual y la guarda lanza si contradice al tipo;
@@ -115,17 +130,38 @@ export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferP
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
   }
+  // Antes que las equivalencias: la categoría aceptada de una oferta FAA (096)
+  // depende de la clase.
+  if (patch.technicianType !== undefined && patch.offerKind === undefined) next.offerKind = offerKindForTechnicianType(next.technicianType);
   if (!next.requiresCertification) {
     next.licenseCode = undefined;
     next.licenseAuthority = undefined;
     next.acceptedAuthorities = [];
+    next.acceptedLicenseCode = undefined;
   } else {
     if (patch.onlyUnlicensed === undefined) next.onlyUnlicensed = false;
-    if (patch.acceptedAuthorities === undefined) {
-      next.acceptedAuthorities = retainApplicableAuthorities(next.acceptedAuthorities, next.licenseAuthority, next.licenseCode);
+    const isFaa = next.licenseAuthority === 'FAA';
+    // 096: pasar de FAA a Part-66 o al revés cambia lo que significa la lista
+    // (otras autoridades con el mismo código, o una categoría Part-66 elegida):
+    // no queda nada que conservar.
+    const crossesFaa = (existing.licenseAuthority === 'FAA') !== isFaa;
+    if (patch.acceptedAuthorities === undefined && patch.acceptedLicenseCode === undefined) {
+      if (crossesFaa) {
+        next.acceptedAuthorities = [];
+        next.acceptedLicenseCode = undefined;
+      } else if (isFaa) {
+        Object.assign(next, retainFaaOfferEquivalence(next));
+      } else {
+        next.acceptedAuthorities = retainApplicableAuthorities(next.acceptedAuthorities, next.licenseAuthority, next.licenseCode);
+      }
+    }
+    // Una categoría sólo existe en una oferta FAA que acepta alguna autoridad
+    // (chk_offers_accepted_license_code). Si el patch no la manda y no cabe,
+    // el único valor admisible es ninguna; si la manda, la guarda decide.
+    if (patch.acceptedLicenseCode === undefined && (!isFaa || next.acceptedAuthorities.length === 0)) {
+      next.acceptedLicenseCode = undefined;
     }
   }
-  if (patch.technicianType !== undefined && patch.offerKind === undefined) next.offerKind = offerKindForTechnicianType(next.technicianType);
   if (next.offerKind !== 'engine' && patch.requiredEngineId === undefined) {
     next.requiredEngineId = undefined;
   }
@@ -172,12 +208,13 @@ function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown>
     // (resolveOfferPatch) en cuanto el patch toca cualquiera de sus campos. Son
     // cinco columnas atadas por tres CHECK (053, 075, 077): escribir sólo una
     // es la forma de dejar la fila en un estado que Postgres rechaza.
-    ...(touches(patch, CERTIFICATION_KEYS)
+    ...(touches(patch, [...CERTIFICATION_KEYS, ...FAA_EQUIVALENCE_INPUT_KEYS])
       ? {
           requires_certification: next.requiresCertification,
           license_code: next.licenseCode ?? null,
           license_authority: next.licenseAuthority ?? null,
           accepted_authorities: next.acceptedAuthorities,
+          accepted_license_code: next.acceptedLicenseCode ?? null,
           only_unlicensed: next.onlyUnlicensed,
         }
       : {}),
@@ -454,6 +491,8 @@ export const offerRepository = {
     licenseAuthority?: AuthorityCode;
     /** Sesión 2 (088): las otras autoridades Part-66 aceptadas. Vacía si no se dice. */
     acceptedAuthorities?: AuthorityCode[];
+    /** 096: en una oferta FAA con autoridades aceptadas, la categoría Part-66 que cuenta. */
+    acceptedLicenseCode?: LicenseCode;
     requiresAllAircraft?: boolean;
     requiredHabilitations?: { aircraftTypeRatingId: string; notes?: string }[];
     requiredEngineId?: string;
@@ -474,6 +513,8 @@ export const offerRepository = {
       licenseCode: data.licenseCode,
       licenseAuthority: data.licenseAuthority,
       acceptedAuthorities: data.acceptedAuthorities ?? [],
+      acceptedLicenseCode: data.acceptedLicenseCode,
+      productType: data.productType,
       requiredEngineId: data.requiredEngineId,
       onlyUnlicensed: data.onlyUnlicensed ?? false,
       requiredHabilitations: habilitationRows,
@@ -498,6 +539,7 @@ export const offerRepository = {
         // formulario; sin ella assertOfferWritable ya ha lanzado.
         license_authority: data.licenseAuthority ?? null,
         accepted_authorities: data.acceptedAuthorities ?? [],
+        accepted_license_code: data.acceptedLicenseCode ?? null,
         requires_all_aircraft: data.requiresAllAircraft ?? false,
         offer_kind: offerKind,
         required_engine_id: data.requiredEngineId ?? null,

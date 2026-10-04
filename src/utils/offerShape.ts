@@ -15,6 +15,7 @@
 //   chk_offers_aircraft_without_engine       (077)  aeronave ⇒ sin motor
 //   chk_offers_only_unlicensed_without_license (077) "sólo sin licencia" ⇒ no exige licencia
 //   chk_offers_accepted_authorities + trigger (088) aceptadas ⊆ otras Part-66 que emiten el código
+//   chk_offers_accepted_license_code + trigger (096) oferta FAA: Part-66 + UNA categoría, juntas
 //   chk_offers_kind_matches_technician_type   (091) motor ⇔ Engine Technician
 //
 // La usan offerRepository (antes de escribir, sobre el estado RESULTANTE) y los
@@ -29,6 +30,8 @@ import {
   authorityLabel,
   credentialLabel,
   equivalentAuthoritiesForLicense,
+  faaOfferAcceptableAuthorities,
+  faaOfferAcceptableLicenseCodes,
   isValidAuthorityLicense,
 } from '../constants/licenses';
 
@@ -70,6 +73,8 @@ export type OfferShape = Pick<
   | 'requiredEngineId'
   | 'onlyUnlicensed'
   | 'acceptedAuthorities'
+  | 'acceptedLicenseCode'
+  | 'productType'
 > & {
   requiredHabilitations: readonly unknown[];
 };
@@ -121,10 +126,36 @@ export function offerShapeViolations(offer: OfferShape): string[] {
 
   // Sesión 2 (088): las aceptadas son OTRAS autoridades Part-66 que emiten el
   // mismo código. Ni la exigida, ni ninguna sin licencia. Parte 3 (095): y la
-  // FAA en una oferta Part-66 cuyo código tiene equivalente FAA (no la C);
-  // una oferta FAA sigue sin aceptadas.
+  // FAA en una oferta Part-66 cuyo código tiene equivalente FAA (no la C).
   const accepted = offer.acceptedAuthorities;
+  const acceptedCode = offer.acceptedLicenseCode;
   if (new Set(accepted).size !== accepted.length) violations.push('An accepted authority is listed twice.');
+
+  // 096: una oferta FAA acepta autoridades Part-66 con UNA categoría, que pasa
+  // el filtro de su clase, oficio y producto y que emite cada autoridad
+  // marcada (chk_offers_accepted_license_code y el trigger de la 096). Las
+  // dos cosas van juntas: autoridades sin categoría, o al revés, no se guardan.
+  if (hasLicense && offer.licenseAuthority === 'FAA') {
+    if (accepted.length > 0 && !acceptedCode) {
+      violations.push('Pick the licence category the accepted authorities must have issued.');
+    } else if (acceptedCode && accepted.length === 0) {
+      violations.push(`Pick at least one authority whose ${acceptedCode} counts.`);
+    }
+    if (acceptedCode && !faaOfferAcceptableLicenseCodes(offer).includes(acceptedCode)) {
+      violations.push(`A ${acceptedCode} licence cannot be accepted on this FAA offer.`);
+    }
+    const outside = accepted.filter((a) => !faaOfferAcceptableAuthorities(acceptedCode).includes(a));
+    if (outside.length > 0) {
+      violations.push(
+        acceptedCode
+          ? `${outside.map(authorityLabel).join(', ')} does not issue a ${acceptedCode} licence.`
+          : `${outside.map(authorityLabel).join(', ')} cannot be accepted on an FAA offer.`,
+      );
+    }
+    return violations;
+  }
+
+  if (acceptedCode) violations.push('Only an FAA offer names an accepted licence category.');
   const acceptable = equivalentAuthoritiesForLicense(offer.licenseAuthority, offer.licenseCode);
   const outside = accepted.filter((a) => !acceptable.includes(a));
   if (outside.length > 0) {

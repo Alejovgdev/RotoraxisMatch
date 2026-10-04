@@ -26,6 +26,9 @@ import {
   showsAcceptedAuthorities,
   acceptableAuthorities,
   acceptedAuthoritiesNote,
+  acceptableLicenseCodes,
+  aircraftRequirementsCopy,
+  selectAcceptedLicenseCode,
   toggleAcceptedAuthority,
   showsAircraftEditor,
   showsCertificationQuestion,
@@ -34,6 +37,7 @@ import {
 } from '../src/utils/offerFormRules';
 import { AUTHORITIES, licensesSelectableForOffer } from '../src/constants/licenses';
 import { TECHNICIAN_TYPES } from '../src/constants/technicianTypes';
+import { offerLicenseDetailText } from '../src/utils/offerRequirementsText';
 
 let passed = 0;
 let failed = 0;
@@ -165,16 +169,18 @@ async function main() {
     const errores = requirementsErrors(sinAutoridad);
     assert.ok(errores.authority);
     assert.ok(errores.license);
-    assert.deepEqual(requirementsErrors(baseForm()), { authority: undefined, license: undefined, engine: undefined });
+    assert.deepEqual(requirementsErrors(baseForm()), { authority: undefined, license: undefined, engine: undefined, acceptedLicense: undefined });
     assert.ok(requirementsErrors(selectTechnicianType(baseForm(), 'engine_technician')).engine, 'motor sin motor elegido');
   });
 
-  await test('Formulario — FAA: mecánico ve A, P y A&P; aviónico ve A y A&P; las equivalencias desaparecen', () => {
+  await test('Formulario — FAA: mecánico ve A, P y A&P; aviónico ve A y A&P; las equivalencias Part-66 se van', () => {
     const faa = selectAuthority(baseForm({ acceptedAuthorities: ['UK_CAA', 'CASA'] }), 'FAA');
     assert.equal(faa.licenseCode, undefined, 'B1.1 no existe en la FAA');
     assert.deepEqual(faa.requiredHabilitations, [], 'las aeronaves colgaban de la B1.1 que se fue');
-    assert.deepEqual(faa.acceptedAuthorities, [], 'la FAA no cruza con nadie');
-    assert.equal(showsAcceptedAuthorities(faa), false);
+    assert.deepEqual(faa.acceptedAuthorities, [], 'las aceptadas de la oferta EASA no significan nada en una FAA');
+    assert.equal(faa.acceptedLicenseCode, undefined);
+    // 096: una oferta FAA de mecánico sí tiene categorías Part-66 que aceptar.
+    assert.equal(showsAcceptedAuthorities(faa), true);
     assert.deepEqual(selectableLicenses(faa), ['A', 'P', 'A&P']);
 
     const conAyP = selectLicense(faa, 'A&P');
@@ -231,9 +237,9 @@ async function main() {
 
     // Una categoría que CASA y GCAA no emiten no los ofrece.
     assert.deepEqual(acceptableAuthorities(baseForm({ technicianType: 'avionic', licenseCode: 'B2L' })), ['UK_CAA', 'FAA']);
-    // Sin licencia elegida, ni con la FAA, no hay fila.
+    // Sin licencia elegida no hay fila. 096: con la FAA, sí (categorías Part-66).
     assert.equal(showsAcceptedAuthorities(baseForm({ licenseCode: undefined })), false);
-    assert.equal(showsAcceptedAuthorities(baseForm({ licenseAuthority: 'FAA', licenseCode: 'A&P' })), false);
+    assert.equal(showsAcceptedAuthorities(baseForm({ licenseAuthority: 'FAA', licenseCode: 'A&P' })), true);
     // Parte 3: la FAA junto a las demás en cualquier oferta Part-66 con B1.1.
     for (const authority of ['EASA', 'UK_CAA', 'CASA', 'GCAA'] as const) {
       assert.ok(acceptableAuthorities(baseForm({ licenseAuthority: authority })).includes('FAA'), authority);
@@ -267,6 +273,164 @@ async function main() {
       acceptedAuthoritiesNote(baseForm({ licenseCode: 'A1', requiredHabilitations: [], acceptedAuthorities: ['FAA'] })),
       'Accepted licences score slightly below an exact EASA match. From the FAA, A or A&P counts for A1.',
     );
+  });
+
+  await test('Formulario — la sección de aeronaves dice con qué se compara cada una: type rating Part-66, experiencia FAA o las dos sin licencia', () => {
+    const part66 = aircraftRequirementsCopy(baseForm());
+    assert.equal(part66.title, 'Required type ratings');
+    assert.equal(part66.rowTag, 'Type rating');
+    assert.equal(part66.pickerLabel, 'Aircraft + engine rating');
+    assert.equal(
+      part66.subtitle,
+      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as set above.",
+    );
+
+    const faa = aircraftRequirementsCopy(baseForm({ licenseAuthority: 'FAA', licenseCode: 'A&P' }));
+    assert.equal(faa.title, 'Aircraft experience');
+    assert.equal(faa.rowTag, 'Experience');
+    assert.equal(faa.pickerLabel, 'Aircraft + engine', 'sin "rating": no se pide ninguno');
+    assert.equal(
+      faa.subtitle,
+      'Search and add the aircraft this role works on. Either a type rating, from any authority, or declared experience on the aircraft counts, signed off or not. Limited to airplanes, as set above.',
+    );
+    // A, P y A&P dicen lo mismo: la firma no distingue ofertas FAA.
+    for (const code of ['A', 'P'] as const) {
+      assert.deepEqual(aircraftRequirementsCopy(baseForm({ licenseAuthority: 'FAA', licenseCode: code })), faa, code);
+    }
+
+    const sinLicencia = aircraftRequirementsCopy(setRequiresCertification(baseForm(), false));
+    assert.equal(sinLicencia.title, 'Aircraft experience');
+    assert.equal(sinLicencia.rowTag, 'Experience');
+    assert.equal(sinLicencia.pickerLabel, 'Aircraft + engine');
+    assert.equal(
+      sinLicencia.subtitle,
+      'Search and add the aircraft this role works on. Either a type rating or declared experience on the aircraft counts. Limited to airplanes, as set above.',
+    );
+    assert.ok(
+      aircraftRequirementsCopy(setRequiresCertification(baseForm({ productType: 'Helicopter' }), false)).subtitle.endsWith('Limited to helicopters, as set above.'),
+    );
+  });
+
+  await test('Formulario — aeronaves: con la FAA aceptada, la frase de la aeronave firmada; licencia pedida sin elegir, ya los textos Part-66', () => {
+    const conFaa = aircraftRequirementsCopy(baseForm({ acceptedAuthorities: ['FAA'] }));
+    assert.equal(conFaa.title, 'Required type ratings');
+    assert.equal(
+      conFaa.subtitle,
+      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as set above. For an FAA certificate holder, an aircraft they have signed off on counts as a type rating.",
+    );
+    // Otra Part-66 aceptada no la añade: allí no hay firma que cuente.
+    assert.equal(aircraftRequirementsCopy(baseForm({ acceptedAuthorities: ['UK_CAA'] })).subtitle, aircraftRequirementsCopy(baseForm()).subtitle);
+
+    const sinCodigo = "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's licence; declared aircraft experience does not count. Limited to airplanes, as set above.";
+    const sinAutoridad = aircraftRequirementsCopy(baseForm({ licenseAuthority: undefined, licenseCode: undefined }));
+    assert.equal(sinAutoridad.title, 'Required type ratings');
+    assert.equal(sinAutoridad.subtitle, sinCodigo);
+    assert.equal(aircraftRequirementsCopy(baseForm({ licenseAuthority: 'UK_CAA', licenseCode: undefined })).subtitle, sinCodigo);
+    // Con la FAA elegida, aunque falte el código, ya son experiencia.
+    assert.equal(aircraftRequirementsCopy(baseForm({ licenseAuthority: 'FAA', licenseCode: undefined })).title, 'Aircraft experience');
+  });
+
+  // ── 096: una oferta FAA acepta una licencia Part-66 ─────────────────────
+
+  const faaForm = (overrides: Partial<OfferRequirementsForm> = {}) =>
+    baseForm({ licenseAuthority: 'FAA', licenseCode: 'A&P', requiredHabilitations: [], ...overrides });
+
+  await test('096 · Formulario — las categorías de una oferta FAA son las de una Part-66 del mismo tipo y producto, sin la C', () => {
+    assert.deepEqual(acceptableLicenseCodes(faaForm({ technicianType: 'avionic' })), ['B2', 'B2L']);
+    assert.deepEqual(acceptableLicenseCodes(faaForm()), ['A1', 'A2', 'B1.1', 'B1.2', 'B3', 'L']);
+    assert.deepEqual(acceptableLicenseCodes(faaForm({ productType: 'Helicopter' })), ['A3', 'A4', 'B1.3', 'B1.4']);
+    // Contraste: en una oferta Part-66 el mismo oficio sí ve la C; aquí no.
+    assert.ok(selectableLicenses(baseForm({ technicianType: 'avionic', licenseCode: 'B2' })).includes('C'));
+    // Fuera de la FAA no hay chips de categoría.
+    assert.deepEqual(acceptableLicenseCodes(baseForm()), []);
+    // Por defecto nada marcado: sólo cuenta la licencia FAA.
+    assert.deepEqual(faaForm().acceptedAuthorities, []);
+    assert.equal(faaForm().acceptedLicenseCode, undefined);
+    assert.equal(acceptedAuthoritiesNote(faaForm()), 'None selected: only FAA A&P counts.');
+  });
+
+  await test('096 · Formulario — una sola categoría: elegir otra sustituye a la anterior; las autoridades son las que la emiten', () => {
+    const conB2 = selectAcceptedLicenseCode(faaForm({ technicianType: 'avionic' }), 'B2');
+    assert.equal(conB2.acceptedLicenseCode, 'B2');
+    const conB2L = selectAcceptedLicenseCode(conB2, 'B2L');
+    assert.equal(conB2L.acceptedLicenseCode, 'B2L', 'no se pueden marcar dos: la nueva sustituye');
+    assert.equal(selectAcceptedLicenseCode(conB2L, 'B2L').acceptedLicenseCode, undefined, 'tocar la elegida la quita');
+    assert.equal(selectAcceptedLicenseCode(conB2, 'C').acceptedLicenseCode, 'B2', 'la C no se puede elegir');
+
+    // Sin categoría, las cuatro Part-66; con B2L, sólo las que la emiten.
+    assert.deepEqual(acceptableAuthorities(faaForm()), ['EASA', 'UK_CAA', 'CASA', 'GCAA']);
+    assert.deepEqual(acceptableAuthorities(conB2L), ['EASA', 'UK_CAA']);
+    // Marcar CASA y después elegir B2L la desmarca.
+    const casaYEasa = toggleAcceptedAuthority(toggleAcceptedAuthority(faaForm({ technicianType: 'avionic' }), 'CASA'), 'EASA');
+    assert.deepEqual(casaYEasa.acceptedAuthorities, ['EASA', 'CASA']);
+    assert.deepEqual(selectAcceptedLicenseCode(casaYEasa, 'B2L').acceptedAuthorities, ['EASA']);
+
+    const completa = toggleAcceptedAuthority(toggleAcceptedAuthority(conB2, 'EASA'), 'UK_CAA');
+    assert.equal(acceptedAuthoritiesNote(completa), 'EASA or UK CAA B2 also counts.');
+  });
+
+  await test('096 · Formulario — no se guarda con autoridades sin categoría, ni con categoría sin autoridades', () => {
+    const soloAutoridades = toggleAcceptedAuthority(faaForm(), 'EASA');
+    assert.equal(requirementsErrors(soloAutoridades).acceptedLicense, 'Pick the licence category the accepted authorities must have issued.');
+    const soloCategoria = selectAcceptedLicenseCode(faaForm(), 'B1.1');
+    assert.equal(requirementsErrors(soloCategoria).acceptedLicense, 'Pick at least one authority whose B1.1 counts.');
+    assert.equal(requirementsErrors(selectAcceptedLicenseCode(soloAutoridades, 'B1.1')).acceptedLicense, undefined, 'las dos juntas, sí');
+    assert.equal(requirementsErrors(faaForm()).acceptedLicense, undefined, 'ninguna de las dos, también');
+    // A medio elegir la nota no dice nada: lo dice el error.
+    assert.equal(acceptedAuthoritiesNote(soloAutoridades), '');
+  });
+
+  await test('096 · Formulario — salir de la FAA, quitar la licencia o cambiar tipo o producto limpian; cambiar A por A&P no', () => {
+    const completa = selectAcceptedLicenseCode(toggleAcceptedAuthority(faaForm({ licenseCode: 'A' }), 'EASA'), 'B1.1');
+    const limpia = (f: OfferRequirementsForm) => ({ authorities: f.acceptedAuthorities, code: f.acceptedLicenseCode });
+    assert.deepEqual(limpia(selectAuthority(completa, 'EASA')), { authorities: [], code: undefined }, 'pasar a Part-66');
+    assert.deepEqual(limpia(setRequiresCertification(completa, false)), { authorities: [], code: undefined }, 'sin licencia');
+    assert.deepEqual(limpia(selectTechnicianType(completa, 'avionic')), { authorities: [], code: undefined }, 'B1.1 no es de aviónico');
+    assert.deepEqual(limpia(selectProductType(completa, 'Helicopter')), { authorities: [], code: undefined }, 'B1.1 no es de helicópteros');
+    assert.deepEqual(limpia(selectLicense(completa, 'A&P')), { authorities: ['EASA'], code: 'B1.1' }, 'A por A&P no toca nada');
+    // A motor: la A&P se queda y la B1.1 cabe en una oferta de motor de aviones.
+    const motor = selectTechnicianType(selectLicense(completa, 'A&P'), 'engine_technician');
+    assert.deepEqual(limpia(motor), { authorities: ['EASA'], code: 'B1.1' });
+    // Una A1 aceptada no cabe en una oferta de motor.
+    const conA1 = selectAcceptedLicenseCode(toggleAcceptedAuthority(faaForm(), 'EASA'), 'A1');
+    assert.deepEqual(limpia(selectTechnicianType(conA1, 'engine_technician')), { authorities: [], code: undefined });
+  });
+
+  // 2026-10-04: el type rating cuenta para todos en una oferta FAA, así que la
+  // frase aparte para el titular de la Part-66 aceptada se retiró.
+  await test('096 · Formulario — el subtítulo de aeronaves FAA no cambia al aceptar una Part-66', () => {
+    const conA320 = faaForm({ requiredHabilitations: [A320] });
+    const sinEquivalente = aircraftRequirementsCopy(conA320).subtitle;
+    const completa = selectAcceptedLicenseCode(toggleAcceptedAuthority(conA320, 'EASA'), 'B1.1');
+    assert.equal(aircraftRequirementsCopy(completa).subtitle, sinEquivalente);
+    assert.equal(aircraftRequirementsCopy(toggleAcceptedAuthority(conA320, 'EASA')).subtitle, sinEquivalente);
+    assert.ok(!sinEquivalente.includes('Part-66'), sinEquivalente);
+  });
+
+  await test('096 · Detalle de oferta — la licencia FAA dice qué Part-66 acepta, con su categoría; las Part-66 no cambian', () => {
+    assert.equal(
+      offerLicenseDetailText({ licenseCode: 'A&P', licenseAuthority: 'FAA', acceptedAuthorities: ['EASA', 'UK_CAA'], acceptedLicenseCode: 'B2' }),
+      'FAA A&P — also accepts EASA or UK CAA B2',
+    );
+    assert.equal(
+      offerLicenseDetailText({ licenseCode: 'A', licenseAuthority: 'FAA', acceptedAuthorities: ['GCAA'], acceptedLicenseCode: 'A1' }),
+      'FAA A — also accepts UAE GCAA A1',
+    );
+    assert.equal(offerLicenseDetailText({ licenseCode: 'A&P', licenseAuthority: 'FAA', acceptedAuthorities: [] }), 'FAA A&P');
+    assert.equal(
+      offerLicenseDetailText({ licenseCode: 'B1.1', licenseAuthority: 'EASA', acceptedAuthorities: ['UK_CAA', 'CASA'] }),
+      'EASA B1.1 — also accepts UK CAA, CASA (Australia)',
+    );
+  });
+
+  // 2026-10-04: la FAA aceptada dice qué certificado cuenta, por la tabla de la 095.
+  await test('Detalle de oferta — una Part-66 que acepta la FAA dice qué certificado FAA cuenta', () => {
+    assert.equal(
+      offerLicenseDetailText({ licenseCode: 'B1.1', licenseAuthority: 'EASA', acceptedAuthorities: ['UK_CAA', 'FAA'] }),
+      'EASA B1.1 — also accepts UK CAA, FAA A&P',
+    );
+    assert.equal(offerLicenseDetailText({ licenseCode: 'B2', licenseAuthority: 'UK_CAA', acceptedAuthorities: ['FAA'] }), 'UK CAA B2 — also accepts FAA A&P');
+    assert.equal(offerLicenseDetailText({ licenseCode: 'A1', licenseAuthority: 'EASA', acceptedAuthorities: ['FAA'] }), 'EASA A1 — also accepts FAA A or A&P');
   });
 
   await test('Formulario — cambiar la licencia limpia las aceptadas que ya no aplican', () => {
@@ -316,6 +480,7 @@ async function main() {
   // Tablas del técnico, para technicianRepositoryV2.
   let licenseRows: Record<string, unknown>[] = [];
   let licenseDependents: Record<string, unknown>[] = [];
+  let profileTypeRows: string[] = [];
   // offer_applications, para offerApplicationRepository (paso 5c). La base de
   // verdad rechaza con el trigger de la 080; aquí se simula su respuesta.
   let applicationRows: Record<string, unknown>[] = [];
@@ -363,6 +528,19 @@ async function main() {
           }
           if (table === 'technician_habilitations') {
             return Promise.resolve({ data: licenseDependents, error: null }).then(resolve);
+          }
+          if (table === 'technician_profile_types') {
+            if (op === 'insert' && Array.isArray(write)) {
+              const added = write.map((r) => r.type_code as string);
+              profileTypeRows = [...profileTypeRows, ...added];
+              return Promise.resolve({ data: added.map((type_code) => ({ type_code })), error: null }).then(resolve);
+            }
+            if (op === 'delete' && inArgs) {
+              const removed = profileTypeRows.filter((c) => inArgs![1].includes(c));
+              profileTypeRows = profileTypeRows.filter((c) => !inArgs![1].includes(c));
+              return Promise.resolve({ data: removed.map((type_code) => ({ type_code })), error: null }).then(resolve);
+            }
+            return Promise.resolve({ data: profileTypeRows.map((type_code) => ({ type_code })), error: null }).then(resolve);
           }
           if (table === 'technician_engine_experience') {
             return Promise.resolve({ data: op === 'insert' ? write : [], error: null }).then(resolve);
@@ -608,8 +786,48 @@ async function main() {
     assert.deepEqual(lastWrite('offers', 'update').accepted_authorities, []);
     await assert.rejects(
       offerRepository.create({ ...base, technicianType: 'mechanic', requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P', acceptedAuthorities: ['EASA'] }),
-      /cannot be accepted as equivalent/,
+      /Pick the licence category/,
+      '096: una oferta FAA acepta autoridades Part-66 sólo con una categoría',
     );
+  });
+
+  await test('096 · Repositorio — oferta FAA con una Part-66 aceptada: se escribe y se lee; a medias no; se limpia al cambiar el tipo o salir de la FAA', async () => {
+    reset();
+    const creada = await offerRepository.create({
+      ...base, technicianType: 'mechanic', requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P',
+      acceptedAuthorities: ['EASA', 'UK_CAA'], acceptedLicenseCode: 'B1.1',
+    });
+    const fila = lastWrite('offers', 'insert');
+    assert.deepEqual(fila.accepted_authorities, ['EASA', 'UK_CAA']);
+    assert.equal(fila.accepted_license_code, 'B1.1');
+    assert.equal(creada.acceptedLicenseCode, 'B1.1');
+
+    // A medias, o con una categoría que el oficio no puede pedir: lanza sin escribir.
+    calls.length = 0;
+    await assert.rejects(
+      offerRepository.create({ ...base, technicianType: 'mechanic', requiresCertification: true, licenseAuthority: 'FAA', licenseCode: 'A&P', acceptedLicenseCode: 'B1.1' }),
+      /Pick at least one authority whose B1.1 counts/,
+    );
+    await assert.rejects(offerRepository.update('offer-1', { acceptedLicenseCode: 'B2' }), /cannot be accepted on this FAA offer/);
+    await assert.rejects(offerRepository.update('offer-1', { acceptedLicenseCode: 'C' }), /cannot be accepted on this FAA offer/);
+    assert.equal(calls.filter((c) => c.op === 'rpc' || c.op === 'insert').length, 0, 'nada llegó a la base');
+
+    // Cambiar el oficio sin mandar la lista: la B1.1 no es de aviónico y se va, con sus autoridades.
+    await offerRepository.update('offer-1', { technicianType: 'avionic' });
+    assert.deepEqual(lastWrite('offers', 'update').accepted_authorities, []);
+    assert.equal(lastWrite('offers', 'update').accepted_license_code, null);
+
+    // Desmarcar todas las autoridades se lleva la categoría en la misma escritura.
+    await offerRepository.update('offer-1', { technicianType: 'mechanic', acceptedAuthorities: ['UK_CAA'], acceptedLicenseCode: 'B1.1' });
+    assert.equal(lastWrite('offers', 'update').accepted_license_code, 'B1.1');
+    await offerRepository.update('offer-1', { acceptedAuthorities: [] });
+    assert.equal(lastWrite('offers', 'update').accepted_license_code, null);
+
+    // Pasar a Part-66 vacía las dos.
+    await offerRepository.update('offer-1', { acceptedAuthorities: ['UK_CAA'], acceptedLicenseCode: 'B1.1' });
+    await offerRepository.update('offer-1', { licenseAuthority: 'EASA', licenseCode: 'B1.1' });
+    assert.deepEqual(lastWrite('offers', 'update').accepted_authorities, []);
+    assert.equal(lastWrite('offers', 'update').accepted_license_code, null);
   });
 
   await test('Repositorio — un patch que no toca requisitos no reescribe sus columnas', async () => {
@@ -668,6 +886,36 @@ async function main() {
     const segundo = await technicianRepositoryV2.removeUnreferencedLicenses('tech-1', []);
     assert.deepEqual(segundo.blocked, ['UK CAA B1.1']);
     assert.equal(licenseRows.length, 1);
+  });
+
+  await test('Repositorio de técnico — con FAA A&P (o A y P en filas) se guarda sólo Avionics; con la P sola o una B1.1, Mechanic se exige', async () => {
+    // FAA A&P: desmarca Mechanic y marca Avionics, y se guarda así.
+    profileTypeRows = ['mechanic'];
+    await technicianRepositoryV2.replaceProfileTypes('tech-1', ['avionic'], ['A&P']);
+    assert.deepEqual(profileTypeRows, ['avionic']);
+    // A y P en filas separadas: igual.
+    profileTypeRows = ['mechanic'];
+    await technicianRepositoryV2.replaceProfileTypes('tech-1', ['avionic'], ['A', 'P']);
+    assert.deepEqual(profileTypeRows, ['avionic']);
+    // Quien lo conserva, lo conserva.
+    profileTypeRows = ['mechanic'];
+    await technicianRepositoryV2.replaceProfileTypes('tech-1', ['mechanic', 'avionic'], ['A']);
+    assert.deepEqual(profileTypeRows, ['mechanic', 'avionic']);
+
+    // La P sola, o la A con una B1.1: Mechanic bloqueado, y no se escribe nada.
+    for (const licencias of [['P'], ['A', 'B1.1']]) {
+      profileTypeRows = ['mechanic'];
+      calls.length = 0;
+      await assert.rejects(
+        technicianRepositoryV2.replaceProfileTypes('tech-1', ['avionic'], licencias),
+        /come from licences you hold and cannot be removed: Mechanic/,
+        licencias.join(' + '),
+      );
+      assert.deepEqual(profileTypeRows, ['mechanic']);
+      assert.equal(calls.filter((c) => c.table === 'technician_profile_types').length, 0);
+    }
+    // El mínimo de un tipo sigue.
+    await assert.rejects(technicianRepositoryV2.replaceProfileTypes('tech-1', [], ['A']), /Select at least one technician type/);
   });
 
   await test('Repositorio de técnico — replaceEngineExperience usa una RPC y conserva NULL', async () => {

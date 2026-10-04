@@ -417,6 +417,97 @@ suite sin la regla de la C ve exactamente esa regresión, y sin la 095, las
 dos que dependen de ella; paridad TS↔SQL de la tabla en modo ensayo, con un
 control (la B2L quitada en SQL) que el validador detecta.
 
+**Firma FAA, paso 1 de la revisión** (2 octubre 2026). Sólo TypeScript, sin
+migración: el núcleo SQL de elegibilidad no lee `signed`. En una oferta FAA
+(A, P o A&P) las aeronaves vuelven a compararse con toda la experiencia
+declarada, firmada o no, como antes de la 094; desaparece la distinción entre
+A/A&P y P y la línea "… declared but not signed off" deja de salir en ellas.
+El punto 3 de la parte 2 queda sustituido por esto. No cambia: en una oferta
+Part-66 que acepta la FAA, la credencial FAA sigue necesitando la aeronave
+firmada, con su línea (parte 3); la columna, sus triggers y la casilla del
+perfil siguen igual.
+
+**Una oferta FAA acepta una licencia Part-66, paso 3** (2 octubre 2026).
+Migración 096, **aplicada y registrada** como `20261002165018` (md5 de
+`statements` idéntico al fichero). Después: `npm test` (con la paridad del
+filtro) y `npm run test:db` (23 + 27, H3 412) en verde contra lo instalado, sin
+rastro.
+
+1. **Oferta:** con la FAA, "Also accept licences from:" ofrece las cuatro
+   Part-66 y debajo una fila "Licence category:" con UNA categoría. Las
+   categorías son las de una oferta Part-66 de la misma clase, oficio y
+   producto, sin la C (aviónico en aviones: B2, B2L); las autoridades, las que
+   emiten la elegida. Por defecto nada marcado. Autoridades sin categoría, o
+   al revés, no se guardan (formulario, repositorio y
+   `chk_offers_accepted_license_code`). Cambiar clase, oficio o producto quita
+   la categoría si deja de caber, con sus autoridades; pasar de FAA a Part-66
+   o al revés vacía las dos; cambiar A por A&P no toca nada. Nota: "EASA or UK
+   CAA B2 also counts."; detalle: "FAA A&P — also accepts EASA or UK CAA B2".
+2. **Base:** `offers.accepted_license_code`; el filtro en SQL
+   (`faa_offer_acceptable_license_codes`, comparado con
+   `faaOfferAcceptableLicenseCodes` por `validate:authority-licenses` en las 28
+   combinaciones); el CHECK de la 095 admite autoridades Part-66 en ofertas FAA
+   (nunca la FAA); el trigger exige que la categoría pase el filtro y que la
+   emita cada autoridad marcada, y salta también al cambiar clase, oficio o
+   producto; la RPC admite la clave nueva. Las ofertas Part-66 no cambian.
+3. **Matching:** quien entra por la Part-66 aceptada (categoría exacta,
+   autoridad marcada) puntúa como equivalente, con el 20 % menos en licencia y
+   aeronave: 87 en el perfil a favor, igual que un FAA en una oferta Part-66.
+   Con aeronaves le cuenta su type rating o su experiencia declarada, como en
+   una oferta sin licencia. Para los técnicos FAA nada cambia. Ofertas de
+   motor: sólo la licencia; la vía (b) no cambia.
+
+Ensayo (todo revertido, producción idéntica después): autocomprobación de 18
+casos; seis mutantes rechazados por ella; `testApplicationSecurity` 23/23,
+`testTransactionalWrites` 27/27 (1 nueva), H3 412/412; la suite transaccional
+sin la 096 falla en el caso nuevo; paridad TS↔SQL del filtro en modo ensayo,
+con un control (pilot en aviones sin la L) que el validador detecta.
+
+**Tipo de perfil con FAA A, y aviso de autoridad no aceptada** (2 octubre
+2026). Sólo TypeScript, sin migración: la base no impone tipos por licencia, y
+el matching y la elegibilidad leen los tipos guardados.
+
+1. **Tipo de perfil:** implicar ya no es bloquear. La FAA A y la A&P (o A y P
+   en filas separadas) marcan Mechanic al añadirse, pero el técnico puede
+   quitarlo y quedarse con Avionics, con Mechanic o con los dos; la P sin A lo
+   sigue bloqueando, y una B1 también aunque haya una A. Quien lo desmarca no
+   lo recupera al añadir otra licencia que no lo bloquee, ni al reabrir el
+   perfil. Quitar la licencia FAA funciona como antes con lo que haya quedado
+   marcado; quien tiene Mechanic guardado lo conserva. El mínimo de un tipo
+   sigue. Con sólo Avionics, una oferta FAA de Mechanic lleva el techo de 19.
+2. **Aviso:** la licencia que encajaría pero de una autoridad que la oferta no
+   acepta se nombra también entre sistemas, con el formato de siempre: un FAA
+   A&P (o A y P en filas) en una oferta Part-66 que no acepta la FAA, si la
+   tabla de la 095 lo haría contar ("The profile holds FAA A&P, which this
+   offer doesn't accept."), y una Part-66 con la categoría aceptada por una
+   oferta FAA pero de una autoridad no marcada. Sin nada parecido, el
+   requisito genérico. Sólo cambia el texto.
+
+**En ofertas FAA el type rating cuenta como experiencia en la aeronave** (4
+octubre 2026). Sólo TypeScript, sin migración: la base no puntúa aeronaves y el
+núcleo SQL de elegibilidad no las lee.
+
+1. **Matching:** en una oferta FAA con aeronaves, a cualquier técnico le cuenta
+   la aeronave por un type rating de cualquier autoridad o por la experiencia
+   declarada, como en una oferta sin licencia (exacta, familia 0,57; un type
+   rating caducado recorta un 10 % sin excluir). Sustituye a "sólo la
+   experiencia declarada" de la sesión 2 y a "para los técnicos FAA nada
+   cambia" del punto 3 de la 096. La firma sigue sin contar en ofertas FAA. El
+   recorte del 20 % lo pone la credencial por la que entra: un FAA A&P con un
+   type rating EASA del A320 saca 100; un EASA B1.1 que entra por la Part-66
+   aceptada, 87. La licencia no cambia: un técnico sólo EASA sigue sin cumplir
+   una oferta FAA que no acepta EASA, aunque la aeronave le cuente. Las ofertas
+   Part-66 con type rating tampoco: la experiencia declarada sigue sin contar.
+2. **Type rating y experiencia a la vez:** cuenta la que dé más puntos, en
+   ofertas FAA y sin licencia. Antes ganaba siempre el type rating, y añadir
+   uno caducado a quien ya tenía la aeronave declarada bajaba la nota (100 a
+   98). Vigente, empatan y se queda el type rating, como antes.
+3. **Textos:** la caja de licencia FAA y el subtítulo de aeronaves del
+   formulario, el diálogo al cambiar a FAA al editar una oferta y la nota de
+   firma del perfil dicen que cuenta el type rating o la experiencia
+   declarada. El subtítulo pierde la frase aparte de la 096 para el titular de
+   la Part-66 aceptada.
+
 ## 3. Pendientes (fuera de esta fase)
 
 - **Fila 5 (más adelante):** añadir un miembro a una empresa tiene que
@@ -453,11 +544,6 @@ control (la B2L quitada en SQL) que el validador detecta.
   selector de ciudad y NO tocado (queda fuera de los seis ajustes): el botón
   "Open chat" dentro de la tarjeta pulsable de
   `app/company/direct-offers/index.tsx:343`. Mismo fallo, misma solución.
-- Encontrado en los ajustes finales y NO tocado: una oferta FAA con aeronaves
-  sigue diciendo "The offer also lists 737; not present in the profile" de un
-  técnico que tiene el 737 como type rating bajo una Part-66. La oferta FAA sólo
-  compara la experiencia declarada, así que no puntúa, pero la frase es falsa.
-  Qué decir es decisión de producto.
 
 ## 4. Avisos
 

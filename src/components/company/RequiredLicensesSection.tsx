@@ -2,11 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { spacing } from '../../theme';
 import { CompanyCard, CompanyChip, companyUi } from './CompanyUI';
-import { AuthorityCode, AuthorityLicenseCode } from '../../types/catalog';
+import { AuthorityCode, AuthorityLicenseCode, LicenseCode } from '../../types/catalog';
 import { AUTHORITIES, authorityLabel } from '../../constants/licenses';
 import {
   OfferRequirementsForm,
   acceptableAuthorities,
+  acceptableLicenseCodes,
   acceptedAuthoritiesNote,
   selectableAuthorities,
   selectableLicenses,
@@ -22,8 +23,12 @@ interface Props {
   onChangeLicense: (next: AuthorityLicenseCode) => void;
   // Sesión 2: marca o desmarca una autoridad aceptada (toggleAcceptedAuthority).
   onToggleAcceptedAuthority: (authority: AuthorityCode) => void;
+  // 096: elige la categoría Part-66 que acepta una oferta FAA (selectAcceptedLicenseCode).
+  onSelectAcceptedLicenseCode: (code: LicenseCode) => void;
   authorityError?: string;
   licenseError?: string;
+  // 096: autoridades aceptadas sin categoría, o al revés.
+  acceptedError?: string;
 }
 
 // Fase 6 tanda D — UNA licencia por oferta.
@@ -38,8 +43,10 @@ export function RequiredLicensesSection({
   onChangeAuthority,
   onChangeLicense,
   onToggleAcceptedAuthority,
+  onSelectAcceptedLicenseCode,
   authorityError,
   licenseError,
+  acceptedError,
 }: Props) {
   const authorities = selectableAuthorities(form, AUTHORITIES.map((a) => a.code));
   const licenses = selectableLicenses(form);
@@ -80,8 +87,9 @@ export function RequiredLicensesSection({
               a las ofertas de aeronave con autoridad FAA. */}
           {authority === 'FAA' && form.offerKind !== 'engine' ? (
             <Text style={styles.note}>
-              FAA certificates carry no aircraft type ratings. Any aircraft you add below are matched against the
-              technician's declared experience: they raise the score, and nobody is excluded for lacking them.
+              FAA certificates carry no aircraft type ratings. Any aircraft you add below count if the technician holds
+              a type rating on them, from any authority, or has declared experience on them, signed off or not: they
+              raise the score, and nobody is excluded for lacking them.
             </Text>
           ) : null}
         </>
@@ -91,7 +99,9 @@ export function RequiredLicensesSection({
 
       {/* Sesión 2: sustituye a la casilla "Considerar otras autoridades". Las
           otras Part-66 que emiten esta categoría y, desde la parte 3, la FAA
-          si la categoría tiene equivalente FAA (no la C). */}
+          si la categoría tiene equivalente FAA (no la C). 096: en una oferta
+          FAA, las Part-66 que emiten la categoría elegida, y debajo la
+          categoría, una sola. */}
       {showsAcceptedAuthorities(form) && authority && form.licenseCode ? (
         <>
           <Text style={styles.fieldLabel}>Also accept licences from:</Text>
@@ -105,8 +115,24 @@ export function RequiredLicensesSection({
               />
             ))}
           </View>
+          {authority === 'FAA' ? (
+            <>
+              <Text style={styles.fieldLabel}>Licence category:</Text>
+              <View style={styles.chipRow}>
+                {acceptableLicenseCodes(form).map((code) => (
+                  <CompanyChip
+                    key={code}
+                    label={code}
+                    selected={form.acceptedLicenseCode === code}
+                    onPress={() => onSelectAcceptedLicenseCode(code)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
+          {acceptedError ? <Text style={styles.error}>{acceptedError}</Text> : null}
           <Text style={styles.note}>
-            {acceptedAuthoritiesNote(form)} This is a search preference, not legal recognition.
+            {[acceptedAuthoritiesNote(form), 'This is a search preference, not legal recognition.'].filter(Boolean).join(' ')}
           </Text>
         </>
       ) : null}

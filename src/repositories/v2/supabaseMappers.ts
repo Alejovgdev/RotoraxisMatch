@@ -163,6 +163,8 @@ export function mapOfferRow(row: DbRow): Offer {
     // lee. La columna es NOT NULL DEFAULT '{}': el `?? []` sólo cubriría un
     // SELECT que la olvidara, y en la dirección segura (sin equivalencias).
     acceptedAuthorities: (row.accepted_authorities as AuthorityCode[] | null) ?? [],
+    // 096: sólo en ofertas FAA con autoridades aceptadas; NULL en las demás.
+    acceptedLicenseCode: (row.accepted_license_code as LicenseCode | null) ?? undefined,
     requiredEngineId: row.required_engine_id ?? undefined,
     onlyUnlicensed: Boolean(row.only_unlicensed),
     locationCountry: row.location_country,

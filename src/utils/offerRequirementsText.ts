@@ -6,7 +6,7 @@
 // una era la forma de que una dijera "B1.1" y otra "EASA B1.1".
 import { Offer } from '../types/offer';
 import { EngineIndex, getEngineLabel } from '../constants/engines';
-import { authorityLabel, credentialLabel } from '../constants/licenses';
+import { authorityLabel, credentialLabel, faaEquivalentLicenseCodes } from '../constants/licenses';
 import { technicianTypeLabel } from '../constants/technicianTypes';
 
 /** "EASA B1.1", "FAA A&P". null si la oferta no pide licencia. */
@@ -14,13 +14,31 @@ export function offerLicenseText(offer: Pick<Offer, 'licenseCode' | 'licenseAuth
   return offer.licenseCode ? credentialLabel(offer.licenseAuthority, offer.licenseCode) : null;
 }
 
-/** "EASA B1.1 — also accepts UK CAA, CASA (Australia)". Sin aceptadas, sólo la credencial. */
-export function offerLicenseDetailText(offer: Pick<Offer, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>): string | null {
+/**
+ * "EASA B1.1 — also accepts UK CAA, CASA (Australia)". Sin aceptadas, sólo la
+ * credencial. 096: en una oferta FAA las aceptadas van con su categoría, que
+ * no es la de la oferta: "FAA A&P — also accepts EASA or UK CAA B2".
+ *
+ * 2026-10-04: la FAA aceptada en una oferta Part-66 va con los certificados que
+ * cuentan por su tabla (faaEquivalentLicenseCodes): "EASA B1.1 — also accepts
+ * UK CAA, FAA A&P"; con A1–A4, "FAA A or A&P".
+ */
+export function offerLicenseDetailText(
+  offer: Pick<Offer, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
+): string | null {
   const license = offerLicenseText(offer);
-  if (!license) return null;
-  return offer.acceptedAuthorities.length > 0
-    ? `${license} — also accepts ${offer.acceptedAuthorities.map(authorityLabel).join(', ')}`
-    : license;
+  if (!license || !offer.licenseCode) return null;
+  if (offer.acceptedAuthorities.length === 0) return license;
+  if (offer.licenseAuthority === 'FAA' && offer.acceptedLicenseCode) {
+    const labels = offer.acceptedAuthorities.map(authorityLabel);
+    const authorities = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`;
+    return `${license} — also accepts ${authorities} ${offer.acceptedLicenseCode}`;
+  }
+  const faaCodes = faaEquivalentLicenseCodes(offer.licenseCode);
+  const labels = offer.acceptedAuthorities.map((a) =>
+    a === 'FAA' && faaCodes.length > 0 ? credentialLabel(a, faaCodes.join(' or ')) : authorityLabel(a),
+  );
+  return `${license} — also accepts ${labels.join(', ')}`;
 }
 
 /** El motor pedido, o null si no es oferta de motor. Con el catálogo aún sin cargar, el id. */

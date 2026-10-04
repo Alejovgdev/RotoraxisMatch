@@ -1,6 +1,7 @@
 import { isLicensedTechnicianType } from './technicianTypes';
 import { AuthorityCode, AuthorityLicenseCode, FaaLicenseCode } from '../types/catalog';
-import type { OfferKind } from '../types/offer';
+import type { OfferKind, OfferProductType } from '../types/offer';
+import { isLicenseCompatibleWithProductType } from '../utils/licenseCategoryProductType';
 
 // V2 — Full EASA Part-66 license list
 export const LICENSE_CATEGORIES = [
@@ -90,13 +91,14 @@ export const LICENSES_BY_TECHNICIAN_TYPE: Record<string, LicenseCode[]> = {
 };
 
 /**
- * Los tipos de perfil que estas licencias IMPLICAN.
+ * Los tipos de perfil que estas licencias IMPLICAN: los que se marcan solos al
+ * añadirlas (typesAfterLicenseChange).
  *
  * Es la dirección única de la regla: de la licencia al oficio, nunca al
- * revés. El perfil del técnico marca estos tipos solo y no deja desmarcarlos
- * mientras la licencia siga declarada (app/technician/profile.tsx), y
- * `replaceProfileTypes` los vuelve a exigir al escribir — una pantalla no
- * puede ser el único sitio donde vive una invariante.
+ * revés. Casi todos, además, quedan BLOQUEADOS mientras la licencia siga
+ * declarada; cuáles lo dice typesLockedByLicenses, no esta función. Desde el
+ * 2026-10-02 no son lo mismo: la FAA A (y la A&P) marca Mechanic pero no lo
+ * bloquea.
  *
  * `C` no implica ninguno (ver el mapa de arriba). Sin licencias -> [], que es
  * lo correcto y no un caso límite: un chapista sin licencias no tiene ningún
@@ -109,13 +111,39 @@ export const LICENSES_BY_TECHNICIAN_TYPE: Record<string, LicenseCode[]> = {
 export function typesImpliedByLicenses(codes: readonly string[]): string[] {
   const held = new Set(codes);
   // Paso 5b: también los certificados FAA. El A&P es un certificado de
-  // MECÁNICO (14 CFR 65 subparte D), así que implica ese oficio igual que una
-  // B1; la FAA no tiene uno de aviónica. Es el mismo mapa que acota qué pide
-  // una oferta FAA (FAA_LICENSES_BY_TECHNICIAN_TYPE, más abajo).
+  // MECÁNICO (14 CFR 65 subparte D), así que marca ese oficio igual que una
+  // B1; la FAA no tiene uno de aviónica. Desde el 2026-10-02 la A y la A&P lo
+  // marcan sin bloquearlo (typesLockedByLicenses).
   return Object.keys(LICENSES_BY_TECHNICIAN_TYPE).filter(
     (type) =>
       LICENSES_BY_TECHNICIAN_TYPE[type].some((code) => held.has(code)) ||
       (FAA_LICENSES_BY_TECHNICIAN_TYPE[type] ?? []).some((code) => held.has(code)),
+  );
+}
+
+/**
+ * Los tipos de perfil que estas licencias BLOQUEAN: el perfil no deja
+ * desmarcarlos, los vuelve a marcar al cargar y `replaceProfileTypes` los
+ * exige al escribir — una pantalla no puede ser el único sitio donde vive una
+ * invariante.
+ *
+ * Las Part-66 bloquean todo lo que implican. La FAA es la excepción
+ * (2026-10-02): con la A (Airframe) se hace mecánica y también aviónica, así
+ * que la A y la A&P marcan Mechanic sin bloquearlo, y un técnico que sólo hace
+ * aviónica puede quitárselo. La P sin A sigue bloqueándolo: Powerplant no
+ * cubre la aviónica. La A y la P en filas separadas son una A&P, igual que en
+ * el matching (H8). Si otra licencia bloquea Mechanic (una B1), lo sigue
+ * bloqueando esa.
+ *
+ * Mismo orden que typesImpliedByLicenses, del que es un subconjunto.
+ */
+export function typesLockedByLicenses(codes: readonly string[]): string[] {
+  const held = new Set(codes);
+  const faaLocksMechanic = held.has('P') && !held.has('A') && !held.has('A&P');
+  return Object.keys(LICENSES_BY_TECHNICIAN_TYPE).filter(
+    (type) =>
+      LICENSES_BY_TECHNICIAN_TYPE[type].some((code) => held.has(code)) ||
+      (type === 'mechanic' && faaLocksMechanic),
   );
 }
 
@@ -129,7 +157,12 @@ export function typesImpliedByLicenses(codes: readonly string[]): string[] {
  * decisión de pantalla.
  *
  * La cuenta es "quita los que implicaban las licencias de ANTES, pon los que
- * implican las de AHORA". De ahí salen las dos propiedades que importan:
+ * implican las de AHORA", con una excepción (2026-10-02): un tipo implicado
+ * antes y después, que el técnico había desmarcado y que nada bloquea (la
+ * Mechanic de una FAA A), se queda desmarcado. Si no, añadir cualquier otra
+ * licencia le devolvería lo que acaba de quitar. Para las Part-66, que
+ * bloquean todo lo que implican, la cuenta es la de siempre. De ahí salen las
+ * dos propiedades que importan:
  *   - Los tipos MANUALES (chapa, pintura, composite: ninguna licencia los
  *     implica) sobreviven intactos, y pueden convivir con los implicados.
  *   - Ninguna licencia puede dejar colgado el tipo de otra: quitar la B2 de
@@ -151,10 +184,12 @@ export function typesAfterLicenseChange(
   nextLicenses: readonly string[],
 ): string[] {
   const impliedBefore = new Set(typesImpliedByLicenses(previousLicenses));
+  const lockedAfter = typesLockedByLicenses(nextLicenses);
+  const leftUnticked = (t: string) => impliedBefore.has(t) && !currentTypes.includes(t) && !lockedAfter.includes(t);
   return [
     ...new Set([
       ...currentTypes.filter((t) => !impliedBefore.has(t)),
-      ...typesImpliedByLicenses(nextLicenses),
+      ...typesImpliedByLicenses(nextLicenses).filter((t) => !leftUnticked(t)),
     ]),
   ];
 }
@@ -216,8 +251,8 @@ export const FAA_LICENSE_CODES: FaaLicenseCode[] = FAA_LICENSE_CATEGORIES.map((l
  * Los certificados FAA con los que se FIRMA trabajo en una aeronave (migración
  * 094): A (célula) y A&P. La P sola no. Espejo de
  * technician_can_sign_off_aircraft en la base, que es quien lo hace cumplir.
- * Sirve para las dos caras: quién puede marcar una aeronave como firmada, y en
- * qué ofertas FAA sólo cuenta la experiencia firmada.
+ * Decide quién puede marcar una aeronave como firmada. Ya no decide nada en
+ * las ofertas FAA, que cuentan la experiencia firmada o no (2026-10-02).
  */
 export const FAA_SIGN_OFF_LICENSE_CODES: readonly FaaLicenseCode[] = ['A', 'A&P'];
 
@@ -313,7 +348,8 @@ export function isValidAuthorityLicense(authority: string, code: string): boolea
 
 // Qué oficio IMPLICA cada certificado FAA. El A&P es un certificado de
 // MECÁNICO (14 CFR 65 subparte D): la FAA no emite uno de aviónica, así que
-// ningún certificado FAA implica aviónico.
+// ningún certificado FAA implica aviónico. Implicar es marcar al añadir; qué
+// bloquea lo dice typesLockedByLicenses (sólo la P sin A).
 const FAA_LICENSES_BY_TECHNICIAN_TYPE: Record<string, FaaLicenseCode[]> = {
   mechanic: [...FAA_LICENSE_CODES],
   avionic: [],
@@ -369,6 +405,65 @@ export function licensesSelectableForOffer(
 }
 
 /**
+ * Las categorías Part-66 que una oferta FAA puede aceptar como equivalente
+ * (migración 096): las que vería la empresa en una oferta Part-66 de la misma
+ * clase, oficio y producto, de cualquier autoridad Part-66, sin la C (decisión
+ * del 2026-10-02: la C no tiene equivalente FAA en ninguno de los dos
+ * sentidos). Qué autoridades marcadas la emiten se decide aparte.
+ *
+ * Espejo de public.faa_offer_acceptable_license_codes, que usa el trigger
+ * enforce_offer_accepted_authorities; `npm run validate:authority-licenses`
+ * compara las dos en todas las combinaciones.
+ */
+export function faaOfferAcceptableLicenseCodes(offer: {
+  offerKind: OfferKind;
+  technicianType: string;
+  productType: OfferProductType;
+}): LicenseCode[] {
+  const selectable = new Set<string>(PART66_AUTHORITIES.flatMap((authority) => licensesSelectableForOffer(offer, authority)));
+  return LICENSE_CODES.filter(
+    (code) => code !== 'C' && selectable.has(code) && isLicenseCompatibleWithProductType(code, offer.productType),
+  );
+}
+
+/**
+ * Las autoridades Part-66 que una oferta FAA puede marcar para esta categoría
+ * aceptada (096): las que la emiten, en el orden del catálogo —CASA no aparece
+ * con una B2L, B3 o L; GCAA no aparece con una B2L—. Sin categoría elegida,
+ * las cuatro. La base rechaza una marcada que no la emite (el trigger de la
+ * 096, como el de la 088 en las ofertas Part-66).
+ */
+export function faaOfferAcceptableAuthorities(acceptedLicenseCode: string | undefined): AuthorityCode[] {
+  if (!acceptedLicenseCode) return [...PART66_AUTHORITIES];
+  return PART66_AUTHORITIES.filter((authority) => isValidAuthorityLicense(authority, acceptedLicenseCode));
+}
+
+/**
+ * "Se limpia lo que ya no aplica" en una oferta FAA (096), para el formulario y
+ * el repositorio. Si la categoría aceptada deja de pasar el filtro (cambia la
+ * clase, el oficio o el producto) se va, y las autoridades con ella: sin
+ * categoría no tienen nada que aceptar. Si sigue, se quedan las autoridades que
+ * la emiten, en el orden del catálogo. Sin categoría elegida, las Part-66
+ * marcadas se quedan tal cual (el formulario las deja marcar primero).
+ */
+export function retainFaaOfferEquivalence<C extends string>(offer: {
+  offerKind: OfferKind;
+  technicianType: string;
+  productType: OfferProductType;
+  acceptedAuthorities: readonly string[];
+  acceptedLicenseCode?: C;
+}): { acceptedAuthorities: AuthorityCode[]; acceptedLicenseCode?: C } {
+  const code = offer.acceptedLicenseCode;
+  if (code && !(faaOfferAcceptableLicenseCodes(offer) as string[]).includes(code)) {
+    return { acceptedAuthorities: [], acceptedLicenseCode: undefined };
+  }
+  return {
+    acceptedAuthorities: faaOfferAcceptableAuthorities(code).filter((a) => offer.acceptedAuthorities.includes(a)),
+    acceptedLicenseCode: code,
+  };
+}
+
+/**
  * Las OTRAS autoridades Part-66 que una oferta de esta autoridad puede aceptar
  * como equivalentes con el MISMO código.
  *
@@ -376,7 +471,9 @@ export function licensesSelectableForOffer(
  * antes—, y la FAA no está aquí: un A&P no es una B1.1 emitida en otro sitio,
  * es otro sistema. Desde la parte 3 (migración 095) la FAA sí puede aceptarse,
  * pero por su propia tabla (FAA_EQUIVALENT_CODES), no por código igual; la
- * añade equivalentAuthoritiesForLicense. Una oferta FAA sigue sin equivalentes.
+ * añade equivalentAuthoritiesForLicense. Una oferta FAA no acepta el mismo
+ * código —ninguna Part-66 emite un A&P—: desde la 096 acepta una categoría
+ * Part-66 que elige la empresa (faaOfferAcceptableAuthorities).
  */
 export function equivalentAuthorities(authority: string): AuthorityCode[] {
   if (!PART66_AUTHORITIES.includes(authority as AuthorityCode)) return [];
@@ -502,7 +599,9 @@ export type LicenseSatisfaction = 'exact' | 'equivalent';
  *                (`acceptedAuthorities`, sesión 2: una lista, no una casilla),
  *                con el mismo código; o, desde la parte 3, un certificado FAA
  *                que cuenta por ese código (FAA_EQUIVALENT_CODES) en una
- *                oferta Part-66 que aceptó la FAA.
+ *                oferta Part-66 que aceptó la FAA; o, desde la 096, en una
+ *                oferta FAA, una licencia Part-66 de una autoridad aceptada
+ *                con exactamente la categoría aceptada (`acceptedLicenseCode`).
  *   null         no responde.
  *
  * `required.authority` ausente = oferta anterior a la 075: se cae al código
@@ -514,7 +613,17 @@ export function licenseSatisfiesRequirement(
   held: { authority: string; licenseCode: string },
   required: { authority?: string; licenseCode: string },
   acceptedAuthorities: readonly string[],
+  acceptedLicenseCode?: string,
 ): LicenseSatisfaction | null {
+  // 096: una licencia Part-66 en una oferta FAA. Los códigos tampoco se
+  // comparan con el exigido —son de otro sistema—: cuenta la categoría que la
+  // oferta aceptó, exacta (una B1.1 no cuenta por una A1 aceptada), de una
+  // autoridad marcada. Nunca exacto.
+  if (required.authority === 'FAA' && held.authority !== 'FAA') {
+    if (!acceptedLicenseCode || !PART66_AUTHORITIES.includes(held.authority as AuthorityCode)) return null;
+    if (!acceptedAuthorities.includes(held.authority)) return null;
+    return held.licenseCode === acceptedLicenseCode ? 'equivalent' : null;
+  }
   // Parte 3 (095): un certificado FAA en una oferta Part-66. Los códigos no se
   // comparan —son de otro sistema—; cuenta si la oferta aceptó la FAA para ese
   // código y el certificado está en su tabla. Nunca exacto.
@@ -530,8 +639,8 @@ export function licenseSatisfiesRequirement(
   // equivalence. An accepted authority still compares the same category abroad.
   if (held.licenseCode !== required.licenseCode) return null;
   // La lista la valida la base (088), pero el scorer no da por hecho lo que la
-  // base garantiza: la propia autoridad nunca cuenta como equivalente, ni una
-  // oferta FAA acepta a nadie. Un certificado FAA ya salió por su rama, arriba.
+  // base garantiza: la propia autoridad nunca cuenta como equivalente. Un
+  // certificado FAA y una oferta FAA ya salieron por sus ramas, arriba.
   return equivalentAuthorities(required.authority).includes(held.authority as AuthorityCode)
     ? 'equivalent'
     : null;

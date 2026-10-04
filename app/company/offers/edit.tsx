@@ -35,6 +35,7 @@ import { authorityLabel } from '../../../src/constants/licenses';
 import { TechnicianTypeCode, ContractTypeCode, AuthorityCode, AuthorityLicenseCode } from '../../../src/types/catalog';
 import {
   OfferRequirementsForm,
+  aircraftRequirementsCopy,
   certificationQuestionCopy,
   describeDropped,
   droppedByTransition,
@@ -50,6 +51,7 @@ import {
   showsOnlyUnlicensed,
   technicianTypeHelper,
   toggleAcceptedAuthority,
+  selectAcceptedLicenseCode,
 } from '../../../src/utils/offerFormRules';
 import { offerAircraftAreExperience, offerKindForTechnicianType } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
@@ -125,6 +127,7 @@ export default function EditOfferScreen() {
           licenseAuthority: o.licenseAuthority,
           licenseCode: o.licenseCode,
           acceptedAuthorities: o.acceptedAuthorities,
+          acceptedLicenseCode: o.acceptedLicenseCode,
           requiresAllAircraft: o.requiresAllAircraft,
           requiredHabilitations: o.requiredHabilitations.map((h) => ({
             aircraftTypeRatingId: h.aircraftTypeRatingId,
@@ -180,7 +183,7 @@ export default function EditOfferScreen() {
       if (!confirmed) return;
     }
     setForm(next);
-    setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined }));
+    setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined, acceptedLicense: undefined }));
   }
 
   function onToggleCertification(next: boolean) {
@@ -218,7 +221,7 @@ export default function EditOfferScreen() {
     void applyTransition(selectAuthority(form, next), {
       title: `Switch the authority to ${authorityLabel(next)}?`,
       why: next === 'FAA'
-        ? 'The licence has to be one the FAA issues, and the aircraft were added under the previous licence. On an FAA offer, aircraft count as declared experience.'
+        ? 'The licence has to be one the FAA issues, and the aircraft were added under the previous licence. On an FAA offer, an aircraft counts through a type rating or declared experience, signed off or not.'
         : `The licence has to be one ${authorityLabel(next)} issues.`,
     });
   }
@@ -273,6 +276,7 @@ export default function EditOfferScreen() {
         licenseAuthority: form.licenseAuthority,
         licenseCode: form.licenseCode,
         acceptedAuthorities: form.acceptedAuthorities,
+        acceptedLicenseCode: form.acceptedLicenseCode,
         requiresAllAircraft: form.requiresAllAircraft,
         // Paso 5b: el motor. La RPC retira las aeronaves en la misma
         // transacción al pasar a motor (los triggers de la 076 lo exigen),
@@ -461,9 +465,17 @@ export default function EditOfferScreen() {
             form={form}
             onChangeAuthority={onSelectAuthority}
             onChangeLicense={onSelectLicense}
-            onToggleAcceptedAuthority={(authority) => setForm((prev) => (prev ? toggleAcceptedAuthority(prev, authority) : prev))}
+            onToggleAcceptedAuthority={(authority) => {
+              setForm((prev) => (prev ? toggleAcceptedAuthority(prev, authority) : prev));
+              setErrors((e) => ({ ...e, acceptedLicense: undefined }));
+            }}
+            onSelectAcceptedLicenseCode={(code) => {
+              setForm((prev) => (prev ? selectAcceptedLicenseCode(prev, code) : prev));
+              setErrors((e) => ({ ...e, acceptedLicense: undefined }));
+            }}
             authorityError={errors.authority}
             licenseError={errors.license}
+            acceptedError={errors.acceptedLicense}
           />
         )}
 
@@ -485,6 +497,7 @@ export default function EditOfferScreen() {
             productType={form.productType}
             licenseCode={form.licenseCode}
             asExperience={offerAircraftAreExperience(form)}
+            copy={aircraftRequirementsCopy(form)}
             requiresAll={form.requiresAllAircraft}
             onChangeRequiresAll={(next) => setField('requiresAllAircraft', next)}
           />

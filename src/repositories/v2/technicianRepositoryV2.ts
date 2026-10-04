@@ -9,7 +9,7 @@ import {
 import { SafeTechnicianPreview, TechnicianView, isUnlocked } from '../../types/privacy';
 import { TechnicianMatchCandidate } from '../../types/matching';
 import { LicenseCode } from '../../types/catalog';
-import { typesImpliedByLicenses } from '../../constants/licenses';
+import { typesLockedByLicenses } from '../../constants/licenses';
 import { technicianTypeLabel } from '../../constants/technicianTypes';
 import { AircraftRatingIndex, buildAircraftRatingIndex, habilitationCoversFamilyKey } from '../../constants/aircraftTypeRatings';
 import { catalogRepository } from './catalogRepository';
@@ -364,6 +364,8 @@ export const technicianRepositoryV2 = {
    * Por lo mismo, `licenseCodes` (2026-08-13): una licencia declarada IMPLICA
    * su oficio, así que un conjunto de tipos al que le falte alguno implicado
    * se RECHAZA, igual que el conjunto vacío — no se completa en silencio.
+   * Desde el 2026-10-02, sólo los que la licencia BLOQUEA
+   * (typesLockedByLicenses): la FAA A y la A&P marcan Mechanic sin exigirlo.
    * Completarlo escribiría algo distinto de lo que el llamante pidió y le
    * diría "guardado", que es la clase de éxito falso que este repositorio
    * evita en todas partes; y el único llamante ya marca esos tipos solo, así
@@ -382,7 +384,7 @@ export const technicianRepositoryV2 = {
       throw new Error('Select at least one technician type.');
     }
 
-    const missing = typesImpliedByLicenses(licenseCodes).filter((t) => !next.includes(t));
+    const missing = typesLockedByLicenses(licenseCodes).filter((t) => !next.includes(t));
     if (missing.length > 0) {
       throw new Error(
         `These profile types come from licences you hold and cannot be removed: ${missing

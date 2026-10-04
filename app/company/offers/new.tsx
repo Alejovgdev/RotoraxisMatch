@@ -35,6 +35,7 @@ import { TechnicianTypeCode, ContractTypeCode } from '../../../src/types/catalog
 import { OfferProductType } from '../../../src/types/offer';
 import {
   OfferRequirementsForm,
+  aircraftRequirementsCopy,
   certificationQuestionCopy,
   requirementsErrors,
   selectAuthority,
@@ -48,6 +49,7 @@ import {
   showsOnlyUnlicensed,
   technicianTypeHelper,
   toggleAcceptedAuthority,
+  selectAcceptedLicenseCode,
 } from '../../../src/utils/offerFormRules';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
 import { OfferStatus } from '../../../src/types/enums';
@@ -159,7 +161,7 @@ export default function NewOfferScreen() {
   // quedarse pintado tras elegirla. Se vuelven a calcular al guardar.
   function applyRequirement(transition: (prev: FormState) => FormState) {
     apply(transition);
-    setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined }));
+    setErrors((e) => ({ ...e, authority: undefined, license: undefined, engine: undefined, acceptedLicense: undefined }));
   }
 
   async function handleSave(status: OfferStatus) {
@@ -187,6 +189,7 @@ export default function NewOfferScreen() {
         licenseAuthority: form.licenseAuthority,
         licenseCode: form.licenseCode,
         acceptedAuthorities: form.acceptedAuthorities,
+        acceptedLicenseCode: form.acceptedLicenseCode,
         requiresAllAircraft: form.requiresAllAircraft,
         requiredHabilitations: form.requiredHabilitations,
         requiredEngineId: form.requiredEngineId,
@@ -350,9 +353,11 @@ export default function NewOfferScreen() {
             form={form}
             onChangeAuthority={(next) => applyRequirement((prev) => selectAuthority(prev, next))}
             onChangeLicense={(next) => applyRequirement((prev) => selectLicense(prev, next))}
-            onToggleAcceptedAuthority={(authority) => apply((prev) => toggleAcceptedAuthority(prev, authority))}
+            onToggleAcceptedAuthority={(authority) => applyRequirement((prev) => toggleAcceptedAuthority(prev, authority))}
+            onSelectAcceptedLicenseCode={(code) => applyRequirement((prev) => selectAcceptedLicenseCode(prev, code))}
             authorityError={errors.authority}
             licenseError={errors.license}
+            acceptedError={errors.acceptedLicense}
           />
         )}
 
@@ -375,6 +380,7 @@ export default function NewOfferScreen() {
             productType={form.productType}
             licenseCode={form.licenseCode}
             asExperience={offerAircraftAreExperience(form)}
+            copy={aircraftRequirementsCopy(form)}
             requiresAll={form.requiresAllAircraft}
             onChangeRequiresAll={(next) => set('requiresAllAircraft', next)}
           />

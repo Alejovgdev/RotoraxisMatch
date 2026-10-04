@@ -17,15 +17,19 @@
 // (offerRepository.assertOfferWritable) y la base, por la suya. Esto decide lo
 // que la pantalla enseña y deja elegir.
 import { OfferKind, OfferProductType } from '../types/offer';
-import { AuthorityCode, AuthorityLicenseCode, TechnicianTypeCode } from '../types/catalog';
+import { AuthorityCode, AuthorityLicenseCode, LicenseCode, TechnicianTypeCode } from '../types/catalog';
 import { isLicensedTechnicianType } from '../constants/technicianTypes';
 import {
   authorityLabel,
   equivalentAuthoritiesForLicense,
   faaEquivalentLicenseCodes,
+  faaOfferAcceptableAuthorities,
+  faaOfferAcceptableLicenseCodes,
   licensesSelectableForOffer,
   retainApplicableAuthorities,
+  retainFaaOfferEquivalence,
 } from '../constants/licenses';
+import { getOfferProductTypeLabel } from '../constants/offerProductTypes';
 import { isLicenseCompatibleWithProductType } from './licenseCategoryProductType';
 import { offerAircraftAreExperience, offerKindForTechnicianType } from './offerShape';
 
@@ -39,6 +43,8 @@ export interface OfferRequirementsForm {
   licenseCode?: AuthorityLicenseCode;
   /** Sesión 2 (088): otras autoridades Part-66 aceptadas. Vacía = sólo la exacta. */
   acceptedAuthorities: AuthorityCode[];
+  /** 096: en una oferta FAA, la categoría Part-66 que también cuenta (una sola). */
+  acceptedLicenseCode?: LicenseCode;
   onlyUnlicensed: boolean;
   requiresAllAircraft: boolean;
   requiredHabilitations: { aircraftTypeRatingId: string; notes?: string }[];
@@ -50,14 +56,24 @@ const CLEARED_AIRCRAFT = { requiredHabilitations: [], requiresAllAircraft: false
 // mover la autoridad o el código termina aquí, así que ninguna puede olvidarse
 // de la lista: si la licencia se va, la lista se va con ella; si cambia, se
 // quedan las que siguen emitiendo ese código y no son la exigida.
+//
+// 096: en una oferta FAA la lista va con una categoría Part-66, y lo que se
+// limpia lo dice retainFaaOfferEquivalence (la misma que usa el repositorio):
+// si la categoría deja de caber por la clase, el oficio o el producto, se va
+// con sus autoridades. Fuera de la FAA no hay categoría aceptada.
 function withApplicableAuthorities<T extends OfferRequirementsForm>(form: T): T {
-  const acceptedAuthorities = form.requiresCertification
-    ? retainApplicableAuthorities(form.acceptedAuthorities, form.licenseAuthority, form.licenseCode)
-    : [];
-  return acceptedAuthorities.length === form.acceptedAuthorities.length &&
+  let acceptedAuthorities: AuthorityCode[] = [];
+  let acceptedLicenseCode: LicenseCode | undefined;
+  if (form.requiresCertification && form.licenseAuthority === 'FAA') {
+    ({ acceptedAuthorities, acceptedLicenseCode } = retainFaaOfferEquivalence(form));
+  } else if (form.requiresCertification) {
+    acceptedAuthorities = retainApplicableAuthorities(form.acceptedAuthorities, form.licenseAuthority, form.licenseCode);
+  }
+  return acceptedLicenseCode === form.acceptedLicenseCode &&
+    acceptedAuthorities.length === form.acceptedAuthorities.length &&
     acceptedAuthorities.every((a, i) => a === form.acceptedAuthorities[i])
     ? form
-    : { ...form, acceptedAuthorities };
+    : { ...form, acceptedAuthorities, acceptedLicenseCode };
 }
 
 // ── Qué se enseña ─────────────────────────────────────────────────────────
@@ -125,17 +141,44 @@ export function showsLicenseSection(form: OfferRequirementsForm): boolean {
  * ninguno; con una licencia FAA, ninguno.
  */
 export function acceptableAuthorities(form: OfferRequirementsForm): AuthorityCode[] {
+  // 096: en una oferta FAA, las Part-66 que emiten la categoría elegida (las
+  // cuatro mientras no hay categoría).
+  if (form.licenseAuthority === 'FAA') return faaOfferAcceptableAuthorities(form.acceptedLicenseCode);
   return equivalentAuthoritiesForLicense(form.licenseAuthority, form.licenseCode);
+}
+
+/**
+ * 096: los chips de categoría de una oferta FAA. Las de una oferta Part-66 de
+ * la misma clase, oficio y producto, sin la C. Fuera de la FAA, ninguno.
+ */
+export function acceptableLicenseCodes(form: OfferRequirementsForm): LicenseCode[] {
+  return form.licenseAuthority === 'FAA' ? faaOfferAcceptableLicenseCodes(form) : [];
+}
+
+// "EASA", "EASA or UK CAA", "EASA, UK CAA or CASA (Australia)".
+function joinWithOr(items: string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
 }
 
 /**
  * La nota bajo los chips. Con la FAA marcada dice qué certificado FAA cuenta
  * (parte 3): "the same B1.1 category" sería falso, la FAA no emite una B1.1.
+ *
+ * 096: en una oferta FAA dice qué Part-66 cuenta ("EASA or UK CAA B2 also
+ * counts."). A medio elegir —autoridades sin categoría o al revés— no dice
+ * nada: lo que falta lo dice el error del formulario.
  */
 export function acceptedAuthoritiesNote(form: OfferRequirementsForm): string {
   const authority = form.licenseAuthority;
   const code = form.licenseCode;
   if (!authority || !code) return '';
+  if (authority === 'FAA') {
+    const accepted = form.acceptedAuthorities;
+    const category = form.acceptedLicenseCode;
+    if (accepted.length === 0 && !category) return `None selected: only FAA ${code} counts.`;
+    if (accepted.length === 0 || !category) return '';
+    return `${joinWithOr(accepted.map(authorityLabel))} ${category} also counts.`;
+  }
   const exact = authorityLabel(authority);
   if (form.acceptedAuthorities.length === 0) return `None selected: only ${exact} ${code} counts.`;
   if (!form.acceptedAuthorities.includes('FAA')) {
@@ -147,17 +190,74 @@ export function acceptedAuthoritiesNote(form: OfferRequirementsForm): string {
   );
 }
 
-/** La fila de chips sólo aparece si hay alguno que ofrecer. */
+/**
+ * La fila de chips sólo aparece si hay alguno que ofrecer. 096: en una oferta
+ * FAA, si hay alguna categoría que aceptar (un oficio sin licencias, ninguna).
+ */
 export function showsAcceptedAuthorities(form: OfferRequirementsForm): boolean {
-  return showsLicenseSection(form) && acceptableAuthorities(form).length > 0;
+  if (!showsLicenseSection(form)) return false;
+  if (form.licenseAuthority === 'FAA') return acceptableLicenseCodes(form).length > 0;
+  return acceptableAuthorities(form).length > 0;
 }
 
 /**
  * Las aeronaves: nunca en motor. Certificando bajo la FAA sí desde la sesión 2,
- * como experiencia y no como type ratings (offerAircraftAreExperience).
+ * como experiencia y no como type ratings exigidos (offerAircraftAreExperience).
  */
 export function showsAircraftEditor(form: OfferRequirementsForm): boolean {
   return form.offerKind !== 'engine';
+}
+
+export interface AircraftRequirementsCopy {
+  title: string;
+  subtitle: string;
+  /** La etiqueta pequeña de cada aeronave añadida. */
+  rowTag: string;
+  /** La etiqueta del buscador: "rating" sólo donde se pide un type rating. */
+  pickerLabel: string;
+}
+
+/**
+ * Los textos de la sección de aeronaves: dicen con qué se compara cada
+ * aeronave, que depende de la licencia de la oferta. Part-66, con el type
+ * rating bajo esa licencia; FAA y sin licencia, con las dos (el type rating de
+ * cualquier autoridad o la experiencia declarada, firmada o no). Mientras la licencia está pedida pero sin elegir
+ * (o con una autoridad Part-66 sin código) salen ya los de Part-66: el
+ * formulario no guarda en ese estado, y es lo que acabará aplicando.
+ */
+export function aircraftRequirementsCopy(form: OfferRequirementsForm): AircraftRequirementsCopy {
+  const intro = 'Search and add the aircraft this role works on.';
+  const scope = `Limited to ${getOfferProductTypeLabel(form.productType).toLowerCase()}, as set above.`;
+  if (!form.requiresCertification) {
+    return {
+      title: 'Aircraft experience',
+      subtitle: `${intro} Either a type rating or declared experience on the aircraft counts. ${scope}`,
+      rowTag: 'Experience',
+      pickerLabel: 'Aircraft + engine',
+    };
+  }
+  if (offerAircraftAreExperience(form)) {
+    // 2026-10-04: el type rating cuenta para todos, así que la frase de la 096
+    // para el titular de la Part-66 aceptada sobra.
+    return {
+      title: 'Aircraft experience',
+      subtitle: `${intro} Either a type rating, from any authority, or declared experience on the aircraft counts, signed off or not. ${scope}`,
+      rowTag: 'Experience',
+      pickerLabel: 'Aircraft + engine',
+    };
+  }
+  const licence = form.licenseCode ? `the offer's ${form.licenseCode} licence` : "the offer's licence";
+  // Parte 3: con la FAA aceptada, "la experiencia no cuenta" sería falso para
+  // un titular FAA, cuya aeronave firmada hace de type rating.
+  const faa = form.acceptedAuthorities.includes('FAA')
+    ? ' For an FAA certificate holder, an aircraft they have signed off on counts as a type rating.'
+    : '';
+  return {
+    title: 'Required type ratings',
+    subtitle: `${intro} They are matched against type ratings held under ${licence}; declared aircraft experience does not count. ${scope}${faa}`,
+    rowTag: 'Type rating',
+    pickerLabel: 'Aircraft + engine rating',
+  };
 }
 
 /** Las licencias que ofrecen los chips: clase, oficio, autoridad y producto. Sin autoridad, ninguna. */
@@ -201,7 +301,9 @@ export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, n
     // queda sin licencia —en motor es opcional—.
     const moved: T = { ...form, offerKind, technicianType: next, ...CLEARED_AIRCRAFT };
     const licenseStays = Boolean(form.licenseCode) && selectableLicenses(moved).includes(form.licenseCode as AuthorityLicenseCode);
-    if (licenseStays) return moved;
+    // 096: con la licencia se quedan las equivalencias que sigan cabiendo (una
+    // A1 aceptada en una oferta FAA no cabe en una de motor).
+    if (licenseStays) return withApplicableAuthorities(moved);
     return withApplicableAuthorities({ ...moved, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
   }
   // Una oferta de aeronave no nombra motor (077). Desde ahí, las reglas de
@@ -224,7 +326,15 @@ export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, n
 
 export function selectAuthority<T extends OfferRequirementsForm>(form: T, authority: AuthorityCode): T {
   if (authority === form.licenseAuthority) return form;
-  const moved = { ...form, licenseAuthority: authority };
+  // 096: pasar de FAA a Part-66 o al revés cambia lo que significa la lista
+  // (otras autoridades con el mismo código, o una categoría Part-66 elegida):
+  // no queda nada que conservar.
+  const crossesFaa = (form.licenseAuthority === 'FAA') !== (authority === 'FAA');
+  const moved = {
+    ...form,
+    licenseAuthority: authority,
+    ...(crossesFaa ? { acceptedAuthorities: [], acceptedLicenseCode: undefined } : {}),
+  };
   // Una B1.1 EASA que pasa a UK CAA sigue siendo B1.1, y sus aeronaves siguen
   // valiendo: las cuatro Part-66 comparten catálogo. Si el código no existe en
   // la autoridad nueva se va, con las aeronaves que colgaban de él.
@@ -256,6 +366,21 @@ export function toggleAcceptedAuthority<T extends OfferRequirementsForm>(form: T
     ? form.acceptedAuthorities.filter((a) => a !== authority)
     : [...form.acceptedAuthorities, authority];
   return { ...form, acceptedAuthorities: acceptableAuthorities(form).filter((a) => next.includes(a)) };
+}
+
+/**
+ * 096: elige la categoría Part-66 que acepta una oferta FAA. Una sola: elegir
+ * otra sustituye a la anterior, y tocar la elegida la quita. Las autoridades
+ * marcadas que no emiten la nueva se desmarcan (CASA con una B2L).
+ */
+export function selectAcceptedLicenseCode<T extends OfferRequirementsForm>(form: T, code: LicenseCode): T {
+  if (!acceptableLicenseCodes(form).includes(code)) return form;
+  const acceptedLicenseCode = form.acceptedLicenseCode === code ? undefined : code;
+  return {
+    ...form,
+    acceptedLicenseCode,
+    acceptedAuthorities: faaOfferAcceptableAuthorities(acceptedLicenseCode).filter((a) => form.acceptedAuthorities.includes(a)),
+  };
 }
 
 export function selectProductType<T extends OfferRequirementsForm>(form: T, productType: OfferProductType): T {
@@ -297,6 +422,8 @@ export interface OfferRequirementsErrors {
   authority?: string;
   license?: string;
   engine?: string;
+  /** 096: en una oferta FAA, autoridades aceptadas sin categoría, o al revés. */
+  acceptedLicense?: string;
 }
 
 export function requirementsErrors(form: OfferRequirementsForm): OfferRequirementsErrors {
@@ -304,5 +431,19 @@ export function requirementsErrors(form: OfferRequirementsForm): OfferRequiremen
     authority: showsLicenseSection(form) && !form.licenseAuthority ? 'Select the authority that issues the licence.' : undefined,
     license: showsLicenseSection(form) && !form.licenseCode ? 'Select the licence this role certifies under.' : undefined,
     engine: form.offerKind === 'engine' && !form.requiredEngineId ? 'Select the engine this role works on.' : undefined,
+    acceptedLicense: acceptedLicenseError(form),
   };
+}
+
+// Los mismos dos casos que offerShapeViolations y chk_offers_accepted_license_code
+// (096): las autoridades y la categoría van juntas.
+function acceptedLicenseError(form: OfferRequirementsForm): string | undefined {
+  if (!showsLicenseSection(form) || form.licenseAuthority !== 'FAA') return undefined;
+  if (form.acceptedAuthorities.length > 0 && !form.acceptedLicenseCode) {
+    return 'Pick the licence category the accepted authorities must have issued.';
+  }
+  if (form.acceptedLicenseCode && form.acceptedAuthorities.length === 0) {
+    return `Pick at least one authority whose ${form.acceptedLicenseCode} counts.`;
+  }
+  return undefined;
 }

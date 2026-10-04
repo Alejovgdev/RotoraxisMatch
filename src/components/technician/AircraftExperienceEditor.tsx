@@ -18,11 +18,11 @@ interface Props {
   value: AircraftExperienceRow[];
   onChange: (next: AircraftExperienceRow[]) => void;
   /**
-   * 094: el técnico tiene FAA A o A&P (guardada o no), así que puede marcar
-   * aeronaves como firmadas. Sin ella el check no aparece; la base rechaza la
-   * firma igualmente.
+   * 094: la etiqueta del check de firma (signOffLabel), o null. Sólo hay
+   * etiqueta si el técnico tiene FAA A o A&P (guardada o no); sin ella ni el
+   * check ni la nota aparecen, y la base rechaza la firma igualmente.
    */
-  canSignOff: boolean;
+  signOffLabel: string | null;
   /**
    * Ratings en los que el técnico YA tiene habilitación (Fase 6 tanda E).
    *
@@ -57,7 +57,7 @@ interface Props {
 export function AircraftExperienceEditor({
   value,
   onChange,
-  canSignOff,
+  signOffLabel,
   habilitatedRatingIds,
   ratingsById,
   onRatingResolved,
@@ -97,6 +97,14 @@ export function AircraftExperienceEditor({
         Aircraft you have worked on. No licence needed — this says you know the work, not that you
         are authorised to sign it off.
       </Text>
+      {/* Dónde cuenta la firma, sin invitar a marcarla. */}
+      {signOffLabel ? (
+        <Text style={styles.note}>
+          Sign-off only counts on EASA, UK CAA, CASA or UAE GCAA offers that also accept the FAA: there, an aircraft you
+          have signed off on counts as a type rating. FAA offers count your type ratings and all your declared aircraft
+          experience, signed off or not.
+        </Text>
+      ) : null}
 
       {value.length === 0 ? <Text style={styles.emptyValue}>Not specified</Text> : null}
 
@@ -110,19 +118,19 @@ export function AircraftExperienceEditor({
               {e.years != null ? `${e.years} years` : 'Years not specified'}
             </Text>
             {/* 094: sólo con FAA A o A&P. */}
-            {canSignOff ? (
+            {signOffLabel ? (
               <TouchableOpacity
                 style={styles.signedRow}
                 onPress={() => toggleSigned(index)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: Boolean(e.signed) }}
-                accessibilityLabel="I have signed off on this aircraft"
+                accessibilityLabel={signOffLabel}
                 activeOpacity={0.75}
               >
                 <View style={[styles.signedBox, e.signed && styles.signedBoxOn]}>
                   {e.signed ? <Text style={styles.signedMark}>✓</Text> : null}
                 </View>
-                <Text style={styles.signedLabel}>I have signed off on this aircraft</Text>
+                <Text style={styles.signedLabel}>{signOffLabel}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -184,6 +192,7 @@ const styles = StyleSheet.create({
   card: { gap: spacing.sm, marginBottom: spacing.md },
   title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: techUi.text },
   subtitle: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: techUi.textSoft },
+  note: { fontSize: 11, lineHeight: 15, fontWeight: '500', color: techUi.textMuted },
   fieldLabel: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: techUi.textSoft, marginTop: spacing.xs },
   fieldGap: { height: spacing.sm },
   emptyValue: { fontSize: 13, lineHeight: 18, fontWeight: '500', color: techUi.textMuted },

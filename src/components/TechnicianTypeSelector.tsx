@@ -62,6 +62,12 @@ export interface TechnicianTypeSelectorProps {
    * definición que podría separarse de la primera.
    */
   lockedCodes?: readonly string[];
+  /**
+   * Una nota más, debajo de las de siempre, que decide el llamante (el perfil
+   * la usa para la FAA A o A&P, que marcan Mechanic sin bloquearlo:
+   * faaMechanicTypeNote). Sin ella, el componente se pinta igual que antes.
+   */
+  extraNote?: string | null;
   palette?: Partial<TechnicianTypeSelectorPalette>;
 }
 
@@ -71,6 +77,7 @@ export function TechnicianTypeSelector({
   onChange,
   loading = false,
   lockedCodes,
+  extraNote,
   palette,
 }: TechnicianTypeSelectorProps) {
   const p = { ...DEFAULT_TECHNICIAN_TYPE_PALETTE, ...palette };
@@ -161,6 +168,7 @@ export function TechnicianTypeSelector({
           type comes off with it.
         </Text>
       ) : null}
+      {extraNote ? <Text style={[styles.note, { color: p.muted }]}>{extraNote}</Text> : null}
     </View>
   );
 }

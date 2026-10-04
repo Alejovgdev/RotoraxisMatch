@@ -161,6 +161,15 @@ BEGIN
     EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE '%chk_offers_accepted_authorities%'; END;
   INSERT INTO transaction_results SELECT 'FAA offer cannot accept equivalents',
     failed AND (SELECT license_authority IS DISTINCT FROM 'FAA' FROM offers WHERE id=o2);
+  -- 096: una oferta FAA acepta autoridades Part-66 con UNA categoría; sin la
+  -- categoría la RPC la rechaza y la fila no cambia.
+  failed:=false;
+  BEGIN PERFORM update_offer_with_habilitations(o2,'{"license_code":"A&P","license_authority":"FAA","accepted_authorities":["EASA","UK_CAA"]}',NULL);
+    EXCEPTION WHEN check_violation THEN failed:=SQLERRM LIKE '%chk_offers_accepted_license_code%'; END;
+  failed:=failed AND (SELECT license_authority='EASA' FROM offers WHERE id=o2);
+  PERFORM update_offer_with_habilitations(o2,'{"license_code":"A&P","license_authority":"FAA","accepted_authorities":["EASA","UK_CAA"],"accepted_license_code":"B1.1"}',NULL);
+  INSERT INTO transaction_results SELECT 'FAA offer accepts a Part-66 category, never without one',
+    failed AND (SELECT license_authority='FAA' AND accepted_authorities=ARRAY['EASA','UK_CAA'] AND accepted_license_code='B1.1' FROM offers WHERE id=o2);
   RESET ROLE;
 END $test$;
 SELECT * FROM transaction_results ORDER BY test;

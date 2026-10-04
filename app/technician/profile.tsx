@@ -40,15 +40,16 @@ import {
   authorityLicenseCanExpire,
   credentialLabel,
   typesAfterLicenseChange,
-  typesImpliedByLicenses,
+  typesLockedByLicenses,
 } from '../../src/constants/licenses';
 import {
   HeldLicense,
   aircraftExperienceAfterLicenseChange,
-  canSignOffAircraft,
+  faaMechanicTypeNote,
   heldCountByAuthority,
   heldLicenseCodes,
   holdsLicense,
+  signOffLabel,
   sortHeldLicenses,
   toggleHeldLicense,
   updateHeldLicenseDates,
@@ -237,8 +238,9 @@ export default function TechnicianProfileScreen() {
   // tipo V1 `Technician` no tiene este campo.
   //
   // 2026-08-13: los tipos IMPLICADOS por una licencia declarada ya no se
-  // eligen — se marcan solos y se bloquean (ver `impliedTypes` y
-  // toggleLicense). Los que no tienen licencia (chapa, pintura, composite)
+  // eligen — se marcan solos y se bloquean (ver `lockedTypes` y
+  // toggleLicense). 2026-10-02: salvo la Mechanic de una FAA A o A&P, que se
+  // marca sola pero se puede quitar. Los que no tienen licencia (chapa, pintura, composite)
   // siguen siendo enteramente libres, y un tecnico puede tener a la vez
   // implicados y manuales.
   //
@@ -400,7 +402,11 @@ export default function TechnicianProfileScreen() {
       // encenderia el boton de guardar por una fila que el tecnico no ha
       // editado. Asi, la reparacion viaja con el proximo guardado real y por
       // si sola no escribe nada.
-      setTechnicianTypes([...new Set([...loadedTypes, ...typesImpliedByLicenses(licenses)])]);
+      //
+      // 2026-10-02: sólo los BLOQUEADOS. La FAA A y la A&P marcan Mechanic
+      // al añadirse pero el tecnico puede quitarlo; repararlo aqui se lo
+      // devolveria cada vez que abre el perfil.
+      setTechnicianTypes([...new Set([...loadedTypes, ...typesLockedByLicenses(licenses)])]);
       setTypesLoaded(true);
 
       if (habResult.error) throw habResult.error;
@@ -1065,12 +1071,13 @@ export default function TechnicianProfileScreen() {
   // ── Main form ─────────────────────────────────────────────────────────────
 
   const status = form.availability.status ?? 'open_to_offers';
-  // Los tipos que las licencias declaradas IMPLICAN: van marcados y el
+  // Los tipos que las licencias declaradas BLOQUEAN: van marcados y el
   // selector no deja desmarcarlos. Se derivan en cada render de
   // `form.licenseCategories` en vez de guardarse en su propio estado, para
   // que no exista ningun instante en el que el bloqueo y las licencias digan
-  // cosas distintas.
-  const impliedTypes = typesImpliedByLicenses(form.licenseCategories);
+  // cosas distintas. 2026-10-02: la FAA A y la A&P marcan Mechanic al
+  // añadirse (toggleLicense) pero no lo bloquean.
+  const lockedTypes = typesLockedByLicenses(form.licenseCategories);
 
   return (
     <TechnicianScreen>
@@ -1234,7 +1241,8 @@ export default function TechnicianProfileScreen() {
               selected={technicianTypes}
               onChange={(next) => void updateTechnicianTypes(next)}
               loading={techTypesLoading}
-              lockedCodes={impliedTypes}
+              lockedCodes={lockedTypes}
+              extraNote={faaMechanicTypeNote(heldLicenses)}
               palette={{
                 text: techUi.text,
                 muted: techUi.textMuted,
@@ -1404,7 +1412,7 @@ export default function TechnicianProfileScreen() {
           <AircraftExperienceEditor
             value={aircraftExperience}
             onChange={onChangeAircraftExperience}
-            canSignOff={canSignOffAircraft(heldLicenses)}
+            signOffLabel={signOffLabel(heldLicenses)}
             habilitatedRatingIds={habilitations.map((h) => h.aircraftTypeRatingId)}
             ratingsById={ratingsById}
             onRatingResolved={(r) => setRatingsById((prev) => new Map(prev).set(r.id, r))}

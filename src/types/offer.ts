@@ -4,6 +4,7 @@ import {
   ContractTypeCode,
   AircraftTypeRatingCatalog,
   AuthorityCode,
+  LicenseCode,
 } from './catalog';
 import { OfferStatus } from './enums';
 import { PersistedLocation } from './location';
@@ -164,10 +165,21 @@ export interface Offer extends PersistedLocation {
    *
    * Vacía = sólo la autoridad exacta. Ensancha la AUTORIDAD, nunca el código:
    * una B2 UK no cumple una B1.1 EASA por aceptar UK CAA. El equivalente
-   * puntúa por debajo del exacto (87 frente a 100), y la FAA no cruza con
-   * nadie. Qué autoridades caben lo dice `equivalentAuthoritiesForLicense`.
+   * puntúa por debajo del exacto (87 frente a 100). Qué autoridades caben lo
+   * dice `equivalentAuthoritiesForLicense`.
+   *
+   * En una oferta FAA (096) son autoridades Part-66 que emiten
+   * `acceptedLicenseCode`: allí la categoría no es la de la oferta, la elige
+   * la empresa.
    */
   acceptedAuthorities: AuthorityCode[];
+  /**
+   * 096: en una oferta FAA con autoridades aceptadas, la categoría Part-66 que
+   * también cuenta (una sola). Presente exactamente cuando la oferta es FAA y
+   * `acceptedAuthorities` no está vacía (chk_offers_accepted_license_code); qué
+   * categorías caben lo dice `faaOfferAcceptableLicenseCodes`.
+   */
+  acceptedLicenseCode?: LicenseCode;
   /** El motor que pide una oferta de motor. Presente sólo si `offerKind` es 'engine'. */
   requiredEngineId?: string;
   /**

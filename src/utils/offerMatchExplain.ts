@@ -53,10 +53,10 @@ import { ENGINE_TECHNICIAN_TYPE_CODE, TECHNICIAN_TYPES } from '../constants/tech
 import { AircraftRatingIndex, areRatingsRelated, getAircraftTypeRatingLabel } from '../constants/aircraftTypeRatings';
 import { EngineIndex, getEngineLabel } from '../constants/engines';
 import {
-  FAA_SIGN_OFF_LICENSE_CODES,
   LicenseSatisfaction,
   authorityLicenseCanExpire,
   credentialLabel,
+  faaEquivalentLicenseCodes,
   isB1LicenseCode,
   licenseCodeSatisfies,
   licenseSatisfiesRequirement,
@@ -133,8 +133,9 @@ const NO_CERTIFICATION_WEIGHTS = { verified: 15, habilitation: 65, license: 0, c
 const LICENSE_ONLY_WEIGHTS = { verified: 15, habilitation: 0, license: 65, contractFit: 15, location: 5, engine: 0 } as const;
 
 // Fase 10, sesión 2 — licencia FAA + aeronaves. La FAA no emite type ratings,
-// así que la aeronave no es certificación sino EXPERIENCIA declarada: puntúa y
-// no excluye. El reparto es el de QUALIFICATION_WEIGHTS al revés, y por lo
+// así que la aeronave no es certificación sino EXPERIENCIA (declarada o, desde
+// el 2026-10-04, por un type rating de cualquier autoridad): puntúa y no
+// excluye. El reparto es el de QUALIFICATION_WEIGHTS al revés, y por lo
 // mismo que allí: la señal fuerte se lleva la mayor parte. Aquí la única
 // certificación es la licencia (40); la aeronave (25, en la fila
 // `habilitation`) sube la nota sin decidir quién puede firmar.
@@ -242,8 +243,9 @@ export function getMatchScoreWeights(offer: OfferWithRequirements): MatchScoreWe
  *
  *   'rating'     certifica bajo una autoridad con type ratings (Part-66): las
  *                habilitaciones de LA credencial elegida, misma fila.
- *   'experience' certifica bajo una autoridad sin type ratings (FAA): sólo la
- *                experiencia de aeronave declarada. Puntúa, no excluye.
+ *   'experience' certifica bajo una autoridad sin type ratings (FAA): la
+ *                aeronave como experiencia, declarada o por un type rating de
+ *                cualquier autoridad (2026-10-04). Puntúa, no excluye.
  *   'knowledge'  no certifica: habilitaciones y experiencia, en unión (tanda E).
  *
  * Una sola función para las cuatro preguntas que dependen de esto: qué tabla de
@@ -422,8 +424,9 @@ interface RequirementOutcome {
   // que exige certificar. Se distingue de "no la tiene" porque el mensaje es
   // distinto y accionable — renovar, no formarse.
   expiredText?: string;
-  // 094: la aeronave está declarada pero sin firmar, en una oferta FAA A o A&P
-  // que sólo cuenta la firmada. Frase completa ("A320 declared but not signed
+  // 094: la aeronave está declarada pero sin firmar, en una oferta Part-66 que
+  // acepta la FAA y cuya credencial elegida es FAA, donde sólo cuenta la
+  // firmada (parte 3). Frase completa ("A320 declared but not signed
   // off. This offer only counts signed-off aircraft."), que sustituye a "not
   // present in the profile", que sería falso. Describe el hecho y nada más.
   unsignedText?: string;
@@ -497,7 +500,7 @@ function evaluateVigencia(
       kind: 'expired',
       notice: {
         label: 'Expired',
-        detail: `License ${licenseCode} expired ${toYearMonth(license!.expiresAt!)} — all its ratings affected, including ${ratingLabel}.`,
+        detail: `License ${credentialLabel(license!.authority, licenseCode)} expired ${toYearMonth(license!.expiresAt!)} — all its ratings affected, including ${ratingLabel}.`,
       },
     };
   }
@@ -531,6 +534,18 @@ interface SelectedLicense {
   satisfaction: LicenseSatisfaction;
 }
 
+// FAA A and P are ratings on one mechanic certificate. Two stored rows
+// represent A&P for matching; this projection is never persisted and never
+// joins Part-66 aircraft from separate credentials. The projected row carries
+// an id starting with `faa-ap:`.
+function withFaaAAndPAsAP(licenses: readonly TechnicianLicense[]): TechnicianLicense[] {
+  const credentials = [...licenses];
+  const faaA = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'A');
+  const faaP = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'P');
+  if (faaA && faaP) credentials.push({ ...faaA, id: `faa-ap:${faaA.id}:${faaP.id}`, licenseCode: 'A&P' });
+  return credentials;
+}
+
 function selectLicenseForOffer(
   offer: OfferWithRequirements,
   technician: TechnicianWithRelations,
@@ -540,17 +555,11 @@ function selectLicenseForOffer(
 ): (SelectedLicense & { score: MatchScore }) | undefined {
   const required = offer.licenseCode;
   if (!required) return undefined;
-  // FAA A and P are ratings on one mechanic certificate. Two stored rows
-  // represent A&P for matching; this projection is never persisted and never
-  // joins Part-66 aircraft from separate credentials.
-  const credentials = [...technician.licenses];
-  const faaA = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'A');
-  const faaP = credentials.find((l) => l.authority === 'FAA' && l.licenseCode === 'P');
-  if (faaA && faaP) credentials.push({ ...faaA, id: `faa-ap:${faaA.id}:${faaP.id}`, licenseCode: 'A&P' });
+  const credentials = withFaaAAndPAsAP(technician.licenses);
   const evidence = aircraftEvidenceFor(offer);
   const candidates = credentials.flatMap((license) => {
     const satisfaction = licenseSatisfiesRequirement(
-      license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptedAuthorities,
+      license, { authority: offer.licenseAuthority, licenseCode: required }, offer.acceptedAuthorities, offer.acceptedLicenseCode,
     );
     if (!satisfaction) return [];
     const candidate = { license, satisfaction };
@@ -654,12 +663,16 @@ function evaluateHabilitationRequirement(
     // legalmente no puede firmar ese trabajo. Cae a 'not_met', que arrastra
     // la habilitación a 0 y con ella el ZERO_QUALIFICATION_CAP (39).
     // `isCurrent = false` sigue degradando y nunca excluye.
+    // 2026-10-04: lo caducado se nombra con la autoridad de SU credencial (la
+    // elegida, que puede ser una equivalente aceptada), igual en todos los
+    // textos de licencia caducada de este fichero.
     if (vigencia.kind === 'expired') {
-      return { tier: 'not_met', expiredText: `${offerLicenseCode} + ${reqLabel}`, vigenciaNotice: vigencia.notice };
+      return { tier: 'not_met', expiredText: `${credentialLabel(license?.authority, offerLicenseCode)} + ${reqLabel}`, vigenciaNotice: vigencia.notice };
     }
     return {
       tier: 'exact',
-      matchText: `${offerLicenseCode} + ${reqLabel}`,
+      // Con la autoridad de la credencial, como la caducada de arriba.
+      matchText: `${credentialLabel(license?.authority, offerLicenseCode)} + ${reqLabel}`,
       vigenciaDegraded: vigencia.kind === 'not_current',
       vigenciaNotice: vigencia.notice,
     };
@@ -672,7 +685,7 @@ function evaluateHabilitationRequirement(
     const heldLabel = getAircraftTypeRatingLabel(best.row!.aircraftTypeRatingId as string, ratingIndex);
     const vigencia = evaluateVigencia(best.row!, license, offerLicenseCode, heldLabel, today);
     if (vigencia.kind === 'expired') {
-      return { tier: 'not_met', expiredText: `${offerLicenseCode} + ${heldLabel}`, vigenciaNotice: vigencia.notice };
+      return { tier: 'not_met', expiredText: `${credentialLabel(license?.authority, offerLicenseCode)} + ${heldLabel}`, vigenciaNotice: vigencia.notice };
     }
     return {
       tier: 'related_family',
@@ -723,15 +736,17 @@ function evaluateHabilitationRequirement(
  * no se afirma nada sobre certificación: sólo que estuvo en ese avión.
  */
 //
-// Sesión 2 — `sources.habilitations`: la oferta FAA con aeronaves pregunta lo
-// mismo ("¿ha trabajado en esto?") pero SÓLO a la experiencia declarada. Es el
-// mismo evaluador con una fuente menos, no una copia: false quita las
-// habilitaciones de las dos búsquedas (exacta y de familia) y nada más.
+// Sesión 2 — `sources.habilitations`: false quita las habilitaciones de las dos
+// búsquedas (exacta y de familia) y nada más. Es el mismo evaluador con una
+// fuente menos, no una copia. Desde el 2026-10-04 la oferta FAA ya no lo usa
+// (cuenta el type rating); sólo lo pide el camino de la firma, abajo.
 //
-// 094 — `sources.signedOnly`: si la oferta FAA pide A o A&P, de esa
-// experiencia sólo cuenta la FIRMADA, en las dos búsquedas. Declarada sin
-// firmar es, para esta oferta, no tenerla; lo único que cambia es el texto,
-// que dice el hecho en vez de "not present in the profile".
+// 094 — `sources.signedOnly`: de esa experiencia sólo cuenta la FIRMADA, en
+// las dos búsquedas. Lo pide sólo una oferta Part-66 que acepta la FAA cuando
+// la credencial elegida es FAA (ver evaluateAircraftRequirement); una oferta
+// FAA cuenta toda la declarada, firmada o no. Declarada sin firmar es, para
+// esa oferta, no tenerla; lo único que cambia es el texto, que dice el hecho
+// en vez de "not present in the profile".
 function evaluateAircraftKnowledgeRequirement(
   req: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>,
   technician: TechnicianWithRelations,
@@ -748,10 +763,15 @@ function evaluateAircraftKnowledgeRequirement(
       ? `${reqLabel} declared but not signed off. This offer only counts signed-off aircraft.`
       : undefined;
 
-  // T1 — la aeronave pedida está en la unión. Se busca PRIMERO en las
-  // habilitaciones para poder arrastrar su vigencia (la experiencia declarada
-  // no tiene fechas que degradar).
+  // T1 — la aeronave pedida está en la unión. Las habilitaciones arrastran su
+  // vigencia; la experiencia declarada no tiene fechas que degradar.
+  //
+  // 2026-10-04: con las dos, cuenta la que dé más puntos. Antes ganaba siempre
+  // la habilitación, y añadir un type rating caducado a quien ya tenía la
+  // aeronave declarada le bajaba la nota. Vigente, empata con la experiencia
+  // y se queda ella, como antes.
   const exactHab = habilitations.find((h) => h.aircraftTypeRatingId === req.aircraftTypeRatingId);
+  let habOutcome: RequirementOutcome | undefined;
   if (exactHab) {
     // Por el id de la credencial de la que cuelga la habilitación: es la
     // única que puede caducarla. Buscarla por código elegía la primera del
@@ -760,12 +780,13 @@ function evaluateAircraftKnowledgeRequirement(
     const vigencia = evaluateVigencia(exactHab, license, exactHab.licenseCode, reqLabel, today);
     // Sin certificación una caducidad NO excluye: degrada, como siempre. Para
     // trabajar de ayudante el papel vencido no borra la experiencia.
-    return {
+    habOutcome = {
       tier: 'exact',
       matchText: `Worked on ${reqLabel}`,
       vigenciaDegraded: vigencia.kind !== 'ok',
       vigenciaNotice: vigencia.notice,
     };
+    if (!habOutcome.vigenciaDegraded) return habOutcome;
   }
 
   const exactExperience = experience.find((e) => e.aircraftTypeRatingId === req.aircraftTypeRatingId);
@@ -776,6 +797,7 @@ function evaluateAircraftKnowledgeRequirement(
       matchText: exactExperience.years != null ? `${worked} — ${exactExperience.years} years declared` : worked,
     };
   }
+  if (habOutcome) return habOutcome;
 
   // T2 — misma familia, otro motor. Misma fracción (0,57) y mismo significado
   // que en la rama que certifica: evidencia real, nunca igual a la exacta.
@@ -795,13 +817,6 @@ function evaluateAircraftKnowledgeRequirement(
   return { tier: 'not_met', unsignedText };
 }
 
-// 094: ¿esta oferta sólo cuenta la experiencia firmada? Sí cuando sus
-// aeronaves son experiencia (FAA, sin type ratings) y la licencia que pide es
-// una de las que firman: A o A&P. Con la P, o fuera de la FAA, no.
-function experienceMustBeSignedOff(evidence: AircraftEvidence, offerLicenseCode: AuthorityLicenseCode | undefined): boolean {
-  return evidence === 'experience' && offerLicenseCode != null && (FAA_SIGN_OFF_LICENSE_CODES as readonly string[]).includes(offerLicenseCode);
-}
-
 // El evaluador de UNA aeronave según la evidencia que la oferta admite (ver
 // aircraftEvidenceFor). Lo usan la elección de credencial y la puntuación: si
 // cada una eligiera su evaluador, podrían discrepar sobre la misma aeronave.
@@ -811,6 +826,15 @@ function experienceMustBeSignedOff(evidence: AircraftEvidence, offerLicenseCode:
 // hace de type rating es la aeronave FIRMADA (094): misma aeronave, exacta;
 // misma familia, 0,57; declarada sin firmar, no cuenta y lo dice. El recorte
 // del 20 % lo pone la equivalencia, como a cualquier otra autoridad.
+//
+// En una oferta FAA (A, P o A&P) la firma no cuenta: sus aeronaves son
+// experiencia y vale toda la declarada, firmada o no, como antes de la 094.
+//
+// 2026-10-04: y en una oferta FAA el type rating cuenta como experiencia en la
+// aeronave, de cualquier autoridad y entre quien entre, como en una oferta sin
+// licencia (hasta entonces sólo al titular de la Part-66 aceptada, 096). El
+// recorte del 20 % lo sigue poniendo la credencial, no la fuente de la
+// aeronave: un FAA con un type rating EASA no lo lleva.
 function evaluateAircraftRequirement(
   evidence: AircraftEvidence,
   req: Pick<OfferRequiredHabilitation, 'aircraftTypeRatingId'>,
@@ -826,10 +850,7 @@ function evaluateAircraftRequirement(
     }
     return evaluateHabilitationRequirement(req, offerLicenseCode, license, technician, ratingIndex, today);
   }
-  return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, {
-    habilitations: evidence !== 'experience',
-    signedOnly: experienceMustBeSignedOff(evidence, offerLicenseCode),
-  });
+  return evaluateAircraftKnowledgeRequirement(req, technician, ratingIndex, today, { habilitations: true });
 }
 
 // The fallback branch, used only when an offer states NO exact
@@ -897,12 +918,13 @@ function evaluateLicenseCategoryMatch(
   // los dos sitios y no depende de que la oferta liste aviones: con la
   // licencia vencida no se puede firmar el trabajo.
   if (isLicenseExpired(license, today)) {
+    const expired = credentialLabel(license!.authority, required);
     return {
       tier: 'not_met',
-      expiredText: `${required}`,
+      expiredText: expired,
       vigenciaNotice: {
         label: 'Expired',
-        detail: `License ${required} expired ${toYearMonth(license!.expiresAt!)}.`,
+        detail: `License ${expired} expired ${toYearMonth(license!.expiresAt!)}.`,
       },
     };
   }
@@ -941,7 +963,7 @@ function evaluateLicenseCategoryMatch(
  * un inventario.
  */
 function unacceptedAuthorityText(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   technician: Pick<TechnicianWithRelations, 'licenses'>,
   today: string,
 ): string | undefined {
@@ -957,8 +979,14 @@ function unacceptedAuthorityText(
 // ninguna. La comparten el aviso de licencia (arriba) y el de aeronave (abajo):
 // si cada uno filtrara por su cuenta, podrían nombrar credenciales distintas
 // del mismo perfil.
+//
+// 2026-10-02: también entre sistemas. Un certificado FAA que la tabla de la
+// 095 haría contar en una oferta Part-66 que no acepta la FAA, y una licencia
+// Part-66 con la categoría que acepta una oferta FAA (096) pero de una
+// autoridad no marcada. La A y la P en filas separadas responden como una A&P,
+// igual que al elegir la credencial (H8).
 function firstRejectedByAuthority(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   licenses: readonly TechnicianLicense[],
   today: string,
 ): TechnicianLicense | undefined {
@@ -968,18 +996,34 @@ function firstRejectedByAuthority(
   // da 'exact' a cualquier código que encaje, así que no habría descartados.
   if (!required || !requiredAuthority) return undefined;
 
-  return licenses
+  // ¿Respondería esta credencial si la oferta aceptara su autoridad?
+  const wouldCountIfAccepted = (held: TechnicianLicense): boolean => {
+    if (requiredAuthority === 'FAA' && held.authority !== 'FAA') {
+      return offer.acceptedLicenseCode != null && held.licenseCode === offer.acceptedLicenseCode;
+    }
+    if (held.authority === 'FAA' && requiredAuthority !== 'FAA') {
+      return (faaEquivalentLicenseCodes(required) as string[]).includes(held.licenseCode);
+    }
+    return licenseCodeSatisfies(held.licenseCode, required);
+  };
+  const projected = (l: TechnicianLicense) => l.id.startsWith('faa-ap:');
+
+  return withFaaAAndPAsAP(licenses)
     .filter(
       (held) =>
-        licenseCodeSatisfies(held.licenseCode, required) &&
+        wouldCountIfAccepted(held) &&
         licenseSatisfiesRequirement(
           held,
           { authority: requiredAuthority, licenseCode: required },
           offer.acceptedAuthorities,
+          offer.acceptedLicenseCode,
         ) === null,
     )
     .sort((a, b) => {
       if ((a.licenseCode === required) !== (b.licenseCode === required)) return a.licenseCode === required ? -1 : 1;
+      // Una fila guardada antes que la A&P proyectada: con una A que ya
+      // encaja, el texto nombra la A que el técnico declaró.
+      if (projected(a) !== projected(b)) return projected(a) ? 1 : -1;
       const expiredA = isLicenseExpired(a, today);
       const expiredB = isLicenseExpired(b, today);
       if (expiredA !== expiredB) return expiredA ? 1 : -1;
@@ -999,7 +1043,7 @@ function firstRejectedByAuthority(
  * texto: ni puntúa ni mueve techos.
  */
 function unacceptedAuthorityRatingHolder(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
   requiredRatingId: string,
   today: string,
@@ -1032,7 +1076,7 @@ function ratingHolders(
  * de autoridad exacta y después el id, para que el texto sea estable.
  */
 function otherAcceptedRatingHolder(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
   requiredRatingId: string,
   selected: TechnicianLicense,
@@ -1046,6 +1090,7 @@ function otherAcceptedRatingHolder(
         held,
         { authority: offer.licenseAuthority, licenseCode: required },
         offer.acceptedAuthorities,
+        offer.acceptedLicenseCode,
       );
       return satisfaction ? [{ held, exact: satisfaction === 'exact' }] : [];
     })
@@ -1059,7 +1104,7 @@ function otherAcceptedRatingHolder(
  * se combinan) y después la de autoridad rechazada (ajustes finales).
  */
 function ratingHeldElsewhereText(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   technician: Pick<TechnicianWithRelations, 'licenses' | 'habilitations'>,
   requiredRatingId: string,
   ratingLabel: string,
@@ -1099,7 +1144,7 @@ type LicenseAxis =
   | { held: false; missingText: string; vigenciaNotice?: VigenciaNotice; unacceptedAuthority?: string };
 
 function evaluateLicenseAxis(
-  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities'>,
+  offer: Pick<OfferWithRequirements, 'licenseCode' | 'licenseAuthority' | 'acceptedAuthorities' | 'acceptedLicenseCode'>,
   technician: Pick<TechnicianWithRelations, 'licenses'>,
   license: TechnicianLicense | undefined,
   today: string,
@@ -1118,7 +1163,10 @@ function evaluateLicenseAxis(
   if (unaccepted) return { held: false, missingText: unaccepted, unacceptedAuthority: unaccepted };
   // Ausente de verdad: la segunda fuente de missingRequirements, que no depende
   // de mandatory/preferred sino de que la oferta pida una licencia que no tiene.
-  return { held: false, missingText: `Required license: ${offer.licenseCode}`, vigenciaNotice: broad.vigenciaNotice };
+  // Con su autoridad (2026-10-04): con cinco autoridades, "B1.1" a secas no
+  // dice cuál pide. Sin autoridad (oferta anterior a la 075), sólo el código.
+  const required = credentialLabel(offer.licenseAuthority, offer.licenseCode ?? '');
+  return { held: false, missingText: `Required license: ${required}`, vigenciaNotice: broad.vigenciaNotice };
 }
 
 const TIER_RANK: Record<HabilitationTier, number> = { not_met: 0, related_family: 1, exact: 2 };
@@ -1224,11 +1272,13 @@ function scoreWithSelectedLicense(
       } else {
         const engineNote = 'On an engine offer the licence adds to the score; it never excludes.';
         clarifications.push(
+          // 2026-10-04: con su autoridad. La caducada, la de su credencial; la
+          // que falta, la de la oferta.
           axis.vigenciaNotice
-            ? `${offer.licenseCode} expired. ${engineNote}`
+            ? `${credentialLabel(selectedLicense?.license.authority, offer.licenseCode)} expired. ${engineNote}`
             : axis.unacceptedAuthority
               ? `${axis.unacceptedAuthority} ${engineNote}`
-              : `The offer also asks for ${offer.licenseCode}; not present in the profile. ${engineNote}`,
+              : `The offer also asks for ${credentialLabel(offer.licenseAuthority, offer.licenseCode)}; not present in the profile. ${engineNote}`,
         );
         if (axis.vigenciaNotice) vigenciaNotices.push(axis.vigenciaNotice);
       }
@@ -1247,7 +1297,8 @@ function scoreWithSelectedLicense(
     // Es el interruptor que la tanda C dejó montado sin conectar.
     //
     // Sesión 2 — tercera fuente: certificando bajo la FAA, que no emite type
-    // ratings, sólo la experiencia declarada (aircraftEvidenceFor).
+    // ratings, la aeronave es experiencia (aircraftEvidenceFor): desde el
+    // 2026-10-04, declarada o por type rating, como sin certificar.
     const evidence = aircraftEvidenceFor(offer);
     const evaluate = (req: OfferRequiredHabilitation) =>
       evaluateAircraftRequirement(evidence, req, offerLicenseCode, selectedLicense?.license, technician, ratingIndex, today);
@@ -1284,8 +1335,12 @@ function scoreWithSelectedLicense(
       // en una oferta de ayudante, "B1.1 + A320" prometería una certificación
       // que nadie ha pedido ni comprobado, y "A&P + 737" un type rating que la
       // FAA no emite.
+      // 2026-10-04: con la autoridad de la OFERTA. Lo que falta es lo que la
+      // oferta pide ("Required license: EASA B1.1"); la credencial elegida
+      // puede ser un FAA en una oferta Part-66, y "FAA B1.1" no existe.
       const ratingLabel = getAircraftTypeRatingLabel(req.aircraftTypeRatingId, ratingIndex);
-      const aircraftLabel = evidence === 'rating' ? `${offerLicenseCode} + ${ratingLabel}` : ratingLabel;
+      const aircraftLabel =
+        evidence === 'rating' ? `${credentialLabel(offer.licenseAuthority, offerLicenseCode ?? '')} + ${ratingLabel}` : ratingLabel;
 
       // Fase 6 tanda E: una cualificación CADUCADA en oferta que certifica
       // llega aquí como 'not_met' con su propio texto. Se nombra siempre —
@@ -1306,8 +1361,9 @@ function scoreWithSelectedLicense(
           evidence === 'rating' && outcome.tier === 'not_met' && !outcome.expiredText
             ? ratingHeldElsewhereText(offer, technician, req.aircraftTypeRatingId, ratingLabel, selectedLicense?.license, today)
             : undefined;
-        // 094: declarada pero sin firmar, en una oferta FAA A o A&P. La frase
-        // ya nombra la aeronave y va tal cual en las dos listas.
+        // 094: declarada pero sin firmar, en una oferta Part-66 que acepta la
+        // FAA y cuya credencial elegida es FAA (parte 3). La frase ya nombra la
+        // aeronave y va tal cual en las dos listas.
         if (offer.requiresAllAircraft) {
           // La oferta dijo que hacen falta TODAS: esto es lo que dispara el
           // cap y hay que nombrarlo.
@@ -1357,10 +1413,13 @@ function scoreWithSelectedLicense(
     const requiredSetSatisfied = !offer.requiresAllAircraft || everyAircraftExact;
     level = bestTier === 'exact' && requiredSetSatisfied ? 'exact' : bestTier !== 'not_met' ? 'related' : 'not_met';
     const vigenciaFraction = vigenciaDegraded ? 1 - VIGENCIA_DEGRADATION_FRACTION : 1;
-    // La equivalencia de autoridad recorta la aeronave sólo cuando la aeronave
-    // sale de la credencial ('rating'). Como experiencia (FAA, o sin certificar)
-    // no depende de ninguna licencia.
-    const aircraftEquivalenceFraction = evidence === 'rating' ? equivalenceFraction : 1;
+    // La equivalencia de autoridad recorta la aeronave cuando la oferta
+    // certifica ('rating' o 'experience'): si la credencial que responde es de
+    // otra autoridad, lo es también para la aeronave. 096: así un EASA que
+    // entra en una oferta FAA saca lo mismo (87) que un FAA en una Part-66.
+    // En una oferta FAA con un técnico FAA la credencial es exacta y la
+    // fracción vale 1. Sin certificar no hay credencial que recorte.
+    const aircraftEquivalenceFraction = evidence === 'knowledge' ? 1 : equivalenceFraction;
     habilitation = Math.round(
       weights.habilitation * HABILITATION_TIER_FRACTIONS[bestTier] * vigenciaFraction * aircraftEquivalenceFraction,
     );
