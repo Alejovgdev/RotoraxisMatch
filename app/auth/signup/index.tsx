@@ -1,12 +1,13 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { Text } from '../../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
@@ -41,6 +42,8 @@ const ROLES: RoleCard[] = [
 ];
 
 export default function SignupScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   const { width } = useWindowDimensions();
@@ -51,7 +54,7 @@ export default function SignupScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={desktopScrollbar}
       >
         <TouchableOpacity onPress={goBack} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
@@ -102,7 +105,7 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1, padding: spacing.lg },
   scrollWide: {
     paddingHorizontal: spacing.xxxl,
@@ -111,19 +114,19 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
-  backText: { color: colors.cyanLight, fontSize: 14, fontWeight: '500' },
+  backText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   header: { alignItems: 'center', paddingVertical: spacing.xxl },
   logoIcon: { fontSize: 40, marginBottom: spacing.md },
   title: {
     fontSize: 26,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: 15,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1.5,
     padding: spacing.md,
@@ -150,10 +153,10 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     marginBottom: 3,
   },
-  cardSubtitle: { fontSize: 12, color: colors.cyanLight, lineHeight: 17 },
+  cardSubtitle: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   arrow: { fontSize: 26, fontWeight: '300', flexShrink: 0 },
   loginRow: {
     flexDirection: 'row',

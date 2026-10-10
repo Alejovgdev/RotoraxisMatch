@@ -17,6 +17,7 @@ export interface OfferMapItem {
   id: string;
   title: string;
   companyName: string;
+  logoPath?: string | null;
   contractType: ContractTypeCode;
   salary?: OfferSalary | null;
   productType: OfferProductType;

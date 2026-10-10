@@ -1,61 +1,27 @@
 import React from 'react';
 import {
-  Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
 import { colors, spacing } from '../../theme';
+import { appUi, cardShadow, radius, TOUCH_TARGET, UI_TONES, type UiTone } from '../../theme/ui';
 
-export const techUi = {
-  page: '#E2EBF2',
-  surface: '#FFFFFF',
-  surfaceSoft: '#EBF2F8',
-  border: '#B0C4D6',
-  borderSoft: '#CCDAE8',
-  text: '#0A1520',
-  textSoft: '#2B3D52',
-  textMuted: '#527088',
-  accent: '#0891B2',
-  accentSoft: '#B3E5F5',
-  blue: '#1D4ED8',
-  blueSoft: '#DBEAFE',
-  green: '#065F46',
-  greenSoft: '#C6F0E1',
-  amber: '#92400E',
-  amberSoft: '#FDE9B0',
-  red: '#B91C1C',
-  redSoft: '#FECACA',
-  navy: '#0A1520',
-};
+// Los mismos tokens que la empresa (src/theme/ui.ts): el documento pide que
+// las dos áreas compartan estilo. El nombre se conserva porque lo leen todas
+// las pantallas del técnico.
+export const techUi = appUi;
 
-export const panelShadow = Platform.select<ViewStyle>({
-  web: { boxShadow: '0px 14px 34px rgba(15, 23, 42, 0.07)' } as ViewStyle,
-  default: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-});
+export const panelShadow = cardShadow;
 
-type Tone = 'success' | 'warning' | 'error' | 'info' | 'muted' | 'navy' | 'cyan';
+type Tone = UiTone;
 
-const TONES: Record<Tone, { bg: string; text: string; border: string }> = {
-  success: { bg: techUi.greenSoft, text: techUi.green, border: '#BBF7D0' },
-  warning: { bg: techUi.amberSoft, text: techUi.amber, border: '#FDE68A' },
-  error: { bg: techUi.redSoft, text: techUi.red, border: '#FECACA' },
-  info: { bg: techUi.blueSoft, text: techUi.blue, border: '#BFDBFE' },
-  muted: { bg: techUi.surfaceSoft, text: techUi.textSoft, border: techUi.borderSoft },
-  navy: { bg: '#EEF2FF', text: '#1E3A5F', border: '#C7D2FE' },
-  cyan: { bg: techUi.accentSoft, text: techUi.accent, border: '#BAE6FD' },
-};
+const TONES = UI_TONES;
 
 export function TechnicianScreen({ children }: { children: React.ReactNode }) {
   return (
@@ -183,7 +149,7 @@ export function InitialAvatar({
 }) {
   const initial = label.trim().charAt(0).toUpperCase() || 'R';
   return (
-    <View style={[techStyles.avatar, { width: size, height: size, borderRadius: Math.round(size * 0.34) }]}>
+    <View style={[techStyles.avatar, { width: size, height: size, borderRadius: Math.round(size * 0.28) }]}>
       <Text style={techStyles.avatarText}>{initial}</Text>
     </View>
   );
@@ -221,14 +187,14 @@ export const techStyles = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: techUi.accent,
     marginBottom: 4,
   },
   pageTitle: {
     fontSize: 26,
     lineHeight: 32,
-    fontWeight: '700',
+    fontWeight: '800',
     color: techUi.text,
   },
   pageSub: {
@@ -243,28 +209,24 @@ export const techStyles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: techUi.surface,
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    ...(panelShadow ?? {}),
   },
   card: {
     backgroundColor: techUi.surface,
-    borderRadius: 22,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: techUi.border,
+    borderColor: techUi.borderSoft,
     padding: spacing.md,
     ...(panelShadow ?? {}),
   },
   badge: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
     alignSelf: 'flex-start',
@@ -272,34 +234,33 @@ export const techStyles = StyleSheet.create({
   badgeSmall: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
   },
   badgeText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '700',
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: '800',
   },
   badgeTextSmall: {
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 14,
   },
   chip: {
     borderWidth: 1,
     borderColor: techUi.border,
     backgroundColor: techUi.surface,
-    borderRadius: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   chipSelected: {
-    backgroundColor: techUi.accent,
-    borderColor: techUi.accent,
+    backgroundColor: techUi.navy,
+    borderColor: techUi.navy,
   },
   chipText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '600',
-    color: techUi.textSoft,
+    fontSize: 13.5,
+    lineHeight: 17,
+    fontWeight: '800',
+    color: techUi.text,
   },
   chipTextSelected: {
     color: colors.white,
@@ -339,7 +300,7 @@ export const techStyles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: techUi.red,
+    backgroundColor: techUi.notify,
     zIndex: 2,
   },
   avatar: {

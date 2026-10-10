@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
+import { Text, TextInput } from '../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
+import { AccountShell, useAccountShellRole } from '../../src/components/AccountShell';
 import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/auth/AuthContext';
 import { colors, spacing } from '../../src/theme';
@@ -25,9 +26,12 @@ import {
 const CONFIRM_WORD = 'DELETE';
 
 export default function DeleteAccountScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   const { profile, signOut } = useAuth();
+  const shellRole = useAccountShellRole();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -99,145 +103,161 @@ export default function DeleteAccountScreen() {
     );
   }
 
+  const content = (
+    <>
+      <View style={styles.header}>
+        <View style={styles.iconWrap}>
+          <Text style={styles.icon}>⚠</Text>
+        </View>
+        <Text style={styles.title}>Delete account</Text>
+        <Text style={styles.subtitle}>
+          This action is permanent and cannot be undone.
+        </Text>
+      </View>
+
+      {/* What happens to the account data */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>What happens to your data</Text>
+        {isTechnician ? (
+          <>
+            <BulletItem text="Your direct profile identifiers and personal contact information" />
+            <BulletItem text="All uploaded documents (licenses, medicals, IDs) — files removed from storage" />
+            <BulletItem text="Cover notes on applications" />
+            <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
+            <BulletItem text="Your authentication credentials" />
+            <BulletItem text="A limited professional and marketplace record remains linked by an internal account identifier, as described in the Privacy Policy" />
+          </>
+        ) : (
+          <>
+            <BulletItem text="Your company membership and profile information" />
+            <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
+            <BulletItem text="Your authentication credentials" />
+            <BulletItem text="A limited deleted-account record retains the internal account identifier" />
+            <BulletItem text="The company profile, offers and marketplace history can remain for other members and platform integrity" />
+          </>
+        )}
+      </View>
+
+      {/* Last-admin warning for company */}
+      {!isTechnician && (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningText}>
+            If you are the only administrator of your company, you must assign another administrator before deleting your account.
+          </Text>
+        </View>
+      )}
+
+      {/* Exit survey — optional, never a gate. */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Before you go</Text>
+        <Text style={styles.surveyIntro}>
+          Why are you leaving? This is optional — you can delete your account without answering.
+          The stored row has no account ID, but your role, the day and any details you write could
+          still make the answer indirectly identifiable. Please do not include personal details.
+        </Text>
+        {DELETION_REASON_CODES.map((code) => (
+          <ReasonOption
+            key={code}
+            label={deletionReasonLabel(code, profile?.role)}
+            selected={reason === code}
+            // Segundo toque sobre la opción marcada la desmarca: sin esto, un
+            // toque accidental no se puede deshacer y la única salida es
+            // mandar un motivo que no es el tuyo.
+            onPress={() => setReason((prev) => (prev === code ? null : code))}
+          />
+        ))}
+        {reason ? (
+          <TextInput
+            style={styles.commentInput}
+            value={comment}
+            onChangeText={setComment}
+            // Aviso explícito: la fila no lleva identidad, pero nada impide
+            // que alguien escriba la suya en el texto libre. Pedirlo aquí es
+            // más barato y más honesto que intentar detectarlo después.
+            placeholder="Anything else? (optional — please don't include personal details)"
+            placeholderTextColor={colors.placeholder}
+            multiline
+            numberOfLines={3}
+            maxLength={DELETION_COMMENT_MAX_LENGTH}
+            textAlignVertical="top"
+          />
+        ) : null}
+      </View>
+
+      {/* Confirmation */}
+      <View style={styles.card}>
+        <Text style={styles.confirmLabel}>
+          Type <Text style={styles.confirmWord}>{CONFIRM_WORD}</Text> to confirm
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            confirmed && styles.inputConfirmed,
+          ]}
+          value={confirmText}
+          onChangeText={setConfirmText}
+          placeholder="Type DELETE"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
+      </View>
+
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : null}
+
+      <TouchableOpacity
+        style={[
+          styles.deleteBtn,
+          (!confirmed || loading) && styles.deleteBtnDisabled,
+        ]}
+        onPress={handleDelete}
+        disabled={!confirmed || loading}
+        activeOpacity={0.8}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.white} size="small" />
+        ) : (
+          <Text style={styles.deleteBtnText}>Permanently delete my account</Text>
+        )}
+      </TouchableOpacity>
+
+      <Text style={styles.footerNote}>
+        Need help instead?{' '}
+        <Text
+          style={styles.footerLink}
+          onPress={() => router.push('/support' as any)}
+        >
+          Contact support
+        </Text>
+      </Text>
+    </>
+  );
+
+  // Escritorio con sesión de empresa o técnico: dentro del marco del área, con
+  // la barra superior y el menú de You (fase 8, decisión B).
+  if (shellRole) {
+    return (
+      <AccountShell role={shellRole} active="settings">
+        {content}
+      </AccountShell>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={desktopScrollbar}
         keyboardShouldPersistTaps="handled"
       >
         <TouchableOpacity onPress={goBack} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
-        <View style={styles.header}>
-          <View style={styles.iconWrap}>
-            <Text style={styles.icon}>⚠</Text>
-          </View>
-          <Text style={styles.title}>Delete account</Text>
-          <Text style={styles.subtitle}>
-            This action is permanent and cannot be undone.
-          </Text>
-        </View>
-
-        {/* What happens to the account data */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>What happens to your data</Text>
-          {isTechnician ? (
-            <>
-              <BulletItem text="Your direct profile identifiers and personal contact information" />
-              <BulletItem text="All uploaded documents (licenses, medicals, IDs) — files removed from storage" />
-              <BulletItem text="Cover notes on applications" />
-              <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
-              <BulletItem text="Your authentication credentials" />
-              <BulletItem text="A limited professional and marketplace record remains linked by an internal account identifier, as described in the Privacy Policy" />
-            </>
-          ) : (
-            <>
-              <BulletItem text="Your company membership and profile information" />
-              <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
-              <BulletItem text="Your authentication credentials" />
-              <BulletItem text="A limited deleted-account record retains the internal account identifier" />
-              <BulletItem text="The company profile, offers and marketplace history can remain for other members and platform integrity" />
-            </>
-          )}
-        </View>
-
-        {/* Last-admin warning for company */}
-        {!isTechnician && (
-          <View style={styles.warningCard}>
-            <Text style={styles.warningText}>
-              If you are the only administrator of your company, you must assign another administrator before deleting your account.
-            </Text>
-          </View>
-        )}
-
-        {/* Exit survey — optional, never a gate. */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Before you go</Text>
-          <Text style={styles.surveyIntro}>
-            Why are you leaving? This is optional — you can delete your account without answering.
-            The stored row has no account ID, but your role, the day and any details you write could
-            still make the answer indirectly identifiable. Please do not include personal details.
-          </Text>
-          {DELETION_REASON_CODES.map((code) => (
-            <ReasonOption
-              key={code}
-              label={deletionReasonLabel(code, profile?.role)}
-              selected={reason === code}
-              // Segundo toque sobre la opción marcada la desmarca: sin esto, un
-              // toque accidental no se puede deshacer y la única salida es
-              // mandar un motivo que no es el tuyo.
-              onPress={() => setReason((prev) => (prev === code ? null : code))}
-            />
-          ))}
-          {reason ? (
-            <TextInput
-              style={styles.commentInput}
-              value={comment}
-              onChangeText={setComment}
-              // Aviso explícito: la fila no lleva identidad, pero nada impide
-              // que alguien escriba la suya en el texto libre. Pedirlo aquí es
-              // más barato y más honesto que intentar detectarlo después.
-              placeholder="Anything else? (optional — please don't include personal details)"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={3}
-              maxLength={DELETION_COMMENT_MAX_LENGTH}
-              textAlignVertical="top"
-            />
-          ) : null}
-        </View>
-
-        {/* Confirmation */}
-        <View style={styles.card}>
-          <Text style={styles.confirmLabel}>
-            Type <Text style={styles.confirmWord}>{CONFIRM_WORD}</Text> to confirm
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              confirmed && styles.inputConfirmed,
-            ]}
-            value={confirmText}
-            onChangeText={setConfirmText}
-            placeholder="Type DELETE"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="characters"
-            autoCorrect={false}
-          />
-        </View>
-
-        {error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : null}
-
-        <TouchableOpacity
-          style={[
-            styles.deleteBtn,
-            (!confirmed || loading) && styles.deleteBtnDisabled,
-          ]}
-          onPress={handleDelete}
-          disabled={!confirmed || loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.deleteBtnText}>Permanently delete my account</Text>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.footerNote}>
-          Need help instead?{' '}
-          <Text
-            style={styles.footerLink}
-            onPress={() => router.push('/support' as any)}
-          >
-            Contact support
-          </Text>
-        </Text>
+        {content}
       </ScrollView>
     </SafeAreaView>
   );
@@ -278,7 +298,7 @@ function BulletItem({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
     padding: spacing.lg,
@@ -290,7 +310,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
-  backText: { color: colors.cyanLight, fontSize: 14, fontWeight: '500' },
+  backText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   header: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
@@ -299,7 +319,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: 'rgba(239,68,68,0.18)',
+    backgroundColor: 'rgba(180, 35, 24, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -308,7 +328,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     marginBottom: spacing.sm,
   },
   subtitle: {
@@ -319,18 +339,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
     marginBottom: spacing.md,
     gap: spacing.sm,
   },
   cardTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.cyanLight,
+    color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: spacing.xs,
@@ -341,13 +361,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   bulletDot: { color: colors.error, fontSize: 14, marginTop: 1, width: 14 },
-  bulletText: { flex: 1, fontSize: 13, color: colors.cyanLight, lineHeight: 19 },
+  bulletText: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
   warningCard: {
-    backgroundColor: 'rgba(245,158,11,0.12)',
+    backgroundColor: 'rgba(122, 63, 6, 0.12)',
     borderRadius: 14,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.3)',
+    borderColor: 'rgba(122, 63, 6, 0.3)',
     marginBottom: spacing.md,
   },
   warningText: {
@@ -371,8 +391,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: colors.borderLight,
+    backgroundColor: colors.surfaceSoft,
   },
   reasonRowSelected: {
     borderColor: colors.cyan,
@@ -383,7 +403,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -400,21 +420,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   reasonTextSelected: {
-    color: colors.white,
+    color: colors.text,
     fontWeight: '600',
   },
   commentInput: {
     marginTop: spacing.xs,
     minHeight: 76,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
     paddingHorizontal: spacing.md,
@@ -422,7 +442,7 @@ const styles = StyleSheet.create({
   },
   confirmLabel: {
     fontSize: 13,
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: spacing.xs,
   },
   confirmWord: {
@@ -431,11 +451,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace' as any,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
     paddingHorizontal: spacing.md,
@@ -454,7 +474,7 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     backgroundColor: colors.error,
-    borderRadius: 14,
+    borderRadius: 999,
     paddingVertical: spacing.md + 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -465,7 +485,7 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     color: colors.white,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   footerNote: {
     textAlign: 'center',
@@ -484,8 +504,8 @@ const styles = StyleSheet.create({
   doneTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     marginBottom: spacing.sm,
   },
-  doneSub: { fontSize: 14, color: colors.cyanLight, textAlign: 'center' },
+  doneSub: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
 });

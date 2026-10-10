@@ -1,11 +1,11 @@
 import React from 'react';
 import {
   TouchableOpacity,
-  Text,
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
 } from 'react-native';
+import { Text } from './ui/Text';
 import { colors, spacing } from '../theme';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost';
@@ -22,33 +22,36 @@ interface ButtonProps {
   style?: ViewStyle;
 }
 
+// Rediseño: botones en píldora, como en las maquetas. `primary` es la única
+// acción (#0B6A9E); `outline` es el secundario blanco con borde gris;
+// `secondary` sigue siendo el relleno oscuro.
 const containerVariant: Record<Variant, ViewStyle> = {
-  primary: { backgroundColor: colors.blue },
+  primary: { backgroundColor: colors.primary },
   secondary: { backgroundColor: colors.navy },
   outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.blue,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   ghost: { backgroundColor: 'transparent' },
 };
 
 const containerSize: Record<Size, ViewStyle> = {
-  sm: { paddingHorizontal: spacing.md, paddingVertical: 6, minHeight: 36 },
-  md: { paddingHorizontal: spacing.lg, paddingVertical: 12, minHeight: 48 },
-  lg: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, minHeight: 56 },
+  sm: { paddingHorizontal: spacing.md, paddingVertical: 6, minHeight: 44 },
+  md: { paddingHorizontal: spacing.lg, paddingVertical: 12, minHeight: 50 },
+  lg: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, minHeight: 52 },
 };
 
 const labelColor: Record<Variant, string> = {
   primary: colors.white,
   secondary: colors.white,
-  outline: colors.blue,
-  ghost: colors.blue,
+  outline: colors.text,
+  ghost: colors.primary,
 };
 
 const labelSize: Record<Size, number> = {
-  sm: 13,
-  md: 15,
+  sm: 14,
+  md: 15.5,
   lg: 16,
 };
 
@@ -80,7 +83,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' || variant === 'secondary' ? colors.white : colors.blue}
+          color={variant === 'primary' || variant === 'secondary' ? colors.white : colors.primary}
           size="small"
         />
       ) : (
@@ -99,7 +102,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 10,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -110,6 +113,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   label: {
-    fontWeight: '600',
+    fontWeight: '800',
   },
 });

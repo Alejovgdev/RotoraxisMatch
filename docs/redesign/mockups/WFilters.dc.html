@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician filters</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 20px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<span style="font-size: 13px; color: #526274">Any option within a section, and every section you use.</span>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">What they do</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ trades }}" as="c" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.toggle }}" style="height: 42px; padding: 0 14px; border-radius: 21px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">Airplanes or helicopters</h3>
+<div role="radiogroup" aria-label="Airplanes or helicopters" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: #EEF3F7">
+<sc-for list="{{ products }}" as="c" hint-placeholder-count="3">
+<button type="button" role="radio" aria-checked="{{c.checked}}" onClick="{{ c.pick }}" style="height: 40px; border-radius: 10px; border: 0; background: {{c.bg}}; box-shadow: {{c.shadow}}; color: {{c.fg}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<sc-if value="{{ showLicence }}" hint-placeholder-val="{{ true }}">
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">Licence</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ auths }}" as="c" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 38px; padding: 0 12px; border-radius: 19px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ cats }}" as="c" hint-placeholder-count="8">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.toggle }}" style="min-width: 54px; height: 42px; padding: 0 10px; border-radius: 12px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+<span style="font-size: 12.5px; color: #66768A">{{catHint}}</span>
+</section>
+</sc-if>
+<sc-if value="{{ hideLicence }}" hint-placeholder-val="{{ false }}">
+<span style="padding: 12px 14px; border-radius: 14px; background: #F3F6F9; font-size: 13.5px; color: #526274">No licence filter: the trades you picked work without a licence.</span>
+</sc-if>
+
+<sc-if value="{{ showAircraft }}" hint-placeholder-val="{{ true }}">
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">Aircraft</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ pickedAircraft }}" as="a" hint-placeholder-count="1">
+<button type="button" onClick="{{ a.remove }}" aria-label="{{a.aria}}" style="height: 36px; padding: 0 10px 0 12px; border-radius: 18px; border: 0; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer">{{a.name}}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+</sc-for>
+</div>
+<input type="search" aria-label="Search aircraft" placeholder="{{aircraftPlaceholder}}" value="{{q}}" onChange="{{ onQ }}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 22px; border: 0; background: #EEF3F7; font-family: inherit; font-size: 14.5px; color: #0E1A2B; outline: none">
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{ aircraftResults }}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{ r.add }}" style="display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 4px; border: 0; border-bottom: 1px solid #E6ECF1; background: transparent; color: #0E1A2B; font-family: inherit; font-size: 14px; font-weight: 700; text-align: left; cursor: pointer"><span style="color: #0B6A9E; font-size: 16px; font-weight: 800">+</span>{{r.name}}</button>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{ showEngine }}" hint-placeholder-val="{{ false }}">
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">Engine</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ pickedEngines }}" as="a" hint-placeholder-count="1">
+<button type="button" onClick="{{ a.remove }}" aria-label="{{a.aria}}" style="height: 36px; padding: 0 10px 0 12px; border-radius: 18px; border: 0; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer">{{a.name}}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+</sc-for>
+</div>
+<input type="search" aria-label="Search engine" placeholder="Search engine" value="{{eq}}" onChange="{{ onEq }}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 22px; border: 0; background: #EEF3F7; font-family: inherit; font-size: 14.5px; color: #0E1A2B; outline: none">
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{ engineResults }}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{ r.add }}" style="display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 4px; border: 0; border-bottom: 1px solid #E6ECF1; background: transparent; color: #0E1A2B; font-family: inherit; font-size: 14px; font-weight: 700; text-align: left; cursor: pointer"><span style="color: #0B6A9E; font-size: 16px; font-weight: 800">+</span>{{r.name}}<span style="margin-left: auto; font-size: 12.5px; font-weight: 600; color: #66768A">{{r.maker}}</span></button>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 800">Availability</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ avail }}" as="c" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.toggle }}" style="height: 42px; padding: 0 14px; border-radius: 21px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<button type="button" role="switch" aria-checked="{{verChecked}}" onClick="{{ toggleVerified }}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; border: 0; background: transparent; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; text-align: left; cursor: pointer">
+Verified only
+<span style="position: relative; flex: none; width: 50px; height: 30px; border-radius: 15px; background: {{verTrack}}"><span style="position: absolute; top: 3px; left: {{verKnob}}; width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(14, 26, 43, 0.25)"></span></span>
+</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E"},"$preview":{"width":390,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const trades = s.trades || { mechanic: true };
+    const product = s.product || 'airplanes';
+    const auth = s.auth || 'any';
+    const cats = s.cats || { 'B1.1': true };
+    const q = s.q || '';
+    const aircraft = s.aircraft || ['a320cfm'];
+    const engines = s.engines || [];
+    const eq = s.eq || '';
+    const avail = s.avail || { open: true };
+    const verified = s.verified === undefined ? true : s.verified;
+    const chip = (on) => ({ bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6', pressed: on ? 'true' : 'false' });
+    const toggleIn = (key, obj, k) => () => { const n = Object.assign({}, obj); n[k] = !n[k]; const st = {}; st[key] = n; this.setState(st); };
+    const tradeDefs = [['mechanic', 'Mechanic'], ['avionic', 'Avionics Technician'], ['sheet', 'Sheet Metal Worker'], ['painter', 'Aircraft Painter'], ['composite', 'Composite Technician'], ['engine', 'Engine Technician']];
+    const picked = tradeDefs.map((d) => d[0]).filter((k) => trades[k]);
+    const none = picked.length === 0;
+    const licensed = ['mechanic', 'avionic', 'engine'];
+    const showLicence = none || picked.some((k) => licensed.indexOf(k) !== -1);
+    const prods = product === 'any' ? ['airplanes', 'helicopters'] : [product];
+    const part66 = [
+      ['A1', ['mechanic'], ['airplanes']], ['A2', ['mechanic'], ['airplanes']], ['A3', ['mechanic'], ['helicopters']], ['A4', ['mechanic'], ['helicopters']],
+      ['B1.1', ['mechanic', 'engine'], ['airplanes']], ['B1.2', ['mechanic', 'engine'], ['airplanes']], ['B1.3', ['mechanic', 'engine'], ['helicopters']], ['B1.4', ['mechanic', 'engine'], ['helicopters']],
+      ['B2', ['avionic'], ['airplanes', 'helicopters']], ['B2L', ['avionic'], ['airplanes', 'helicopters']], ['B3', ['mechanic'], ['airplanes']], ['L', ['mechanic'], ['airplanes']], ['C', ['mechanic', 'avionic'], ['airplanes', 'helicopters']]
+    ];
+    const faa = [['A', ['mechanic'], ['airplanes', 'helicopters']], ['P', ['mechanic', 'engine'], ['airplanes', 'helicopters']], ['A&P', ['mechanic', 'engine'], ['airplanes', 'helicopters']]];
+    const catList = (auth === 'FAA' ? faa : part66).filter((c) => (none || c[1].some((t) => trades[t])) && c[2].some((x) => prods.indexOf(x) !== -1));
+    const airDefs = [
+      ['a320cfm', 'A320 family — CFM56', 'airplanes'], ['a320iae', 'A320 family — V2500', 'airplanes'], ['a320leap', 'A320neo — LEAP-1A', 'airplanes'],
+      ['b737', 'B737 NG — CFM56-7B', 'airplanes'], ['atr', 'ATR 42/72 — PW100', 'airplanes'], ['a330', 'A330 — Trent 700', 'airplanes'],
+      ['h145', 'H145 / BK117 D2 — Arriel 2', 'helicopters'], ['aw139', 'AW139 — PT6C-67C', 'helicopters'], ['aw169', 'AW169 — PW210A', 'helicopters'], ['h135', 'H135 — Arrius 2B2', 'helicopters']
+    ];
+    const fits = (a) => prods.indexOf(a[2]) !== -1;
+    const needle = q.trim().toLowerCase();
+    const pickedAircraft = airDefs.filter((a) => aircraft.indexOf(a[0]) !== -1 && fits(a))
+      .map((a) => ({ name: a[1], aria: 'Remove ' + a[1], remove: () => this.setState({ aircraft: aircraft.filter((x) => x !== a[0]) }) }));
+    const aircraftResults = airDefs.filter((a) => aircraft.indexOf(a[0]) === -1 && fits(a) && (!needle || a[1].toLowerCase().indexOf(needle) !== -1)).slice(0, 3)
+      .map((a) => ({ name: a[1], add: () => this.setState({ aircraft: aircraft.concat([a[0]]), q: '' }) }));
+    const engineDefs = [
+      ['cfm565b', 'CFM56-5B', 'CFM International'], ['cfm567b', 'CFM56-7B', 'CFM International'], ['leap1a', 'LEAP-1A', 'CFM International'],
+      ['leap1b', 'LEAP-1B', 'CFM International'], ['pw1100g', 'PW1100G', 'Pratt & Whitney'], ['v2500', 'V2500', 'International Aero Engines'],
+      ['trent700', 'Trent 700', 'Rolls-Royce'], ['pw100', 'PW100 series', 'Pratt & Whitney Canada'], ['arriel2', 'Arriel 2', 'Safran'], ['pt6c', 'PT6C-67C', 'Pratt & Whitney Canada']
+    ];
+    const eNeedle = eq.trim().toLowerCase();
+    return {
+      trades: tradeDefs.map((d) => Object.assign({ label: d[1], toggle: toggleIn('trades', trades, d[0]) }, chip(!!trades[d[0]]))),
+      products: [['any', 'Any'], ['airplanes', 'Airplanes'], ['helicopters', 'Helicopters']].map((d) => {
+        const on = d[0] === product;
+        return { label: d[1], checked: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#0E1A2B' : '#526274', shadow: on ? '0 1px 3px rgba(14, 26, 43, 0.14)' : 'none', pick: () => this.setState({ product: d[0] }) };
+      }),
+      showLicence: showLicence, hideLicence: !showLicence,
+      auths: ['any', 'EASA', 'UK CAA', 'CASA', 'UAE GCAA', 'FAA'].map((a) => Object.assign({ label: a === 'any' ? 'Any authority' : a, pick: () => this.setState({ auth: a }) }, chip(a === auth))),
+      cats: catList.map((c) => {
+        const on = !!cats[c[0]];
+        return { label: c[0], pressed: on ? 'true' : 'false', bg: on ? '#E6F1F8' : '#FFFFFF', fg: on ? '#0B5E8C' : '#0E1A2B', border: on ? '2px solid ' + p : '1px solid #D5DEE6', toggle: toggleIn('cats', cats, c[0]) };
+      }),
+      catHint: 'Only the categories that fit what they do and the aircraft you picked.',
+      showAircraft: none || picked.some((k) => k !== 'engine'), showEngine: !!trades.engine,
+      pickedAircraft: pickedAircraft, aircraftResults: aircraftResults, q: q,
+      aircraftPlaceholder: product === 'helicopters' ? 'Search helicopters' : product === 'airplanes' ? 'Search airplanes' : 'Search aircraft',
+      onQ: (e) => this.setState({ q: e.target.value }),
+      pickedEngines: engineDefs.filter((e) => engines.indexOf(e[0]) !== -1).map((e) => ({ name: e[1], aria: 'Remove ' + e[1], remove: () => this.setState({ engines: engines.filter((x) => x !== e[0]) }) })),
+      engineResults: engineDefs.filter((e) => engines.indexOf(e[0]) === -1 && (!eNeedle || (e[1] + ' ' + e[2]).toLowerCase().indexOf(eNeedle) !== -1)).slice(0, 3)
+        .map((e) => ({ name: e[1], maker: e[2], add: () => this.setState({ engines: engines.concat([e[0]]), eq: '' }) })),
+      eq: eq, onEq: (e) => this.setState({ eq: e.target.value }),
+      avail: [['open', 'Open to offers'], ['off', 'Unavailable']].map((d) => Object.assign({ label: d[1], toggle: toggleIn('avail', avail, d[0]) }, chip(!!avail[d[0]]))),
+      verChecked: verified ? 'true' : 'false', verTrack: verified ? p : '#C9D3DD', verKnob: verified ? '23px' : '3px',
+      toggleVerified: () => this.setState({ verified: !verified })
+    };
+  }
+}
+</script>
+</body>
+</html>

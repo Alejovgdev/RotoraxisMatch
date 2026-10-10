@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import type { AvailabilityStatus, SafeTechnicianView } from '../types';
 import type { TechnicianHabilitation } from '../types/technician';
-import type { MapFilters, MapFilterValue } from '../types/filters';
 import type { MapOfferMatchOption } from '../types/mapOffers';
 import type { TechnicianTypeCode } from '../types/catalog';
 import { colors } from '../theme';
@@ -14,9 +13,7 @@ import { resolveTypeRatingLabels } from '../utils/v2CompatAdapters';
 import { groupTechnicianMapMarkers } from '../utils/technicianMapMarkers';
 import { TechnicianMapHeader, TechnicianMapLegend } from './technician-map/TechnicianMapControls';
 import {
-  activeTechnicianMapFilterCount,
   TechnicianMapDetailSheet,
-  TechnicianMapFilterSheet,
   TechnicianOfferSelectionSheet,
 } from './technician-map/TechnicianMapSheets';
 
@@ -24,8 +21,11 @@ export interface TechnicianMapProps {
   technicians: SafeTechnicianView[];
   habilitationsById: Record<string, TechnicianHabilitation[]>;
   technicianTypesById: Record<string, TechnicianTypeCode[]>;
-  filters: MapFilters;
-  onFilterChange: (key: keyof MapFilters, value: MapFilterValue) => void;
+  /** Los filtros son los compartidos con la búsqueda (fase 3B): el panel lo abre quien monta el mapa. */
+  filterCount: number;
+  onOpenFilters: () => void;
+  /** El botón para volver a la lista. */
+  onShowList?: () => void;
   loading: boolean;
   onBack?: () => void;
   offerMatchesByTechnician?: Record<string, MapOfferMatchOption[]>;
@@ -34,8 +34,19 @@ export interface TechnicianMapProps {
   onViewProfile?: (technicianId: string) => void;
 }
 
+// Los colores de los marcadores NO siguen el tema: el mapa se queda como está
+// (respuesta 22 de la revisión del rediseño) y son los mismos que el WebView de
+// TechnicianMap.native.tsx lleva escritos a mano. Si cambian, cambian allí también.
+const MARKER = {
+  available: '#10B981',
+  unavailable: '#94A3B8',
+  group: '#0A1628',
+  selected: '#2563EB',
+  ring: '#FFFFFF',
+} as const;
+
 function markerColor(status: AvailabilityStatus): string {
-  return status === 'open_to_offers' ? colors.success : colors.textMuted;
+  return status === 'open_to_offers' ? MARKER.available : MARKER.unavailable;
 }
 
 function hasMapCoordinates(technician: SafeTechnicianView): boolean {
@@ -98,8 +109,9 @@ export default function TechnicianMapLeafletImpl({
   technicians,
   habilitationsById,
   technicianTypesById,
-  filters,
-  onFilterChange,
+  filterCount,
+  onOpenFilters,
+  onShowList,
   loading,
   onBack,
   offerMatchesByTechnician = {},
@@ -110,7 +122,6 @@ export default function TechnicianMapLeafletImpl({
   useLeafletCss();
   const { ratings } = useAircraftTypeRatingsCatalog();
   const ratingIndex = useMemo(() => buildAircraftRatingIndex(ratings), [ratings]);
-  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedOfferTechId, setSelectedOfferTechId] = useState<string | null>(null);
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null);
@@ -203,9 +214,9 @@ export default function TechnicianMapLeafletImpl({
               eventHandlers={{ click: () => setSelectedGroupKey(group.key) }}
               pathOptions={{
                 fillColor: isGroup
-                  ? colors.navy
+                  ? MARKER.group
                   : markerColor(singleTechnician.availability.status ?? 'unavailable'),
-                color: isSelected ? colors.blue : isApproximate && !isGroup ? colors.navy : colors.white,
+                color: isSelected ? MARKER.selected : isApproximate && !isGroup ? MARKER.group : MARKER.ring,
                 fillOpacity: isGroup ? 0.92 : isApproximate ? 0.34 : 0.92,
                 weight: isSelected ? 5 : isApproximate ? 3 : 2,
                 dashArray: isApproximate ? '4 3' : undefined,
@@ -225,20 +236,14 @@ export default function TechnicianMapLeafletImpl({
 
       <TechnicianMapHeader
         visibleCount={technicians.length}
-        filterCount={activeTechnicianMapFilterCount(filters)}
+        filterCount={filterCount}
         loading={loading}
         onBack={onBack}
-        onOpenFilters={() => setFilterOpen(true)}
+        onOpenFilters={onOpenFilters}
+        onShowList={onShowList}
       />
 
       {!loading && mappedTechnicians.length > 0 ? <TechnicianMapLegend /> : null}
-
-      <TechnicianMapFilterSheet
-        visible={filterOpen}
-        filters={filters}
-        onFilterChange={onFilterChange}
-        onClose={() => setFilterOpen(false)}
-      />
 
       <TechnicianMapDetailSheet
         group={selectedGroup}

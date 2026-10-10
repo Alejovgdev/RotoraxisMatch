@@ -9,7 +9,7 @@ interface LoadingScreenProps {
   role?: string;
 }
 
-export function LoadingScreen({ color = colors.blue }: LoadingScreenProps) {
+export function LoadingScreen({ color = colors.primary }: LoadingScreenProps) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />

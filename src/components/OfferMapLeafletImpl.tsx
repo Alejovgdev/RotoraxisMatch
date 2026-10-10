@@ -116,6 +116,7 @@ export default function OfferMapLeafletImpl({
   unmappedCount,
   onRetry,
   onBack,
+  onShowList,
   onViewOffer,
 }: OfferMapProps) {
   useLeafletCss();
@@ -196,6 +197,7 @@ export default function OfferMapLeafletImpl({
         filters={filters}
         onBack={onBack}
         onOpenFilters={() => setFilterOpen(true)}
+        onShowList={onShowList}
       />
 
       {!loading && !error && offers.length > 0 ? <OfferMapLegend /> : null}

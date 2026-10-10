@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Review</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 940px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="WPostHeader" step="5" total="4" back="W-Post4.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Review your offer</h1>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: #526274">Publish it now or keep it as a draft.</p>
+</div>
+
+<sc-for list="{{ blocks }}" as="b" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid #E1E8EE">
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #66768A">{{b.title}}</span>
+<sc-for list="{{ b.lines }}" as="l" hint-placeholder-count="2">
+<span style="font-size: 14.5px; font-weight: 700; line-height: 1.35">{{l.text}}</span>
+</sc-for>
+</div>
+<a href="{{b.href}}" style="flex: none; align-self: flex-start; height: 40px; display: flex; align-items: center; font-size: 14px; font-weight: 800; text-decoration: none; color: {{primary}}">Edit</a>
+</div>
+</sc-for>
+</div>
+
+<div style="flex: none; display: flex; gap: 10px; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="C-Offers.dc.html" style="flex: 1 1 0; height: 52px; border-radius: 26px; border: 1px solid #D5DEE6; color: #0E1A2B; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Save draft</a>
+<a href="W-PostDone.dc.html" style="flex: 1.4 1 0; height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Publish</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const b = (title, lines, href) => ({ title: title, href: href, lines: lines.map((t) => ({ text: t })) });
+    return {
+      primary: this.props.primary ?? '#0B6A9E',
+      blocks: [
+        b('Who', ['Mechanic · Airplanes'], 'W-Post.dc.html'),
+        b('Licence', ['Licence required · EASA B1.1', 'Also accepts UK CAA'], 'W-Post2.dc.html'),
+        b('Type ratings · any one', ['Airbus A320 family — CFM56', 'Airbus A320 family — V2500'], 'W-Post3.dc.html'),
+        b('Details', ['B1 Mechanic · A320 family', 'Permanent · 3+ years', '€3,200 per month, gross', 'Barcelona, Spain'], 'W-Post4.dc.html')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

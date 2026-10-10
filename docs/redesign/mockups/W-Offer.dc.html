@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your offer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 1140px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 8px 0 4px">
+<a href="W-Home.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+<span style="flex: 1 1 auto; font-size: 15px; font-weight: 800">Offer</span>
+<button type="button" aria-label="More actions" onClick="{{ openMenu }}" style="flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 22px; background: transparent; color: #0E1A2B; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 10px 20px 0">
+
+<div style="display: flex; align-items: center; gap: 14px">
+<span style="flex: none; width: 60px; height: 60px; border-radius: 18px; background: #D6ECF8; color: #0B5E8C; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 20px">B1</span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 21px; font-weight: 800; line-height: 1.2">B1 Mechanic · A320 family</h1>
+<span style="display: flex; align-items: center; gap: 8px"><span style="height: 24px; padding: 0 9px; border-radius: 12px; background: {{statusBg}}; color: {{statusFg}}; font-size: 12px; font-weight: 800; display: flex; align-items: center">{{statusLabel}}</span><span style="font-size: 13px; color: #66768A">{{statusWhen}}</span></span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<div style="padding: 10px 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Contract</span><span style="font-size: 14.5px; font-weight: 800">Permanent</span></div>
+<div style="padding: 10px 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Remuneration</span><span style="font-size: 14.5px; font-weight: 800">€3,200 / month</span></div>
+<div style="padding: 10px 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Location</span><span style="font-size: 14.5px; font-weight: 800">Barcelona, Spain</span></div>
+<div style="padding: 10px 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Experience</span><span style="font-size: 14.5px; font-weight: 800">3+ years</span></div>
+</div>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Requirements</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14px; color: #526274">Profile type</span><span style="font-size: 14px; font-weight: 800">Mechanic</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14px; color: #526274">Certified work</span><span style="font-size: 14px; font-weight: 800">Licence required</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14px; color: #526274">Licence</span><span style="font-size: 14px; font-weight: 800; text-align: right">EASA B1.1 · also UK CAA</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0"><span style="flex: none; font-size: 14px; color: #526274">Aircraft · any one</span><span style="font-size: 14px; font-weight: 800; text-align: right">A320 family — CFM56<br>A320 family — V2500</span></div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Technicians for this offer</h2>
+<span style="font-size: 13px; color: #526274">Applications and direct offers first, then the best matches.</span>
+<sc-for list="{{ techs }}" as="t" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1">
+<a href="{{t.href}}" style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #0E1A2B">
+<dc-import name="WAvatar" who="{{t.face}}" size="44" hint-size="44px,44px"></dc-import>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.name}}</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #526274"><span style="font-weight: 800; color: {{t.scoreColor}}">{{t.score}}</span>{{t.lic}}</span>
+</span>
+</a>
+<sc-if value="{{ t.hasRel }}" hint-placeholder-val="{{ true }}">
+<span style="flex: none; height: 26px; padding: 0 9px; border-radius: 13px; background: {{t.relBg}}; color: {{t.relFg}}; font-size: 11.5px; font-weight: 800; display: flex; align-items: center">{{t.rel}}</span>
+</sc-if>
+<sc-if value="{{ t.canSend }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ t.send }}" style="flex: none; height: 40px; padding: 0 14px; border-radius: 20px; border: 1.5px solid {{primary}}; background: #FFFFFF; color: {{primary}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">Send offer</button>
+</sc-if>
+</div>
+</sc-for>
+</section>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<sc-if value="{{ isOpen }}" hint-placeholder-val="{{ true }}">
+<a href="W-Post.dc.html" style="height: 52px; border-radius: 26px; border: 1px solid #D5DEE6; color: #0E1A2B; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Edit offer</a>
+</sc-if>
+<sc-if value="{{ isClosed }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ reopen }}" style="width: 100%; height: 52px; border-radius: 26px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Reopen offer</button>
+</sc-if>
+</div>
+
+<sc-if value="{{ anySheet }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Close" onClick="{{ closeSheet }}" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 0; border: 0; background: rgba(14, 26, 43, 0.45); cursor: pointer"></button>
+</sc-if>
+
+<sc-if value="{{ isMenu }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="Offer actions" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 18px 20px 24px; display: flex; flex-direction: column; gap: 4px">
+<a href="W-Post.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 52px; text-decoration: none; color: #0E1A2B; font-size: 16px; font-weight: 800"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit offer</a>
+<sc-if value="{{ isOpen }}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{ askClose }}" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0; border: 0; background: transparent; font-family: inherit; color: #0E1A2B; font-size: 16px; font-weight: 800; text-align: left; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Close offer</button>
+</sc-if>
+<sc-if value="{{ isClosed }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ reopen }}" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0; border: 0; background: transparent; font-family: inherit; color: #0E1A2B; font-size: 16px; font-weight: 800; text-align: left; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>Reopen offer</button>
+</sc-if>
+<button type="button" onClick="{{ askDelete }}" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0; border: 0; background: transparent; font-family: inherit; color: #B42318; font-size: 16px; font-weight: 800; text-align: left; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Delete offer</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+<div role="alertdialog" aria-label="{{confirmTitle}}" style="position: absolute; left: 20px; right: 20px; top: 330px; border-radius: 22px; background: #FFFFFF; padding: 22px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(14, 26, 43, 0.3)">
+<h2 style="margin: 0; font-size: 19px; font-weight: 800">{{confirmTitle}}</h2>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">{{confirmText}}</p>
+<div style="display: flex; gap: 10px; margin-top: 8px">
+<button type="button" onClick="{{ closeSheet }}" style="flex: 1 1 0; height: 48px; border-radius: 24px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Cancel</button>
+<button type="button" onClick="{{ confirm }}" style="flex: 1 1 0; height: 48px; border-radius: 24px; border: 0; background: {{confirmBg}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{confirmLabel}}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="Send direct offer" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 style="margin: 0; font-size: 19px; font-weight: 800">Send direct offer</h2><span style="font-size: 14px; color: #526274">To {{sendTo}} · B1 Mechanic · A320 family</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Personal message (optional)
+<textarea rows="4" placeholder="Add a note to the technician..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; resize: none; outline: none"></textarea>
+</label>
+<button type="button" onClick="{{ doSend }}" style="height: 52px; border-radius: 26px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Send offer</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%); height: 46px; padding: 0 20px; border-radius: 23px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14.5px; font-weight: 800; white-space: nowrap">{{toast}}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":1140}}'>
+class Component extends DCLogic {
+  flash(text) { this.setState({ toast: text }); setTimeout(() => this.setState({ toast: '' }), 2400); }
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const status = s.status || 'published';
+    const sent = s.sent || {};
+    const rel = {
+      accepted: ['Direct offer · accepted', '#D3F1E3', '#0B5B3A'],
+      pending: ['Applied · pending', '#FDE7B5', '#7A3F06'],
+      rejected: ['Applied · rejected', '#E9EDF1', '#4A5A6C'],
+      sent: ['Direct offer · pending', '#DCE7FB', '#1E4FB8']
+    };
+    const base = [
+      { id: 'a', face: 't4410', name: 'Pablo Serrano', lic: 'EASA B1.1', score: 88, rel: 'accepted', href: 'C-Tech.dc.html' },
+      { id: 'b', face: 'anon', name: 'Technician T7A2C91B04', lic: 'EASA B1.1', score: 92, rel: 'pending', href: 'W-Candidate.dc.html' },
+      { id: 'c', face: 'anon', name: 'Technician T2E55A0C31', lic: 'UK CAA B1.1', score: 64, rel: 'rejected', href: '#' },
+      { id: 'd', face: 'anon', name: 'Technician T4C81E9A20', lic: 'EASA B1.1', score: 84, rel: '', href: '#' },
+      { id: 'e', face: 'anon', name: 'Technician T9B07D3E11', lic: 'EASA B1.1', score: 79, rel: '', href: '#' }
+    ];
+    const techs = base.map((t) => {
+      const r = sent[t.id] ? 'sent' : t.rel;
+      return {
+        face: t.face, name: t.name, lic: '· ' + t.lic, href: t.href,
+        score: t.score + '%', scoreColor: t.score >= 85 ? '#157F4F' : t.score >= 70 ? '#0B5E8C' : '#66768A',
+        hasRel: !!r, rel: r ? rel[r][0] : '', relBg: r ? rel[r][1] : '', relFg: r ? rel[r][2] : '',
+        canSend: !r && status === 'published',
+        send: () => this.setState({ sheet: 'send', target: t.id, targetName: t.name })
+      };
+    });
+    const sheet = s.sheet || null;
+    const confirmKind = s.confirmKind || 'close';
+    const statusMap = { published: ['Published', '#D3F1E3', '#0B5B3A', 'Published 5 days ago'], closed: ['Closed', '#E9EDF1', '#4A5A6C', 'Closed just now'] };
+    return {
+      primary: p, techs: techs,
+      statusLabel: statusMap[status][0], statusBg: statusMap[status][1], statusFg: statusMap[status][2], statusWhen: statusMap[status][3],
+      isOpen: status === 'published', isClosed: status === 'closed',
+      anySheet: !!sheet, isMenu: sheet === 'menu', isConfirm: sheet === 'confirm', isSend: sheet === 'send',
+      sendTo: s.targetName || '',
+      confirmTitle: confirmKind === 'close' ? 'Close offer?' : 'Delete offer?',
+      confirmText: confirmKind === 'close' ? 'This offer will no longer be visible to technicians.' : 'The offer and its draft data are removed. This cannot be undone.',
+      confirmLabel: confirmKind === 'close' ? 'Close offer' : 'Delete',
+      confirmBg: confirmKind === 'close' ? '#0E1A2B' : '#B42318',
+      toastOn: !!s.toast, toast: s.toast || '',
+      openMenu: () => this.setState({ sheet: 'menu' }),
+      closeSheet: () => this.setState({ sheet: null }),
+      askClose: () => this.setState({ sheet: 'confirm', confirmKind: 'close' }),
+      askDelete: () => this.setState({ sheet: 'confirm', confirmKind: 'delete' }),
+      confirm: () => {
+        if (confirmKind === 'close') { this.setState({ sheet: null, status: 'closed' }); this.flash('Offer closed'); }
+        else { this.setState({ sheet: null }); this.flash('Offer deleted'); }
+      },
+      reopen: () => { this.setState({ sheet: null, status: 'published' }); this.flash('Offer reopened'); },
+      doSend: () => { const n = Object.assign({}, sent); n[s.target] = true; this.setState({ sheet: null, sent: n }); this.flash('Direct offer sent'); }
+    };
+  }
+}
+</script>
+</body>
+</html>

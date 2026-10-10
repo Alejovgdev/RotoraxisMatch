@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from './ui/Text';
 import { colors, spacing } from '../theme';
 import { MatchScore, MatchDisplayLabel } from '../types/matching';
 import { OfferWithRequirements } from '../types/offer';
 import { QUALIFICATION_FIRST_ORDER, visibleBreakdownRows } from '../utils/matchBreakdownRows';
+import { scoreCapNote } from '../utils/offerChecklist';
 
 const LEVEL_LABEL: Record<MatchScore['level'], string> = {
   exact: 'Exact match',
@@ -57,8 +59,9 @@ export function MatchExplanation({
   offer?: OfferWithRequirements | null;
 }) {
   const breakdownRows = visibleBreakdownRows(offer, QUALIFICATION_FIRST_ORDER);
-  const rawSum = Object.values(score.breakdown).reduce((sum, v) => sum + v, 0);
-  const wasCapped = rawSum > score.total;
+  // El texto del tope vive en src/utils/offerChecklist.ts: lo comparte la
+  // checklist de la página de oferta del técnico (fase 5A).
+  const capNote = scoreCapNote(score);
 
   if (
     score.matches.length === 0 &&
@@ -103,17 +106,7 @@ export function MatchExplanation({
           ))}
         </View>
       )}
-      {wasCapped && (
-        <Text style={styles.cappedNote}>
-          {score.blockers.length > 0
-            ? 'Score capped: this profile does not meet a hard requirement of the offer (see above).'
-            : score.profileTypeMismatch
-              ? 'Score capped: the offer is looking for a different profile type (see below).'
-            : score.missingRequirements.length > 0
-              ? 'Score capped: this offer states a requirement this profile does not meet (see below).'
-              : 'Score capped: this offer requires certified work and the profile does not hold the licence for it.'}
-        </Text>
-      )}
+      {capNote ? <Text style={styles.cappedNote}>{capNote}</Text> : null}
 
       {score.vigenciaNotices.length > 0 && (
         <View style={styles.block}>

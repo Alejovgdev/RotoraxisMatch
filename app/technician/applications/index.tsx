@@ -1,28 +1,23 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  useWindowDimensions,
-} from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
-import { ClipboardCheck, MessageCircle } from 'lucide-react-native';
-import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
+import { Avatar, Text } from '../../../src/components/ui';
+import { TechnicianScreen } from '../../../src/components/technician/TechnicianUI';
 import {
-  ActivityDot,
-  EmptyPanel,
-  TechnicianBadge,
-  TechnicianCard,
-  TechnicianPageHeader,
-  TechnicianScreen,
-  techStyles,
-  techUi,
-} from '../../../src/components/technician/TechnicianUI';
+  AvatarDot,
+  DesktopTitle,
+  EmptyBlock,
+  FilterChipRow,
+  PageBar,
+  PageBody,
+  PageSubtitle,
+  PillButton,
+  RowList,
+  StatusPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { companyRepositoryV2 } from '../../../src/repositories/v2/companyRepositoryV2';
@@ -34,8 +29,27 @@ import { Offer } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { ChatRoom } from '../../../src/types/chat';
 import { formatLocation } from '../../../src/utils/formatLocation';
+import {
+  TECHNICIAN_APPLICATION_FILTERS,
+  TECHNICIAN_APPLICATION_FILTER_LABELS,
+  applicationFilterCounts,
+  applicationOfferStatusLook,
+  isFinishedStatus,
+  matchesApplicationFilter,
+  sortApplications,
+  technicianApplicationListLook,
+  type TechnicianApplicationFilter,
+} from '../../../src/utils/technicianRelations';
+import { technicianOfferHref } from '../../../src/utils/technicianNavigation';
+import { colors } from '../../../src/theme';
 
-type StatusFilter = 'all' | 'pending' | 'accepted' | 'closed';
+// Candidaturas del técnico (rediseño, fase 5B; el patrón de Applications de
+// empresa, maquetas W-Applications y W-D-Applications). Cambia el aspecto; la
+// carga, el orden, los estados y los filtros (All, Pending, Accepted, Closed)
+// son los de antes (src/utils/technicianRelations.ts).
+//
+// El detalle de una candidatura es la página de su oferta: allí se ve el
+// estado y se retira, con la confirmación de siempre.
 
 type AppEntry = {
   app: OfferApplication;
@@ -44,25 +58,6 @@ type AppEntry = {
   chatRoom: ChatRoom | null;
 };
 
-function appStatusInfo(status: string): { label: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
-  switch (status) {
-    case 'pending':   return { label: 'Pending review', tone: 'warning' };
-    case 'accepted':  return { label: 'Accepted', tone: 'success' };
-    case 'rejected':  return { label: 'Not selected', tone: 'error' };
-    case 'expired':   return { label: 'Expired', tone: 'muted' };
-    case 'withdrawn': return { label: 'Withdrawn', tone: 'muted' };
-    default:          return { label: status, tone: 'muted' };
-  }
-}
-
-function offerStatusBadge(status: string): { label: string; tone: 'muted' | 'warning' } | null {
-  if (status === 'published') return null; // no badge for normal state
-  if (status === 'closed')  return { label: 'Offer closed', tone: 'muted' };
-  if (status === 'expired') return { label: 'Offer expired', tone: 'muted' };
-  if (status === 'draft')   return { label: 'Offer draft', tone: 'warning' };
-  return null;
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
@@ -70,18 +65,17 @@ function formatDate(iso: string): string {
 export default function ApplicationHistoryScreen() {
   const router = useRouter();
   const goBack = useGoBack();
+  const wide = useIsWide();
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
 
   const [entries, setEntries] = useState<AppEntry[]>([]);
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<TechnicianApplicationFilter>('all');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
     // vacio. El .finally(setLoading(false)) del efecto apaga el spinner, asi
     // que la pantalla cae en su estado vacio en vez de colgarse o crashear.
@@ -90,10 +84,7 @@ export default function ApplicationHistoryScreen() {
     const [apps, rooms, unreadEntityIds] = await Promise.all([
       offerApplicationRepository.getForTechnician(technicianId),
       chatRepository.getRoomsForTechnician(technicianId),
-      activityRepository.getUnreadEntityIds('technician', technicianId, [
-        'application_accepted',
-        'application_rejected',
-      ]),
+      activityRepository.getUnseenApplicationResponseIds(technicianId),
     ]);
 
     const roomByAppId = new Map(
@@ -121,49 +112,42 @@ export default function ApplicationHistoryScreen() {
       chatRoom: roomByAppId.get(app.id) ?? null,
     }));
 
-    built.sort((a, b) => {
-      const aUnread = unreadEntityIds.has(a.app.id) ? 0 : 1;
-      const bUnread = unreadEntityIds.has(b.app.id) ? 0 : 1;
-      if (aUnread !== bUnread) return aUnread - bUnread;
-      const order = ['pending', 'accepted', 'rejected', 'withdrawn', 'expired'];
-      const ai = order.indexOf(a.app.status);
-      const bi = order.indexOf(b.app.status);
-      if (ai !== bi) return ai - bi;
-      return new Date(b.app.createdAt).getTime() - new Date(a.app.createdAt).getTime();
-    });
-
-    setEntries(built);
+    if (!signal.active) return;
+    setEntries(sortApplications(built, (id) => unreadEntityIds.has(id)));
     setUnreadIds(unreadEntityIds);
   }, [technicianId]);
 
+  // Señal de cancelacion compartida por el efecto de foco y el refresco.
+  const loadSignal = useRef<{ active: boolean }>({ active: false });
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
+      const signal = { active: true };
+      loadSignal.current = signal;
       setLoading(true);
-      load().finally(() => { if (active) setLoading(false); });
-      return () => { active = false; };
+      load(signal).finally(() => { if (signal.active) setLoading(false); });
+      return () => { signal.active = false; };
     }, [load]),
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await load();
+    await load(loadSignal.current);
     setRefreshing(false);
   }
 
-  const filtered = statusFilter === 'all'
-    ? entries
-    : statusFilter === 'closed'
-    ? entries.filter((e) => e.app.status === 'rejected' || e.app.status === 'withdrawn' || e.app.status === 'expired')
-    : entries.filter((e) => e.app.status === statusFilter);
-
-  const pendingCount = entries.filter((e) => e.app.status === 'pending').length;
+  const filtered = entries.filter((e) => matchesApplicationFilter(e.app.status, statusFilter));
+  const counts = applicationFilterCounts(entries.map((e) => e.app.status));
+  // El título cuenta lo mismo que el número de Applications: respuestas sin ver
+  // (los puntos rojos de la lista), no las pendientes (fase 8).
+  const unseenCount = entries.filter((e) => unreadIds.has(e.app.id)).length;
+  const subtitle = `${entries.length} application${entries.length !== 1 ? 's' : ''}${unseenCount > 0 ? ` · ${unseenCount} new` : ''}`;
 
   if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadingScreen color={colors.technician} role="technician" />
+        <LoadingScreen color={colors.primary} role="technician" />
       </>
     );
   }
@@ -171,155 +155,195 @@ export default function ApplicationHistoryScreen() {
   return (
     <TechnicianScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[techStyles.content, isWide && techStyles.contentWide]}
+      {!wide ? (
+        <>
+          <PageBar title="My applications" large onBack={goBack} />
+          <PageSubtitle>{subtitle}</PageSubtitle>
+        </>
+      ) : null}
+      <PageBody
+        wide={wide}
+        gap={wide ? 18 : 12}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
       >
-        <TechnicianPageHeader
-          eyebrow="Application history"
-          title="My Applications"
-          subtitle={`${entries.length} application${entries.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` · ${pendingCount} pending` : ''}`}
-          onBack={goBack}
+        {wide ? <DesktopTitle title="My applications" subtitle={subtitle} /> : null}
+
+        <FilterChipRow
+          wide={wide}
+          options={TECHNICIAN_APPLICATION_FILTERS.map((key) => ({
+            key,
+            label: TECHNICIAN_APPLICATION_FILTER_LABELS[key],
+            count: counts[key],
+          }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
         />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterRow}
-          contentContainerStyle={styles.filterContent}
-        >
-          {(['all', 'pending', 'accepted', 'closed'] as StatusFilter[]).map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterChip, statusFilter === f && styles.filterChipActive]}
-              onPress={() => setStatusFilter(f)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.filterChipText, statusFilter === f && styles.filterChipTextActive]}>
-                {f === 'all' ? 'All' : f === 'pending' ? 'Pending' : f === 'accepted' ? 'Accepted' : 'Closed'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {filtered.length === 0 && (
-          <EmptyPanel
+        {filtered.length === 0 ? (
+          <EmptyBlock
             title={statusFilter === 'all' ? 'No applications yet' : 'No applications in this category'}
-            subtitle={statusFilter === 'all'
+            text={statusFilter === 'all'
               ? 'Browse offers and apply to start your application history.'
               : 'Try a different filter.'}
           />
+        ) : (
+          <RowList wide={wide}>
+            {filtered.map((entry) => (
+              <ApplicationRow
+                key={entry.app.id}
+                entry={entry}
+                wide={wide}
+                isUnread={unreadIds.has(entry.app.id)}
+                onOpen={() => router.push(technicianOfferHref(entry.app.offerId) as never)}
+                onOpenChat={entry.app.status === 'accepted' && entry.chatRoom
+                  ? () => router.push(`/technician/chats/${entry.chatRoom!.id}` as never)
+                  : undefined}
+              />
+            ))}
+          </RowList>
         )}
-
-        {filtered.map(({ app, offer, company, chatRoom }) => {
-          const status = appStatusInfo(app.status);
-          const offerBadge = offer ? offerStatusBadge(offer.status) : null;
-          const unread = unreadIds.has(app.id);
-
-          return (
-            <TechnicianCard key={app.id} style={[styles.card, unread && styles.cardUnread]}>
-              {unread && <ActivityDot />}
-
-              <View style={styles.cardTop}>
-                <View style={styles.cardTitleBlock}>
-                  <Text style={styles.cardTitle} numberOfLines={2}>
-                    {offer?.title ?? 'Offer unavailable'}
-                  </Text>
-                  {company ? (
-                    <Text style={styles.cardCompany} numberOfLines={1}>{company.name}</Text>
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.badgeRow}>
-                <TechnicianBadge label={status.label} tone={status.tone} small />
-                {offerBadge ? (
-                  <TechnicianBadge label={offerBadge.label} tone={offerBadge.tone} small />
-                ) : null}
-              </View>
-
-              <View style={styles.metaRow}>
-                <Text style={styles.metaText}>Applied {formatDate(app.createdAt)}</Text>
-                {offer ? (
-                  <Text style={styles.metaText}>{formatLocation(offer.locationCity, offer.locationCountry)}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.cardFooter}>
-                <TouchableOpacity
-                  style={styles.viewButton}
-                  onPress={() => router.push(`/technician/offers/${app.offerId}` as any)}
-                  activeOpacity={0.75}
-                >
-                  <ClipboardCheck color={techUi.accent} size={14} strokeWidth={2.2} />
-                  <Text style={styles.viewButtonText}>View offer</Text>
-                </TouchableOpacity>
-                {app.status === 'accepted' && chatRoom ? (
-                  <TouchableOpacity
-                    style={styles.chatButton}
-                    onPress={() => router.push(`/technician/chats/${chatRoom.id}` as any)}
-                    activeOpacity={0.75}
-                  >
-                    <MessageCircle color={colors.white} size={14} strokeWidth={2.2} />
-                    <Text style={styles.chatButtonText}>Open chat</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </TechnicianCard>
-          );
-        })}
-      </ScrollView>
+      </PageBody>
     </TechnicianScreen>
   );
 }
 
+function ApplicationRow({
+  entry,
+  wide,
+  isUnread,
+  onOpen,
+  onOpenChat,
+}: {
+  entry: AppEntry;
+  wide: boolean;
+  isUnread: boolean;
+  onOpen: () => void;
+  onOpenChat?: () => void;
+}) {
+  const { app, offer, company } = entry;
+  const status = technicianApplicationListLook(app.status);
+  const offerStatus = applicationOfferStatusLook(offer?.status);
+  const title = offer?.title ?? 'Offer unavailable';
+  const companyName = company?.name ?? null;
+  const place = offer ? formatLocation(offer.locationCity, offer.locationCountry) : null;
+  const meta = [`Applied ${formatDate(app.createdAt)}`, place].filter(Boolean).join(' · ');
+  const faded = isFinishedStatus(app.status);
+  const hasActions = wide || Boolean(onOpenChat);
+
+  // La fila son DOS pulsables, uno al lado del otro y nunca uno dentro de
+  // otro (en web serían <button> dentro de <button>): la zona principal abre
+  // la oferta, donde se ve y se retira la candidatura; "Open chat" va aparte.
+  return (
+    <View style={wide ? styles.rowWide : styles.row}>
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed, hovered }: any) => [wide ? styles.mainWide : styles.main, (pressed || hovered) && styles.mainPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${companyName ?? ''}. ${status.label}${isUnread ? '. New' : ''}`}
+      >
+        <View style={[styles.avatar, faded && styles.faded]}>
+          <Avatar kind="company" size={wide ? 48 : 52} name={companyName} logoPath={company?.logoPath} />
+          {isUnread ? <AvatarDot size={wide ? 12 : 13} /> : null}
+        </View>
+
+        <View style={wide ? styles.copyWide : styles.copy}>
+          <Text style={styles.title} numberOfLines={2}>{title}</Text>
+          {companyName ? <Text style={styles.company} numberOfLines={1}>{companyName}</Text> : null}
+          <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
+        </View>
+
+        <View style={styles.pills}>
+          <StatusPill label={status.label} tone={status.tone} large={wide} />
+          {offerStatus ? <StatusPill label={offerStatus.label} tone={offerStatus.tone} /> : null}
+        </View>
+      </Pressable>
+
+      {hasActions ? (
+        <View style={wide ? styles.actionsWide : styles.actions}>
+          {wide ? <PillButton label="View offer" variant="outline" size="sm" onPress={onOpen} /> : null}
+          {onOpenChat ? <PillButton label="Open chat" size="sm" onPress={onOpenChat} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  filterRow: { marginBottom: spacing.sm },
-  filterContent: { gap: spacing.xs, paddingHorizontal: 2, flexDirection: 'row' },
-  filterChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: techUi.surfaceSoft,
-    borderWidth: 1,
-    borderColor: techUi.border,
+  row: {
+    paddingVertical: 13,
+    gap: 8,
   },
-  filterChipActive: { backgroundColor: techUi.accent, borderColor: techUi.accent },
-  filterChipText: { fontSize: 12, fontWeight: '600', color: techUi.textSoft },
-  filterChipTextActive: { color: colors.white },
-  card: { marginBottom: spacing.sm },
-  cardUnread: { borderLeftWidth: 3, borderLeftColor: techUi.accent },
-  cardTop: { marginBottom: spacing.xs },
-  cardTitleBlock: {},
-  cardTitle: { fontSize: 14, fontWeight: '700', color: techUi.text, marginBottom: 2, lineHeight: 20 },
-  cardCompany: { fontSize: 12, fontWeight: '500', color: techUi.textSoft },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.xs },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.sm },
-  metaText: { fontSize: 11, color: techUi.textMuted, fontWeight: '500' },
-  cardFooter: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  viewButton: {
+  rowWide: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: techUi.accentSoft,
-    borderWidth: 1,
-    borderColor: `${techUi.accent}30`,
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  viewButtonText: { fontSize: 12, fontWeight: '700', color: techUi.accent },
-  chatButton: {
+  main: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    borderRadius: 12,
+  },
+  mainWide: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 18,
     paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: techUi.accent,
+    paddingHorizontal: 8,
+    borderRadius: 14,
   },
-  chatButtonText: { fontSize: 12, fontWeight: '700', color: colors.white },
+  mainPressed: {
+    backgroundColor: colors.surfaceSoft,
+  },
+  avatar: {
+    flexShrink: 0,
+  },
+  faded: {
+    opacity: 0.6,
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  copyWide: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  pills: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  // Móvil: las acciones debajo, alineadas con el texto (avatar 52 + hueco 14).
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingLeft: 66,
+  },
+  actionsWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 0,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  company: {
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  meta: {
+    fontSize: 12.5,
+    color: colors.textMuted,
+  },
 });

@@ -1,38 +1,31 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { ChevronLeft, Lock } from 'lucide-react-native';
+import { Avatar, AvatarFrame, BottomSheet, Text, TextInput, useConfirmDialog } from '../../../src/components/ui';
 import { useGoBack } from '../../../src/state/useGoBack';
-import { colors, spacing } from '../../../src/theme';
-import { formatOfferSalary } from '../../../src/utils/offerSalary';
-import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
-import { getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
-import { technicianTypeLabel } from '../../../src/constants/technicianTypes';
+import { colors } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { InlineScore } from '../../../src/components/InlineScore';
-import { MatchExplanation } from '../../../src/components/MatchExplanation';
-import { Button } from '../../../src/components/Button';
 import { ExternalLink } from '../../../src/components/ExternalLink';
+import { TechnicianScreen } from '../../../src/components/technician/TechnicianUI';
+import { MatchPill } from '../../../src/components/technician/OfferCards';
+import { OfferAboutRole, OfferChecklistSection, OfferTags } from '../../../src/components/technician/OfferDetailParts';
+import { ScoreHeadline } from '../../../src/components/company/MatchBreakdownBars';
 import {
-  EmptyPanel,
-  TechnicianBadge,
-  TechnicianCard,
-  TechnicianChip,
-  TechnicianPageHeader,
-  TechnicianScreen,
-  techStyles,
-  techUi,
-} from '../../../src/components/technician/TechnicianUI';
+  AsideCard,
+  Breadcrumb,
+  ButtonRow,
+  CARD_BORDER,
+  EmptyBlock,
+  NoticeBox,
+  PageBar,
+  PageBody,
+  PillButton,
+  StatusPill,
+  StickyBar,
+  TwoColumns,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
 import { isOfferOpenForTechnicians, offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
@@ -41,29 +34,43 @@ import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianR
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
-import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
+import { useTechnicianNav } from '../../../src/state/TechnicianNavContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { applySheetNote, companyCanSeeIdentity, offerPrivacyText } from '../../../src/utils/technicianPrivacy';
+import { isOpenedFromChat } from '../../../src/utils/technicianNavigation';
+import {
+  offerPlaceLine,
+  technicianApplicationLook,
+  technicianDirectOfferLook,
+} from '../../../src/utils/technicianOffers';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { MatchScore } from '../../../src/types/matching';
 import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
 import { ChatRoom } from '../../../src/types/chat';
-import { notify, confirmAction } from '../../../src/utils/platformAlert';
-import { formatLocation } from '../../../src/utils/formatLocation';
+import { notify } from '../../../src/utils/platformAlert';
+
+// Página de oferta del técnico (rediseño, fase 5A; maqueta T-Offer, T7 y
+// respuesta 24 de la revisión).
+//   - El % y su etiqueta siguen arriba.
+//   - "What they ask vs. your profile" sustituye a las barras y a la tarjeta de
+//     requisitos: los mismos criterios que dan puntos hoy, con su estado
+//     (src/utils/offerChecklist.ts). Debajo, los avisos de hoy sin repetirla.
+//   - Lo que la oferta pide pero no puntúa (tipo de perfil, trabajo
+//     certificado, "sólo sin licencia") y la descripción van en "About the role".
+//   - Abajo, fijo, el aviso de privacidad y "Apply", con las confirmaciones y
+//     los estados de siempre. La carga y las acciones no cambian.
+//   - Fase 5B: si esta empresa ya ve la identidad del técnico por un contacto
+//     anterior aceptado, el aviso lo dice (src/utils/technicianPrivacy.ts, la
+//     misma regla que la base); y abierta desde un chat (?from=chat) no ofrece
+//     "Open chat", para que no haya bucle.
 
 function formatPublishedDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
-const CONTRACT_LABELS: Record<string, string> = {
-  permanent: 'Permanent',
-  long_term: 'Long-term',
-  short_term: 'Short-term',
-};
 
 const COMPANY_TYPE_LABELS: Record<string, string> = {
   MRO: 'MRO',
@@ -73,43 +80,19 @@ const COMPANY_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-function scoreColor(total: number): string {
-  if (total >= 80) return colors.success;
-  if (total >= 60) return colors.blue;
-  if (total >= 40) return colors.warning;
-  return colors.textMuted;
-}
-
-function appStatusInfo(status: string): { label: string; tone: 'success' | 'warning' | 'error' | 'muted'; color: string } {
-  switch (status) {
-    case 'pending': return { label: 'Application sent - pending review', tone: 'warning', color: techUi.amber };
-    case 'accepted': return { label: 'Accepted', tone: 'success', color: techUi.green };
-    case 'rejected': return { label: 'Not selected', tone: 'error', color: techUi.red };
-    case 'expired': return { label: 'Offer expired', tone: 'muted', color: techUi.textMuted };
-    case 'withdrawn': return { label: 'Withdrawn', tone: 'muted', color: techUi.textMuted };
-    default: return { label: status, tone: 'muted', color: techUi.textMuted };
-  }
-}
-
-function directOfferStatusInfo(status: string): { label: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
-  switch (status) {
-    case 'pending': return { label: 'Direct offer received - pending response', tone: 'warning' };
-    case 'accepted': return { label: 'Direct offer accepted', tone: 'success' };
-    case 'rejected': return { label: 'Direct offer rejected', tone: 'error' };
-    case 'expired': return { label: 'Direct offer expired', tone: 'muted' };
-    case 'withdrawn': return { label: 'Direct offer withdrawn', tone: 'muted' };
-    default: return { label: status, tone: 'muted' };
-  }
-}
+const LINKED_TO_DIRECT_OFFER = 'This role is already linked to a direct offer, so a separate application is not needed.';
+const ACCEPTED_NOTE = 'Your identity and admin-verified documents are now accessible to the company.';
 
 export default function OfferDetailScreen() {
   const technicianSession = useTechnicianSession();
+  const { refreshCounts } = useTechnicianNav();
   const technicianId = technicianSession?.technicianId;
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const fromChat = isOpenedFromChat(from);
   const router = useRouter();
   const goBack = useGoBack();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const wide = useIsWide();
+  const { confirm, dialog } = useConfirmDialog();
 
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [company, setCompany] = useState<CompanyProfileView | null>(null);
@@ -118,10 +101,14 @@ export default function OfferDetailScreen() {
   const score: MatchScore | null = match?.eligible ? match.score : null;
   const [existingApp, setExistingApp] = useState<OfferApplication | null>(null);
   const [existingDirectOffer, setExistingDirectOffer] = useState<OfferRequest | null>(null);
+  // Todas las relaciones del técnico (ya se cargaban): deciden si la empresa
+  // ya ve su identidad por un contacto anterior aceptado.
+  const [allApplications, setAllApplications] = useState<OfferApplication[]>([]);
+  const [allDirectOffers, setAllDirectOffers] = useState<OfferRequest[]>([]);
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
   const [coverNote, setCoverNote] = useState('');
   const [applying, setApplying] = useState(false);
 
@@ -171,11 +158,15 @@ export default function OfferDetailScreen() {
     setMatch(pair);
 
     const app = apps.find((a) => a.offerId === id) ?? null;
+    setAllApplications(apps);
+    setAllDirectOffers(directOffers);
     setExistingApp(app);
     setExistingDirectOffer(directOffers.find((request) => request.offerId === id) ?? null);
 
     if (app) {
       await activityRepository.markRead('technician', technicianId, app.id);
+      // El número de Applications (respuestas sin ver) baja ya, no al cambiar de pantalla.
+      refreshCounts();
     }
 
     if (app && app.status === 'accepted') {
@@ -185,7 +176,7 @@ export default function OfferDetailScreen() {
     } else {
       setChatRoom(null);
     }
-  }, [id, technicianId]);
+  }, [id, technicianId, refreshCounts]);
 
   // Señal de cancelacion compartida por el efecto de foco y el refresco. load()
   // la comprueba ANTES de cada setState, no solo en el .finally: si el foco vuelve
@@ -203,13 +194,6 @@ export default function OfferDetailScreen() {
     }, [load]),
   );
 
-  // Real per-offer denominators — same source the company side uses
-  // (app/company/offers/[id].tsx) — never hardcoded, since weights change
-  // per offer (qualification-requiring vs. not) and have changed once
-  // already (Fase 2 rebalance).
-  // Filas, rótulos y máximos salen de la oferta: src/utils/matchBreakdownRows.ts.
-  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
-
   async function handleApply() {
     if (!offer || !technicianId) {
       notify('Not ready yet', 'Your session is still loading. Try again in a moment.');
@@ -224,7 +208,7 @@ export default function OfferDetailScreen() {
         coverNote: coverNote.trim() || undefined,
       });
       setExistingApp(app);
-      setModalVisible(false);
+      setApplyOpen(false);
       setCoverNote('');
       notify('Application sent', 'The company will be notified of your application.');
     } catch (e: any) {
@@ -240,7 +224,7 @@ export default function OfferDetailScreen() {
       notify('Cannot withdraw yet', 'Your session is still loading. Try again in a moment.');
       return;
     }
-    const confirmed = await confirmAction({
+    const confirmed = await confirm({
       title: 'Withdraw application?',
       message: 'This will cancel your application. This cannot be undone.',
       confirmLabel: 'Withdraw',
@@ -270,14 +254,15 @@ export default function OfferDetailScreen() {
     return (
       <TechnicianScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.notFound}>
-          <EmptyPanel title="Offer not found" subtitle="This offer is no longer available." />
-        </View>
+        {!wide ? <PageBar title="Offer" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          <EmptyBlock title="Offer not found" text="This offer is no longer available." />
+        </PageBody>
       </TechnicianScreen>
     );
   }
 
-  const accent = score ? scoreColor(score.total) : colors.technician;
+  const open = isOfferOpenForTechnicians(offer);
   const activeDirectOffer = existingDirectOffer && (existingDirectOffer.status === 'pending' || existingDirectOffer.status === 'accepted');
   // Retirarse NO veta (2026-07-28, migracion 033): una aplicacion retirada
   // se puede REACTIVAR — la misma fila vuelve a 'pending', conservando el
@@ -287,310 +272,344 @@ export default function OfferDetailScreen() {
   // Paso 5b: y que el filtro de la oferta no lo saque. La lista de ofertas ya
   // no se la enseña, pero a esta pantalla se llega también por enlace.
   const filteredOut = Boolean(match && !match.eligible);
-  const canApply = !activeDirectOffer && (!existingApp || wasWithdrawn) && isOfferOpenForTechnicians(offer) && !filteredOut;
+  const ineligibleReason = match && !match.eligible ? ineligibilityReasonText(match.reason) : null;
+  const canApply = !activeDirectOffer && (!existingApp || wasWithdrawn) && open && !filteredOut;
   // Una retirada NO cuenta como aplicacion activa: si no, la pantalla
   // mostraria su estado en vez del boton de volver a aplicar.
   const activeApp = !!existingApp && !wasWithdrawn;
-  const statusInfo = activeApp ? appStatusInfo(existingApp!.status) : null;
-  const directOfferInfo = existingDirectOffer ? directOfferStatusInfo(existingDirectOffer.status) : null;
+  const statusLook = activeApp
+    ? technicianApplicationLook(existingApp!.status, 'detail')
+    : existingDirectOffer
+      ? technicianDirectOfferLook(existingDirectOffer.status)
+      : null;
+  const accepted = activeApp && existingApp!.status === 'accepted';
+
+  const notEligible = Boolean(score && score.blockers.length > 0) || filteredOut;
+  // La misma regla con la que la base enseña la identidad a la empresa.
+  const identityVisible = Boolean(technicianId) && companyCanSeeIdentity({
+    companyId: offer.companyId,
+    technicianId: technicianId!,
+    offerRequests: allDirectOffers,
+    offerApplications: allApplications,
+  });
+  const displayLabel = score ? getMatchDisplayLabel(offer, score) : undefined;
+  const companyName = company?.name ?? null;
+  const companyLine = [companyName, offerPlaceLine(offer)].filter(Boolean).join(' · ');
+
+  const banners = (
+    <>
+      {!open ? (
+        <NoticeBox>
+          {`${offer.status === 'expired' ? 'This offer has expired.' : 'This offer is closed.'} Viewing as historical record.`}
+        </NoticeBox>
+      ) : null}
+      {ineligibleReason ? <NoticeBox tone="error" title="Not eligible">{ineligibleReason}</NoticeBox> : null}
+    </>
+  );
+
+  const chips = <OfferTags offer={offer} />;
+
+  const checklist = (
+    <OfferChecklistSection offer={offer} score={score} wide={wide} ratingIndex={ratingIndex} engineIndex={engineIndex} />
+  );
+  const about = <OfferAboutRole offer={offer} wide={wide} />;
+
+  const companyCard = (
+    <View style={styles.companyCard}>
+      <Avatar kind="company" size={40} name={companyName} logoPath={company?.logoPath} />
+      <View style={styles.companyCopy}>
+        <Text style={styles.companyName} numberOfLines={2}>
+          {[companyName ?? 'Company', company?.companyType ? COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        <Text style={styles.companyMeta}>Published {formatPublishedDate(offer.createdAt)}</Text>
+        {company?.website ? <ExternalLink url={company.website} color={colors.primary} /> : null}
+      </View>
+    </View>
+  );
+
+  // Estado y acción: lo de la tarjeta "Application status" y la botonera de
+  // antes. En móvil, fijo abajo; en escritorio, en la columna lateral.
+  const privacyLine = (
+    <View style={styles.privacy}>
+      <Lock color={colors.textSecondary} size={13} strokeWidth={2.4} />
+      <Text style={styles.privacyText}>
+        {activeDirectOffer ? LINKED_TO_DIRECT_OFFER : accepted ? ACCEPTED_NOTE : offerPrivacyText(identityVisible)}
+      </Text>
+    </View>
+  );
+
+  let action: React.ReactNode = null;
+  if (activeDirectOffer) {
+    action = (
+      <PillButton
+        label="Review direct offer"
+        onPress={() => router.push(`/technician/direct-offers/${existingDirectOffer!.id}` as never)}
+      />
+    );
+  } else if (activeApp) {
+    if (existingApp!.status === 'pending') {
+      action = <PillButton label="Withdraw application" variant="outline" onPress={handleWithdraw} />;
+    } else if (accepted && chatRoom && !fromChat) {
+      action = <PillButton label="Open chat" onPress={() => router.push(`/technician/chats/${chatRoom.id}` as never)} />;
+    }
+  } else if (canApply) {
+    action = (
+      <PillButton
+        label={wasWithdrawn ? 'Apply again' : 'Apply'}
+        onPress={() => { setCoverNote(''); setApplyOpen(true); }}
+      />
+    );
+  }
+
+  const status = statusLook ? (
+    <View style={styles.statusRow}>
+      <StatusPill label={statusLook.label} tone={statusLook.tone} large />
+    </View>
+  ) : !action ? (
+    <Text style={styles.notApplied}>You have not applied to this offer yet.</Text>
+  ) : null;
+
+  const applySheet = (
+    <BottomSheet
+      visible={applyOpen}
+      onClose={() => setApplyOpen(false)}
+      dismissible={!applying}
+      title="Apply to offer"
+      subtitle={offer.title}
+      footer={(
+        <ButtonRow>
+          <PillButton label="Cancel" variant="outline" size="md" onPress={() => setApplyOpen(false)} disabled={applying} grow={1} />
+          <PillButton label="Send application" size="md" onPress={handleApply} loading={applying} grow={1} />
+        </ButtonRow>
+      )}
+    >
+      <View style={styles.field}>
+        <Text style={styles.fieldLabel}>Cover note (optional)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Add a short note to the company..."
+          placeholderTextColor={colors.placeholder}
+          value={coverNote}
+          onChangeText={setCoverNote}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+      </View>
+      <Text style={styles.sheetNote}>{applySheetNote(identityVisible)}</Text>
+    </BottomSheet>
+  );
+
+  if (wide) {
+    return (
+      <TechnicianScreen>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PageBody wide>
+          <Breadcrumb parent="Offers" onParent={() => router.navigate('/technician/offers' as never)} current={offer.title} />
+          <TwoColumns
+            main={(
+              <>
+                <View style={styles.wideHero}>
+                  <Avatar kind="company" size={88} name={companyName} logoPath={company?.logoPath} />
+                  <View style={styles.titleBlock}>
+                    <Text style={[styles.title, styles.titleWide]} accessibilityRole="header">{offer.title}</Text>
+                    <Text style={styles.subtitle}>{companyLine}</Text>
+                    {chips}
+                  </View>
+                </View>
+                {banners}
+                {checklist}
+                {about}
+                {companyCard}
+              </>
+            )}
+            aside={(
+              <AsideCard>
+                {score ? (
+                  <ScoreHeadline total={score.total} label={displayLabel ?? ''} notEligible={notEligible} wide />
+                ) : filteredOut ? (
+                  <ScoreHeadline total={0} label="" notEligible reason={ineligibleReason ?? undefined} wide />
+                ) : null}
+                {status}
+                {privacyLine}
+                {action}
+              </AsideCard>
+            )}
+          />
+        </PageBody>
+        {applySheet}
+        {dialog}
+      </TechnicianScreen>
+    );
+  }
 
   return (
     <TechnicianScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[techStyles.content, isWide && techStyles.contentWide]}
-        showsVerticalScrollIndicator={false}
-      >
-        <TechnicianPageHeader
-          eyebrow="Offer detail"
-          title={offer.title}
-          subtitle={company ? `${company.name} - ${formatLocation(offer.locationCity, offer.locationCountry)}` : formatLocation(offer.locationCity, offer.locationCountry)}
-          onBack={goBack}
-        />
-
-        <TechnicianCard style={styles.summaryCard}>
-          {!isOfferOpenForTechnicians(offer) && (
-            <View style={styles.closedBanner}>
-              <Text style={styles.closedBannerText}>
-                {offer.status === 'expired' ? 'This offer has expired.' : 'This offer is closed.'}
-                {' '}Viewing as historical record.
-              </Text>
+      <PageBody wide={false} contentStyle={styles.mobileBody}>
+        {/* La franja azul sólo con iniciales; con logo, el logo solo (fase 8, H). */}
+        <AvatarFrame image={{ logoPath: company?.logoPath }} style={styles.hero}>
+          <Pressable onPress={goBack} style={styles.heroBack} hitSlop={4} accessibilityRole="button" accessibilityLabel="Back">
+            <ChevronLeft color={colors.text} size={26} strokeWidth={2.2} />
+          </Pressable>
+          <Avatar kind="company" size={104} name={companyName} logoPath={company?.logoPath} />
+          {score || filteredOut ? (
+            <View style={styles.heroPill}>
+              <MatchPill total={score?.total ?? 0} notEligible={notEligible} label={displayLabel} large />
             </View>
-          )}
-          {score && (
-            <InlineScore
-              score={score.total}
-              quality={getMatchDisplayLabel(offer, score)}
-              context="match with your profile"
-              notEligible={score.blockers.length > 0}
-            />
-          )}
-          {match && !match.eligible && (
-            <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
-          )}
-          <View style={styles.badgeRow}>
-            <TechnicianBadge label={getOfferProductTypeLabel(offer.productType)} tone="info" />
-            <TechnicianBadge label={CONTRACT_LABELS[offer.contractType] ?? offer.contractType} tone="muted" />
-            {offer.minYearsExperience > 0 ? (
-              <TechnicianBadge label={`${offer.minYearsExperience}+ yrs exp`} tone="muted" />
-            ) : null}
+          ) : null}
+        </AvatarFrame>
+        <View style={styles.mobileContent}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title} accessibilityRole="header">{offer.title}</Text>
+            <Text style={styles.subtitle}>{companyLine}</Text>
+            {chips}
           </View>
-          {company ? (
-            <Text style={styles.companyLine}>
-              {company.name}
-              {company.companyType ? ` - ${COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType}` : ''}
-            </Text>
-          ) : null}
-          {company?.website ? (
-            <ExternalLink url={company.website} color={techUi.accent} />
-          ) : null}
-          <Text style={styles.location}>
-            {formatLocation(offer.locationCity, offer.locationCountry)}
-            {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
-          </Text>
-          <Text style={styles.publishedDate}>Published {formatPublishedDate(offer.createdAt)}</Text>
-          <Text style={styles.companyLine}>{formatOfferSalary(offer.salary) ?? 'Remuneration not specified'}</Text>
-          <Text style={styles.description}>{offer.description}</Text>
-        </TechnicianCard>
-
-        {/* La tarjeta se muestra SIEMPRE desde la Fase 6 tanda C: el tipo de
-            perfil y el interruptor de certificación existen en toda oferta, y
-            el técnico tiene que ver si le exigen licencia ANTES de aplicar. */}
-        {(
-          <TechnicianCard style={styles.section}>
-            <Text style={styles.sectionTitle}>Requirements</Text>
-            {offer.offerKind === 'engine' ? (
-              <ReqRow label="Engine" items={[offerEngineText(offer, engineIndex) ?? 'Not specified']} />
-            ) : (
-              <ReqRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
-            )}
-            <ReqRow
-              label="Certified work"
-              items={[offerCertificationText(offer)]}
-            />
-            {offer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(offer)!]} />}
-            {offer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}
-            {offer.requiredHabilitations.length > 0 && (
-              // Fase 6 tanda D: la exigencia se dice UNA vez en la etiqueta,
-              // no "(preferred)" por fila. El técnico tiene que saber si le
-              // piden todas o le basta con una ANTES de aplicar.
-              <ReqRow
-                label={offer.requiresAllAircraft ? 'Aircraft — ALL of these' : 'Aircraft — any one of these'}
-                items={offer.requiredHabilitations.map((h) => getAircraftTypeRatingLabel(h.aircraftTypeRatingId, ratingIndex))}
-              />
-            )}
-          </TechnicianCard>
-        )}
-
-        {score && (
-          <TechnicianCard style={styles.section}>
-            <Text style={styles.sectionTitle}>Match</Text>
-            <Text style={styles.sectionSub}>How your profile scores against this offer's criteria.</Text>
-            {breakdownRows.map((row) => (
-              <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} accent={accent} />
-            ))}
-            <MatchExplanation score={score} hideBreakdown displayLabel={getMatchDisplayLabel(offer, score)} />
-          </TechnicianCard>
-        )}
-
-        <TechnicianCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Application status</Text>
-          {statusInfo ? (
-            <TechnicianBadge label={statusInfo.label} tone={statusInfo.tone} />
-          ) : directOfferInfo ? (
-            <TechnicianBadge label={directOfferInfo.label} tone={directOfferInfo.tone} />
-          ) : (
-            <Text style={styles.sectionSub}>You have not applied to this offer yet.</Text>
-          )}
-          <Text style={styles.privacyText}>
-            {activeDirectOffer
-              ? 'This role is already linked to a direct offer, so a separate application is not needed.'
-              : 'Your identity remains private until a company accepts your application.'}
-          </Text>
-        </TechnicianCard>
-
-        <View style={styles.actions}>
-          {activeDirectOffer ? (
-            <Button
-              label="Review direct offer"
-              onPress={() => router.push(`/technician/direct-offers/${existingDirectOffer!.id}` as any)}
-              fullWidth
-            />
-          ) : activeApp ? (
-            <>
-              {existingApp!.status === 'pending' && (
-                <Button label="Withdraw application" variant="outline" onPress={handleWithdraw} fullWidth />
-              )}
-              {existingApp!.status === 'accepted' && (
-                <>
-                  <Text style={styles.acceptedNote}>
-                    Your identity and admin-verified documents are now accessible to the company.
-                  </Text>
-                  {chatRoom && (
-                    <Button label="Open chat" onPress={() => router.push(`/technician/chats/${chatRoom.id}` as any)} fullWidth />
-                  )}
-                </>
-              )}
-            </>
-          ) : canApply ? (
-            <Button
-              label={wasWithdrawn ? 'Apply again' : 'Apply to this offer'}
-              onPress={() => { setCoverNote(''); setModalVisible(true); }}
-              fullWidth
-            />
-          ) : null}
+          {banners}
+          {checklist}
+          {about}
+          {companyCard}
         </View>
-      </ScrollView>
-
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={modalStyles.overlay}>
-          <TechnicianCard style={modalStyles.sheet}>
-            <Text style={modalStyles.title}>Apply to offer</Text>
-            <Text style={modalStyles.offerName} numberOfLines={2}>{offer.title}</Text>
-
-            <Text style={modalStyles.fieldLabel}>Cover note (optional)</Text>
-            <TextInput
-              style={modalStyles.input}
-              placeholder="Add a short note to the company..."
-              placeholderTextColor={techUi.textMuted}
-              value={coverNote}
-              onChangeText={setCoverNote}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-
-            <Text style={modalStyles.privacyNote}>
-              Do not include your real name or contact details. Your identity will remain anonymous until the company accepts your application.
-            </Text>
-
-            <View style={modalStyles.actions}>
-              <TouchableOpacity style={[modalStyles.btn, modalStyles.cancelBtn]} onPress={() => setModalVisible(false)} activeOpacity={0.75}>
-                <Text style={modalStyles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[modalStyles.btn, modalStyles.confirmBtn, applying && modalStyles.btnDisabled]}
-                onPress={handleApply}
-                disabled={applying}
-                activeOpacity={0.75}
-              >
-                {applying ? <ActivityIndicator color={colors.white} size="small" /> : <Text style={modalStyles.confirmBtnText}>Send application</Text>}
-              </TouchableOpacity>
-            </View>
-          </TechnicianCard>
-        </View>
-      </Modal>
+      </PageBody>
+      <StickyBar>
+        {privacyLine}
+        {status}
+        {action}
+      </StickyBar>
+      {applySheet}
+      {dialog}
     </TechnicianScreen>
   );
 }
 
-function ReqRow({ label, items }: { label: string; items: string[] }) {
-  return (
-    <View style={styles.reqRow}>
-      <Text style={styles.reqLabel}>{label}</Text>
-      <View style={styles.reqPills}>
-        {items.map((item, i) => <TechnicianChip key={`${item}-${i}`} label={item} />)}
-      </View>
-    </View>
-  );
-}
-
-function BreakdownRow({ label, value, max, accent }: { label: string; value: number; max: number; accent: string }) {
-  const pct = max > 0 ? value / max : 0;
-  return (
-    <View style={styles.breakdownRow}>
-      <Text style={styles.breakdownLabel}>{label}</Text>
-      <View style={styles.breakdownBarBg}>
-        <View style={[styles.breakdownBarFill, { width: `${pct * 100}%` as any, backgroundColor: value > 0 ? accent : techUi.borderSoft }]} />
-      </View>
-      <Text style={[styles.breakdownScore, { color: value > 0 ? accent : techUi.textMuted }]}>{value}/{max}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  notFound: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
-  summaryCard: { marginBottom: spacing.md },
-  closedBanner: {
-    backgroundColor: techUi.surfaceSoft,
-    borderRadius: 10,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: techUi.border,
+  mobileBody: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    gap: 0,
   },
-  closedBannerText: { fontSize: 12, color: techUi.textMuted, fontWeight: '600', lineHeight: 17 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
-  companyLine: { fontSize: 14, fontWeight: '600', color: techUi.textSoft, marginBottom: 3 },
-  location: { fontSize: 12, fontWeight: '500', color: techUi.textMuted, marginBottom: 3 },
-  publishedDate: { fontSize: 11, fontWeight: '500', color: techUi.textMuted, marginBottom: spacing.sm },
-  description: { fontSize: 13, color: techUi.textSoft, lineHeight: 20 },
-  section: { marginBottom: spacing.md },
-  sectionTitle: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '700',
-    color: techUi.text,
-    marginBottom: spacing.sm,
-  },
-  sectionSub: { fontSize: 12, color: techUi.textSoft, lineHeight: 18, marginBottom: spacing.md },
-  reqRow: { marginBottom: spacing.sm },
-  reqLabel: { fontSize: 12, color: techUi.textSoft, fontWeight: '600', marginBottom: spacing.xs },
-  reqPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  breakdownLabel: { fontSize: 12, color: techUi.textSoft, width: 90 },
-  breakdownBarBg: { flex: 1, height: 7, backgroundColor: techUi.borderSoft, borderRadius: 4, overflow: 'hidden' },
-  breakdownBarFill: { height: '100%', borderRadius: 4 },
-  breakdownScore: { fontSize: 11, fontWeight: '700', width: 38, textAlign: 'right' },
-  privacyText: { fontSize: 12, lineHeight: 18, color: techUi.textMuted, marginTop: spacing.sm },
-  actions: { marginBottom: spacing.md, gap: spacing.sm },
-  acceptedNote: { fontSize: 12, lineHeight: 18, color: techUi.textSoft, textAlign: 'center' },
-});
-
-const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.42)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  sheet: {
-    width: '100%',
-    maxWidth: 480,
-  },
-  title: { fontSize: 18, fontWeight: '700', color: techUi.text, marginBottom: spacing.xs },
-  offerName: { fontSize: 13, color: techUi.textSoft, marginBottom: spacing.md },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: techUi.textSoft, marginBottom: spacing.xs },
-  input: {
-    backgroundColor: techUi.surfaceSoft,
-    borderWidth: 1,
-    borderColor: techUi.border,
-    borderRadius: 14,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 14,
-    color: techUi.text,
-    minHeight: 96,
-    marginBottom: spacing.sm,
-  },
-  privacyNote: { fontSize: 11, color: techUi.textMuted, marginBottom: spacing.md, lineHeight: 16 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  btn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: 14,
+  hero: {
+    height: 200,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroBack: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  heroPill: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 14,
+  },
+  mobileContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    gap: 18,
+  },
+  wideHero: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    alignItems: 'center',
+    gap: 18,
   },
-  cancelBtn: { backgroundColor: techUi.surfaceSoft, borderWidth: 1, borderColor: techUi.border },
-  confirmBtn: { backgroundColor: techUi.accent },
-  btnDisabled: { opacity: 0.6 },
-  cancelBtnText: { fontSize: 14, fontWeight: '700', color: techUi.text },
-  confirmBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  titleWide: {
+    fontSize: 26,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 14.5,
+    color: colors.textSecondary,
+  },
+  companyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  companyCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  companyName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  companyMeta: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  privacy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  privacyText: {
+    flexShrink: 1,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  statusRow: {
+    alignItems: 'center',
+  },
+  notApplied: {
+    fontSize: 13.5,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  field: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  input: {
+    minHeight: 104,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 15,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  sheetNote: {
+    marginTop: 10,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
 });

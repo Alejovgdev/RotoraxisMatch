@@ -1,18 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Avatar } from '../ui/Avatar';
 import React, { useEffect, useState } from 'react';
 import {
+  Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import {
   AlertTriangle,
-  ArrowLeft,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronUp,
+  List,
   MapPin,
   RotateCcw,
   SlidersHorizontal,
@@ -34,6 +37,10 @@ import { ContractTypeCode } from '../../types/catalog';
 import { OfferProductType } from '../../types/offer';
 import { techUi } from '../technician/TechnicianUI';
 import { MapBottomSheet } from '../map/MapBottomSheet';
+import { TOUCH_TARGET, WIDE_BREAKPOINT } from '../../theme/ui';
+
+/** Ancho de la cabecera del mapa en escritorio. */
+const MAP_HEADER_MAX_WIDTH = 560;
 import { formatOfferSalary } from '../../utils/offerSalary';
 
 export const OFFER_MAP_MATCH_OPTIONS: readonly {
@@ -143,6 +150,10 @@ export function offerMapGroupMarkerIcon(
   return buildOfferMapMarkerIcon(offerMapGroupIconOptions(group, tier, color));
 }
 
+// Rediseño, fase 5A (respuesta 22): el mapa de ofertas se queda como estaba
+// —marcadores, colores, agrupación, filtros y hojas—. Cambia el aspecto de esta
+// cabecera, igual que la del mapa de técnicos de empresa, y se añade "List"
+// para volver a la lista de ofertas.
 export function OfferMapHeader({
   visibleCount,
   totalCount,
@@ -150,6 +161,7 @@ export function OfferMapHeader({
   filters,
   onBack,
   onOpenFilters,
+  onShowList,
 }: {
   visibleCount: number;
   totalCount: number;
@@ -157,51 +169,64 @@ export function OfferMapHeader({
   filters: OfferMapFilters;
   onBack?: () => void;
   onOpenFilters: () => void;
+  /** El botón para volver a la lista de ofertas. */
+  onShowList?: () => void;
 }) {
+  // En un teléfono estrecho los dos botones se quedan en icono, como antes
+  // "Filters": la cabecera no debe partirse en dos filas y tapar el zoom.
   const { width } = useWindowDimensions();
   const compact = width < 520;
+  // Escritorio: la barra superior ya lleva la navegación; sin flecha (fase 8).
+  const wide = width >= WIDE_BREAKPOINT;
   const filterCount = activeOfferMapFilterCount(filters);
   const subtitle = filterCount > 0
     ? `${visibleCount} of ${totalCount} published offers`
     : `${visibleCount} published offer${visibleCount === 1 ? '' : 's'}`;
 
   return (
-    <View style={styles.header}>
-      {onBack ? (
-        <TouchableOpacity
+    <View style={[styles.header, wide && styles.headerWide]}>
+      {onBack && !wide ? (
+        <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
-          activeOpacity={0.75}
           onPress={onBack}
-          style={styles.headerIconButton}
+          hitSlop={4}
+          style={styles.headerBack}
         >
-          <ArrowLeft color={techUi.text} size={20} strokeWidth={2.4} />
-        </TouchableOpacity>
+          <ChevronLeft color={colors.text} size={26} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
 
       <View style={styles.headerCopy}>
-        <Text style={styles.headerEyebrow}>Offer marketplace</Text>
-        <Text style={styles.headerTitle} numberOfLines={1}>Offer Map</Text>
+        <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">Offer map</Text>
         <Text style={styles.headerSubtitle} numberOfLines={1}>
           {subtitle}{unmappedCount > 0 ? ` · ${unmappedCount} without a map point` : ''}
         </Text>
       </View>
 
-      <TouchableOpacity
+      <Pressable
         accessibilityRole="button"
         accessibilityLabel={filterCount > 0 ? `Filters, ${filterCount} active` : 'Filters'}
-        activeOpacity={0.75}
         onPress={onOpenFilters}
-        style={styles.filterButton}
+        style={({ pressed, hovered }: any) => [styles.headerPill, (pressed || hovered) && styles.headerPillPressed]}
       >
-        <SlidersHorizontal color={techUi.accent} size={18} strokeWidth={2.2} />
-        {!compact ? <Text style={styles.filterButtonText}>Filters</Text> : null}
-        {filterCount > 0 ? (
-          <View style={styles.filterCount}>
-            <Text style={styles.filterCountText}>{filterCount}</Text>
-          </View>
-        ) : null}
-      </TouchableOpacity>
+        <SlidersHorizontal color={colors.text} size={17} strokeWidth={2.2} />
+        {compact
+          ? (filterCount > 0 ? <Text style={styles.headerPillText}>{filterCount}</Text> : null)
+          : <Text style={styles.headerPillText}>{filterCount > 0 ? `Filters · ${filterCount}` : 'Filters'}</Text>}
+      </Pressable>
+
+      {onShowList ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show as list"
+          onPress={onShowList}
+          style={({ pressed, hovered }: any) => [styles.headerPill, (pressed || hovered) && styles.headerPillPressed]}
+        >
+          <List color={colors.text} size={17} strokeWidth={2.2} />
+          {!compact ? <Text style={styles.headerPillText}>List</Text> : null}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -491,7 +516,7 @@ export function OfferMapDetailSheet({
         return (
           <View key={offer.id} style={styles.offerDetailCard}>
             <Text style={styles.offerDetailTitle}>{offer.title}</Text>
-            <Text style={styles.offerDetailCompany}>{offer.companyName}</Text>
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}><Avatar kind="company" size={40} name={offer.companyName} logoPath={offer.logoPath} /><Text style={styles.offerDetailCompany}>{offer.companyName}</Text></View>
             <Text style={offer.salary ? styles.offerDetailSalary : styles.offerDetailMeta}>
               {formatOfferSalary(offer.salary) ?? 'Remuneration not specified'}
             </Text>
@@ -577,67 +602,66 @@ export function OfferMapStatusOverlay({
 }
 
 const styles = StyleSheet.create({
+  // La cabecera, con los valores de la del mapa de técnicos de empresa
+  // (src/components/technician-map/TechnicianMapControls.tsx).
+  /** Escritorio (fase 8): a la izquierda y con ancho máximo, no de borde a borde. */
+  headerWide: {
+    right: 'auto',
+    width: MAP_HEADER_MAX_WIDTH,
+    maxWidth: '96%',
+    // Sin la flecha, el título no se pega al borde.
+    paddingLeft: 16,
+  },
   header: {
     position: 'absolute',
     top: 12,
     left: 12,
     right: 12,
     zIndex: 1002,
-    minHeight: 76,
-    padding: 10,
+    minHeight: 64,
+    paddingVertical: 8,
+    paddingLeft: 4,
+    paddingRight: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
+    borderColor: '#E1E8EE',
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    shadowColor: '#0E1A2B',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
-    shadowRadius: 18,
+    shadowRadius: 16,
     elevation: 8,
   },
-  headerIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: techUi.borderSoft,
-    backgroundColor: techUi.surfaceSoft,
+  headerBack: {
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: TOUCH_TARGET / 2,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  headerCopy: { flex: 1, minWidth: 0 },
-  headerEyebrow: { fontSize: 10, lineHeight: 13, fontWeight: '700', color: techUi.accent },
-  headerTitle: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: techUi.text },
-  headerSubtitle: { marginTop: 2, fontSize: 11, lineHeight: 14, fontWeight: '600', color: techUi.textMuted },
-  filterButton: {
-    minWidth: 48,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+  headerCopy: { flex: 1, minWidth: 0, paddingLeft: 4 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  headerSubtitle: { marginTop: 1, fontSize: 12.5, color: colors.textSecondary },
+  headerPill: {
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    borderRadius: TOUCH_TARGET / 2,
     borderWidth: 1,
-    borderColor: techUi.accent,
-    backgroundColor: techUi.accentSoft,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
+    gap: 6,
     flexShrink: 0,
   },
-  filterButtonText: { fontSize: 12, fontWeight: '800', color: techUi.accent },
-  filterCount: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: techUi.accent,
-  },
-  filterCountText: { color: colors.white, fontSize: 10, fontWeight: '800' },
+  headerPillPressed: { backgroundColor: colors.surfaceSoft },
+  headerPillText: { fontSize: 14, fontWeight: '800', color: colors.text },
   legend: {
     position: 'absolute',
     left: 12,
@@ -649,7 +673,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: techUi.border,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    shadowColor: '#0F172A',
+    shadowColor: '#0E1A2B',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 14,
@@ -667,7 +691,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: techUi.border,
     backgroundColor: 'rgba(255,255,255,0.96)',
-    shadowColor: '#0F172A',
+    shadowColor: '#0E1A2B',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 14,
@@ -794,7 +818,7 @@ const styles = StyleSheet.create({
   offerDetailButton: {
     minHeight: 48,
     marginTop: 12,
-    borderRadius: 14,
+    borderRadius: 999,
     backgroundColor: techUi.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -803,7 +827,7 @@ const styles = StyleSheet.create({
   resetButton: {
     minHeight: 48,
     paddingHorizontal: spacing.md,
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: techUi.border,
     flexDirection: 'row',
@@ -816,7 +840,7 @@ const styles = StyleSheet.create({
   doneButton: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: 999,
     backgroundColor: techUi.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -839,7 +863,7 @@ const styles = StyleSheet.create({
     borderColor: techUi.border,
     backgroundColor: 'rgba(255,255,255,0.97)',
     alignItems: 'center',
-    shadowColor: '#0F172A',
+    shadowColor: '#0E1A2B',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -860,7 +884,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: 14,
+    borderRadius: 999,
     backgroundColor: techUi.accent,
     alignItems: 'center',
     justifyContent: 'center',

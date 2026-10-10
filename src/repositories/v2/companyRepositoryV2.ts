@@ -37,7 +37,7 @@ export const companyRepositoryV2 = {
     const { data, error } = await supabase
       .from('companies')
       .select(`
-        id, name, phone, email, company_type, website,
+        id, name, phone, email, company_type, website, logo_path,
         location_country_code, location_city_name,
         location_city_lat, location_city_lng, location_city_geoname_id,
         verification_status, created_at, updated_at,
@@ -52,7 +52,7 @@ export const companyRepositoryV2 = {
     const { data, error } = await supabase
       .from('companies')
       .select(`
-        id, name, phone, email, company_type, website,
+        id, name, phone, email, company_type, website, logo_path,
         location_country_code, location_city_name,
         location_city_lat, location_city_lng, location_city_geoname_id,
         verification_status, created_at, updated_at,
@@ -183,7 +183,7 @@ export const companyRepositoryV2 = {
       .update(companyPatchToDb(patch))
       .eq('id', id)
       .select(`
-        id, name, phone, email, company_type, website,
+        id, name, phone, email, company_type, website, logo_path,
         location_country_code, location_city_name,
         location_city_lat, location_city_lng, location_city_geoname_id,
         verification_status, created_at, updated_at,

@@ -51,7 +51,7 @@ import {
 // verificado). En cuanto hubiera una oferta, el scorer estaría puntuando su
 // licencia como si no existiera.
 const OFFER_COLUMNS =
-  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepted_authorities, accepted_license_code, required_engine_id, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
+  'id, company_id, title, description, contract_type, salary_amount, salary_currency, salary_period, product_type, technician_type, requires_certification, license_code, license_authority, requires_all_aircraft, offer_kind, accepted_authorities, accepted_license_code, required_engine_id, required_engine_notes, only_unlicensed, location_country, location_country_code, location_city_name, location_city_lat, location_city_lng, location_city_geoname_id, min_years_experience, status, visible, expires_at, created_at, updated_at';
 
 /**
  * La localización de una oferta, tal y como la produce el selector.
@@ -165,6 +165,12 @@ export function resolveOfferPatch(existing: OfferWithRequirements, patch: OfferP
   if (next.offerKind !== 'engine' && patch.requiredEngineId === undefined) {
     next.requiredEngineId = undefined;
   }
+  // 097: mirror the RPC's omitted-note semantics; an explicit null clears it.
+  if (patch.requiredEngineNotes === undefined &&
+      (next.offerKind !== 'engine' || next.requiredEngineId !== existing.requiredEngineId)) {
+    next.requiredEngineNotes = null;
+  }
+  next.requiredEngineNotes = next.requiredEngineNotes?.trim() || null;
   if (!offerCanRequireAircraft(next)) {
     next.requiredHabilitations = [];
     next.requiresAllAircraft = false;
@@ -224,6 +230,9 @@ function offerPatchToDb(patch: OfferPatch, next: Offer): Record<string, unknown>
       ? { technician_type: next.technicianType, offer_kind: next.offerKind, required_engine_id: next.requiredEngineId ?? null }
       : {}),
     ...(patch.requiresAllAircraft !== undefined ? { requires_all_aircraft: patch.requiresAllAircraft } : {}),
+    ...(patch.requiredEngineNotes !== undefined || touches(patch, KIND_KEYS)
+      ? { required_engine_notes: next.requiredEngineNotes ?? null }
+      : {}),
     ...(patch.locationCountry !== undefined ? { location_country: patch.locationCountry } : {}),
     // Fase 7 F2c — la localización se escribe DIRECTA, y las cinco columnas
     // van SIEMPRE juntas. `locationColumns()` no permite escribir sólo
@@ -354,6 +363,9 @@ function assertLicenseMatchesTechnicianType(
 function assertOfferWritable(offer: OfferWithRequirements): void {
   assertOfferShape(offer);
   assertLicenseMatchesTechnicianType(offer);
+  if (offer.offerKind !== 'engine' && offer.requiredEngineNotes) {
+    throw new Error('Only an engine offer can have an engine note.');
+  }
   if (!offerCanRequireAircraft(offer) && offer.requiredHabilitations.length > 0) {
     throw new Error('An engine offer cannot require aircraft type ratings.');
   }
@@ -496,6 +508,7 @@ export const offerRepository = {
     requiresAllAircraft?: boolean;
     requiredHabilitations?: { aircraftTypeRatingId: string; notes?: string }[];
     requiredEngineId?: string;
+    requiredEngineNotes?: string | null;
     onlyUnlicensed?: boolean;
   }): Promise<OfferWithRequirements> {
     const status = data.status ?? 'draft';
@@ -516,6 +529,7 @@ export const offerRepository = {
       acceptedLicenseCode: data.acceptedLicenseCode,
       productType: data.productType,
       requiredEngineId: data.requiredEngineId,
+      requiredEngineNotes: data.requiredEngineNotes?.trim() || null,
       onlyUnlicensed: data.onlyUnlicensed ?? false,
       requiredHabilitations: habilitationRows,
     } as OfferWithRequirements);
@@ -543,6 +557,7 @@ export const offerRepository = {
         requires_all_aircraft: data.requiresAllAircraft ?? false,
         offer_kind: offerKind,
         required_engine_id: data.requiredEngineId ?? null,
+        required_engine_notes: data.requiredEngineNotes?.trim() || null,
         only_unlicensed: data.onlyUnlicensed ?? false,
         location_country: location.locationCountry,
         // Fase 7 F2c: las cinco juntas, y sin `location_city_id` — la oferta

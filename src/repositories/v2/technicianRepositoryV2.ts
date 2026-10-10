@@ -2,21 +2,24 @@ import { supabase } from '../../lib/supabase';
 import { locationColumns } from '../../utils/locationBridge';
 import { PersistedLocation } from '../../types/location';
 import {
+  Availability,
+  SocialLinks,
   TechnicianProfile,
   TechnicianWithRelations,
-  AvailabilityStatus,
 } from '../../types/technician';
+import type { OwnProfileColumnsPatch } from '../../types/technicianProfileEdit';
 import { SafeTechnicianPreview, TechnicianView, isUnlocked } from '../../types/privacy';
 import { TechnicianMatchCandidate } from '../../types/matching';
 import { LicenseCode } from '../../types/catalog';
 import { typesLockedByLicenses } from '../../constants/licenses';
 import { technicianTypeLabel } from '../../constants/technicianTypes';
-import { AircraftRatingIndex, buildAircraftRatingIndex, habilitationCoversFamilyKey } from '../../constants/aircraftTypeRatings';
+import { buildAircraftRatingIndex } from '../../constants/aircraftTypeRatings';
 import { catalogRepository } from './catalogRepository';
 import {
   DbRow,
   loadTechnicianProfileTypes,
   loadTechnicianRelations,
+  mapAvailability,
   mapPrivateTechnicianRow,
   mapPublicTechnicianRow,
   mapPublicTechnicianView,
@@ -31,7 +34,7 @@ import { credentialLabel } from '../../constants/licenses';
 // Fase 10, paso 5b: aquí vivía DEFAULT_AUTHORITY = 'EASA', el relleno de la
 // autoridad mientras el perfil no la pedía. Se retira con el selector de
 // autoridad del perfil: un olvido falla a la vista, no se rellena aquí.
-import { matchesTechnicianSearchIdentity } from '../../utils/technicianSearchFilterMatch';
+import { matchesTechnicianSearch, type TechnicianSearchQuery } from '../../utils/technicianSearchFilterMatch';
 import { explainHabilitationScopeRejection, HabilitationCredential, isHabilitationScopeRejection } from '../../utils/profileHabilitationValidation';
 
 // `technician_type` (singular) NO se pide en ninguno de los dos SELECT desde
@@ -51,7 +54,7 @@ import { explainHabilitationScopeRejection, HabilitationCredential, isHabilitati
 // ANTES de su DROP (expand-contract): un SELECT de una columna inexistente
 // revienta todas las consultas de la tabla.
 const PRIVATE_SELECT = `
-  id, user_id, anonymous_code, first_name, last_name, email, phone, birth_date,
+  id, user_id, anonymous_code, first_name, last_name, email, phone, birth_date, photo_path,
   location_country_code, location_city_name,
   location_city_lat, location_city_lng, location_city_geoname_id,
   availability, years_experience,
@@ -68,7 +71,7 @@ const PUBLIC_SELECT = `
   location_city_lat, location_city_lng, location_city_geoname_id,
   availability, years_experience,
   verification_status, first_name, last_name, email,
-  phone, social_links
+  phone, social_links, photo_path
 `;
 
 // Sub-fase de experiencia (2026-07-28) — FILTRO DURO, en el servidor.
@@ -151,54 +154,11 @@ function privatePatchToDb(patch: Partial<Omit<TechnicianProfile, 'id' | 'userId'
   };
 }
 
-// Empty/undefined means "no filter on this dimension" (matches everything);
-// non-empty means "must match at least one" (OR within the array). Same
-// semantics useMapTechnicians.ts's own matchesAny() already used
-// client-side — now the one place both search() callers (search screen,
-// map) go through server-side, instead of each rolling its own post-filter.
-function matchesAny<T>(selected: T[] | undefined, value: T | undefined): boolean {
-  if (!selected || selected.length === 0) return true;
-  return value !== undefined && selected.includes(value);
-}
-
-// Oficios y localización catalogada comparten una función pura y probada:
-// oficios con OR, país por ISO y ciudad del directorio por GeoNames id.
-function matchesSearchFilters(
-  preview: SafeTechnicianPreview,
-  filters: {
-    technicianTypes?: string[];
-    licenseCodes?: string[];
-    aircraftFamilyKeys?: string[];
-    countryCode?: string;
-    cityGeonameId?: number;
-    country?: string;
-    city?: string;
-    verificationStatuses?: string[];
-    availabilityStatuses?: AvailabilityStatus[];
-    availableImmediately?: boolean;
-  },
-  ratingIndex: AircraftRatingIndex,
-): boolean {
-  if (!matchesTechnicianSearchIdentity(preview, filters)) return false;
-  if (!matchesAny(filters.verificationStatuses, preview.verificationStatus)) return false;
-  if (!matchesAny(filters.availabilityStatuses, preview.availability.status)) return false;
-  if (filters.availableImmediately === true && !preview.availability.immediately) return false;
-  if (
-    filters.licenseCodes && filters.licenseCodes.length > 0 &&
-    !preview.licenses.some((license) => filters.licenseCodes!.includes(license.licenseCode))
-  ) {
-    return false;
-  }
-  if (
-    filters.aircraftFamilyKeys && filters.aircraftFamilyKeys.length > 0 &&
-    !preview.habilitations.some((h) =>
-      filters.aircraftFamilyKeys!.some((key) => habilitationCoversFamilyKey(h, key, ratingIndex)),
-    )
-  ) {
-    return false;
-  }
-  return true;
-}
+// Qué técnicos entran en una búsqueda —pantalla de búsqueda y mapa de empresa,
+// los dos llamadores de search()— lo decide UNA función pura y probada,
+// matchesTechnicianSearch (src/utils/technicianSearchFilterMatch.ts). Vivía
+// aquí como matchesSearchFilters; se movió para poder probarla sin red
+// (rediseño, fase 3B).
 
 async function getPublicRow(id: string): Promise<DbRow | null> {
   const { data, error } = await supabase
@@ -286,6 +246,25 @@ export const technicianRepositoryV2 = {
   },
 
   /**
+   * El perfil PROPIO con sus relaciones, para editarlo (rediseño, fase 6A;
+   * antes lo leía la pantalla de perfil con supabase directamente).
+   *
+   * A diferencia de getWithRelations, NO cae a technician_public_view si la
+   * lectura privada falla: lanza. Editar sobre la vista pública —que anula
+   * nombre, email, teléfono y enlaces— y guardar después escribiría esos
+   * huecos encima de los datos reales. null = no hay fila.
+   */
+  async getOwnWithRelations(id: string): Promise<TechnicianWithRelations | null> {
+    const [{ data, error }, relations] = await Promise.all([
+      supabase.from('technician_profiles').select(PRIVATE_SELECT).eq('id', id).maybeSingle(),
+      loadTechnicianRelations([id]),
+    ]);
+    throwIfError(error);
+    if (!data) return null;
+    return mapPrivateTechnicianRow(data as DbRow, relations[id]);
+  },
+
+  /**
    * Los candidatos de una oferta, en un lote (Fase 10, paso 5a).
    *
    * Sustituye al bucle de getTechnicianMatchesForOffer, que llamaba a
@@ -313,7 +292,7 @@ export const technicianRepositoryV2 = {
     const relations = await loadTechnicianRelations(rows.map((row) => row.id));
     return rows.map((row) => ({
       technician: publicRowToPrivateCompat(row, relations[row.id]),
-      preview: mapPublicTechnicianRow(row, relations[row.id]),
+      preview: mapPublicTechnicianView(row, relations[row.id]),
     }));
   },
 
@@ -349,6 +328,58 @@ export const technicianRepositoryV2 = {
   },
 
   /**
+   * Las dos columnas JSON del perfil propio, leídas justo antes de escribir
+   * UNA de sus claves (rediseño, fase 6A). `availability` guarda la
+   * disponibilidad y los contratos juntos, y cada cosa se guarda ahora desde
+   * su pantalla: escribir los contratos con la disponibilidad que la pantalla
+   * cargó hace un rato pisaría un cambio hecho después. Por eso el caso de uso
+   * relee aquí la clave que no toca. null = la fila no se puede leer.
+   */
+  async getOwnJsonColumns(id: string): Promise<{ availability: Availability; socialLinks: SocialLinks | null } | null> {
+    const { data, error } = await supabase
+      .from('technician_profiles')
+      .select('availability, social_links')
+      .eq('id', id)
+      .maybeSingle();
+    throwIfError(error);
+    if (!data) return null;
+    const row = data as DbRow;
+    return { availability: mapAvailability(row.availability), socialLinks: (row.social_links as SocialLinks | null) ?? null };
+  },
+
+  /**
+   * Escribe en `technician_profiles` SÓLO las columnas presentes en `patch`
+   * (rediseño, fase 6A: cada pantalla del perfil guarda lo suyo). Devuelve
+   * false si la fila no se actualizó: `.select('id')` no es decorativo, sin él
+   * un bloqueo de RLS (p. ej. la cuenta deja de estar `active`) daría 0 filas
+   * y CERO error, y la pantalla diría "guardado" sin haber guardado nada.
+   */
+  async updateOwnProfile(id: string, patch: OwnProfileColumnsPatch): Promise<boolean> {
+    const row: Record<string, unknown> = {
+      ...(patch.firstName !== undefined ? { first_name: patch.firstName } : {}),
+      ...(patch.lastName !== undefined ? { last_name: patch.lastName } : {}),
+      ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+      // Las cinco columnas juntas: cambiar de país limpia las coordenadas de
+      // la ciudad anterior en vez de dejarlas.
+      ...(patch.location !== undefined ? locationColumns(patch.location) : {}),
+      // Sólo `immediately` y `contract_types`; `status` nunca se persiste.
+      ...(patch.availability !== undefined
+        ? { availability: { immediately: patch.availability.immediately, contract_types: patch.availability.contractTypes } }
+        : {}),
+      ...(patch.yearsExperience !== undefined ? { years_experience: patch.yearsExperience } : {}),
+      ...(patch.socialLinks !== undefined ? { social_links: patch.socialLinks } : {}),
+    };
+    if (Object.keys(row).length === 0) return true;
+    const { data, error } = await supabase
+      .from('technician_profiles')
+      .update(row)
+      .eq('id', id)
+      .select('id');
+    throwIfError(error);
+    return (data ?? []).length > 0;
+  },
+
+  /**
    * Reemplaza los tipos de perfil de un técnico (Fase 6 tanda A).
    *
    * Diferencial, NO borrar-e-insertar: se calcula qué sobra y qué falta y se
@@ -374,7 +405,7 @@ export const technicianRepositoryV2 = {
    *
    * ⚠ `licenseCodes` son las licencias que van a QUEDAR después del guardado
    * en curso, no las que hay en la base: este método corre ANTES de que se
-   * escriban las licencias (ver app/technician/profile.tsx), así que un
+   * escriban las licencias (ver saveWork en src/usecases/technicianProfile.ts), así que un
    * guardado que las reduce tiene que calcular los implicados sobre las
    * nuevas o se rechazaría a sí mismo.
    */
@@ -659,19 +690,7 @@ export const technicianRepositoryV2 = {
     throwIfNoRows(data, 'Could not remove this type rating — it may no longer exist, or you may not have permission.');
   },
 
-  async search(filters: {
-    technicianTypes?: string[];
-    licenseCodes?: string[];
-    aircraftFamilyKeys?: string[];
-    countryCode?: string;
-    cityGeonameId?: number;
-    country?: string;
-    city?: string;
-    verificationStatuses?: string[];
-    availabilityStatuses?: AvailabilityStatus[];
-    availableImmediately?: boolean;
-    minYearsExperience?: number;
-  }): Promise<SafeTechnicianPreview[]> {
+  async search(filters: TechnicianSearchQuery): Promise<SafeTechnicianPreview[]> {
     const { data, error, count } = await applyMinYearsFilter(
       supabase.from('technician_public_view').select(PUBLIC_SELECT, { count: 'exact' }),
       filters.minYearsExperience,
@@ -687,6 +706,6 @@ export const technicianRepositoryV2 = {
     const ratingIndex = buildAircraftRatingIndex(ratings);
     return rows
       .map((row) => mapPublicTechnicianRow(row, relations[row.id]))
-      .filter((preview) => matchesSearchFilters(preview, filters, ratingIndex));
+      .filter((preview) => matchesTechnicianSearch(preview, filters, ratingIndex));
   },
 };

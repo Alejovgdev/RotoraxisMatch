@@ -1,10 +1,10 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
@@ -121,7 +121,7 @@ export default function PendingVerificationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   container: {
     flex: 1,
     padding: spacing.lg,
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: 'rgba(245,158,11,0.15)',
+    backgroundColor: 'rgba(122, 63, 6, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
@@ -156,10 +156,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
-  emailHighlight: { color: colors.cyanLight, fontWeight: '600' },
+  emailHighlight: { color: colors.text, fontWeight: '600' },
   body: {
     fontSize: 14,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
     marginBottom: spacing.xl,
@@ -172,37 +172,37 @@ const styles = StyleSheet.create({
   step: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: spacing.md,
     gap: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.borderLight,
   },
   stepIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   stepIconActive: {
-    backgroundColor: 'rgba(245,158,11,0.18)',
+    backgroundColor: 'rgba(122, 63, 6, 0.18)',
   },
   stepIconText: { fontSize: 18 },
   stepContent: { flex: 1 },
   stepTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.white,
+    color: colors.text,
     marginBottom: 2,
   },
   stepTitleActive: { color: colors.warning },
   stepDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 17 },
   actions: { width: '100%', gap: spacing.sm, marginBottom: spacing.lg },
-  signOutBtn: { borderColor: 'rgba(255,255,255,0.2)' },
+  signOutBtn: { borderColor: colors.border },
   footer: {
     fontSize: 12,
     color: colors.textMuted,

@@ -33,6 +33,8 @@ export interface OfferMapProps {
   unmappedCount: number;
   onRetry: () => void;
   onBack?: () => void;
+  /** Rediseño, fase 5A: el botón "List" de la cabecera, para volver a la lista. */
+  onShowList?: () => void;
   onViewOffer: (offerId: string) => void;
 }
 
@@ -235,6 +237,7 @@ export function OfferMap({
   unmappedCount,
   onRetry,
   onBack,
+  onShowList,
   onViewOffer,
 }: OfferMapProps) {
   const webViewRef = useRef<WebView>(null);
@@ -380,6 +383,7 @@ export function OfferMap({
         filters={filters}
         onBack={onBack}
         onOpenFilters={() => setFilterOpen(true)}
+        onShowList={onShowList}
       />
 
       {!loading && !effectiveError && offers.length > 0 ? <OfferMapLegend /> : null}

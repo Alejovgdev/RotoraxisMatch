@@ -1,62 +1,27 @@
 import React from 'react';
 import {
-  Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
 import type { LucideProps } from 'lucide-react-native';
 import { colors, spacing } from '../../theme';
+import { appUi, cardShadow, radius, TOUCH_TARGET, UI_TONES, type UiTone } from '../../theme/ui';
 
-export const companyUi = {
-  page: '#E4EBF2',
-  surface: '#FFFFFF',
-  surfaceSoft: '#EEF3F8',
-  border: '#B8C8D9',
-  borderSoft: '#D0DCE8',
-  text: '#0B1520',
-  textSoft: '#2E4057',
-  textMuted: '#5E7592',
-  accent: '#0369A1',
-  accentSoft: '#BAE0F5',
-  blue: '#1D4ED8',
-  blueSoft: '#DBEAFE',
-  green: '#065F46',
-  greenSoft: '#C6F0E1',
-  amber: '#92400E',
-  amberSoft: '#FDE9B0',
-  red: '#B91C1C',
-  redSoft: '#FECACA',
-  navy: '#0B1520',
-};
+// Los tokens comunes del rediseño (src/theme/ui.ts). El nombre se conserva
+// porque lo leen todas las pantallas de empresa y el admin.
+export const companyUi = appUi;
 
-export const companyShadow = Platform.select<ViewStyle>({
-  web: { boxShadow: '0px 14px 34px rgba(15, 23, 42, 0.07)' } as ViewStyle,
-  default: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-});
+export const companyShadow = cardShadow;
 
-export type CompanyTone = 'success' | 'warning' | 'error' | 'info' | 'muted' | 'navy' | 'cyan';
+export type CompanyTone = UiTone;
 
-const TONES: Record<CompanyTone, { bg: string; text: string; border: string }> = {
-  success: { bg: companyUi.greenSoft, text: companyUi.green, border: '#BBF7D0' },
-  warning: { bg: companyUi.amberSoft, text: companyUi.amber, border: '#FDE68A' },
-  error: { bg: companyUi.redSoft, text: companyUi.red, border: '#FECACA' },
-  info: { bg: companyUi.blueSoft, text: companyUi.blue, border: '#BFDBFE' },
-  muted: { bg: companyUi.surfaceSoft, text: companyUi.textSoft, border: companyUi.borderSoft },
-  navy: { bg: '#EEF2FF', text: '#1E3A5F', border: '#C7D2FE' },
-  cyan: { bg: companyUi.accentSoft, text: companyUi.accent, border: '#BAE6FD' },
-};
+const TONES = UI_TONES;
 
 export function CompanyScreen({ children }: { children: React.ReactNode }) {
   return (
@@ -193,7 +158,7 @@ export function InitialAvatar({
 }) {
   const initial = label.trim().charAt(0).toUpperCase() || 'C';
   return (
-    <View style={[companyStyles.avatar, { width: size, height: size, borderRadius: Math.round(size * 0.34), backgroundColor: color }]}>
+    <View style={[companyStyles.avatar, { width: size, height: size, borderRadius: Math.round(size * 0.28), backgroundColor: color }]}>
       <Text style={companyStyles.avatarText}>{initial}</Text>
     </View>
   );
@@ -313,7 +278,7 @@ export const companyStyles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: 0.2,
-    color: '#0891B2',
+    color: companyUi.text,
     marginBottom: 2,
   },
   pageTitle: {
@@ -334,28 +299,24 @@ export const companyStyles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: companyUi.border,
-    backgroundColor: companyUi.surface,
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    ...(companyShadow ?? {}),
   },
   card: {
     backgroundColor: companyUi.surface,
-    borderRadius: 22,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: companyUi.border,
+    borderColor: companyUi.borderSoft,
     padding: spacing.md,
     ...(companyShadow ?? {}),
   },
   badge: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
     alignSelf: 'flex-start',
@@ -363,34 +324,33 @@ export const companyStyles = StyleSheet.create({
   badgeSmall: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
   },
   badgeText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '700',
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: '800',
   },
   badgeTextSmall: {
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 14,
   },
   chip: {
     borderWidth: 1,
     borderColor: companyUi.border,
     backgroundColor: companyUi.surface,
-    borderRadius: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   chipSelected: {
-    backgroundColor: companyUi.accent,
-    borderColor: companyUi.accent,
+    backgroundColor: companyUi.navy,
+    borderColor: companyUi.navy,
   },
   chipText: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: '600',
-    color: companyUi.textSoft,
+    fontSize: 13.5,
+    lineHeight: 17,
+    fontWeight: '800',
+    color: companyUi.text,
   },
   chipTextSelected: {
     color: colors.white,
@@ -430,7 +390,7 @@ export const companyStyles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: companyUi.red,
+    backgroundColor: companyUi.notify,
     zIndex: 2,
   },
   avatar: {

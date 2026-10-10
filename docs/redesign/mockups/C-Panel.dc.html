@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Option C · Clean dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px; padding: 18px 20px 24px; background: #F1F5F8; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-family: 'Nunito', 'Nunito Sans', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: -0.2px; color: #0E8FB0">Aviation Job Talent</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #526274">
+Airbus1
+<span style="height: 22px; padding: 0 8px; border-radius: 11px; background: #D3F1E3; color: #0B5B3A; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 4px">
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+Verified
+</span>
+</span>
+</div>
+<a href="#" aria-label="Profile and team" style="flex: none; width: 48px; height: 48px; border-radius: 15px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path><path d="M10 6h4"></path><path d="M10 10h4"></path><path d="M10 14h4"></path><path d="M10 18h4"></path></svg>
+</a>
+</header>
+
+<section style="border-radius: 22px; background: {{primary}}; color: #FFFFFF; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; color: #E3F0F8">Next step</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 22px; font-weight: 800; line-height: 1.2">Review 1 new application</span>
+<span style="font-size: 14.5px; color: #E3F0F8">B1 Mechanic · A320 family · 2h ago</span>
+</div>
+<a href="#" style="align-self: flex-start; height: 46px; padding: 0 20px 0 22px; border-radius: 23px; background: #FFFFFF; color: {{primary}}; font-size: 15px; font-weight: 800; text-decoration: none; display: flex; align-items: center; gap: 6px">
+Review now
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Workspace</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+
+<a href="#" style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: #D6ECF8; color: #0B5E8C; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.05">9</span>
+<span style="font-size: 15px; font-weight: 800">Job offers</span>
+<span style="font-size: 13px; color: #526274">Published</span>
+</span>
+</a>
+
+<a href="#" style="position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: #FFF6E2; border: 1px solid #F3DDA4; text-decoration: none; color: #0E1A2B">
+<span style="position: absolute; top: 14px; right: 14px; width: 10px; height: 10px; border-radius: 6px; background: #D42C2C"></span>
+<span style="width: 40px; height: 40px; border-radius: 12px; background: #FDE7B5; color: #8A4A0C; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="m9 14 2 2 4-4"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.05; color: #7A3F06">1</span>
+<span style="font-size: 15px; font-weight: 800">Applications</span>
+<span style="font-size: 13px; color: #6B4A1E">To review</span>
+</span>
+</a>
+
+<a href="#" style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: #D6ECF8; color: #0B5E8C; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.05">0</span>
+<span style="font-size: 15px; font-weight: 800">Direct offers</span>
+<span style="font-size: 13px; color: #526274">Awaiting reply</span>
+</span>
+</a>
+
+<a href="#" style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: #DCE7FB; color: #1E4FB8; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.05">1</span>
+<span style="font-size: 15px; font-weight: 800">Chats</span>
+<span style="font-size: 13px; color: #526274">Open conversation</span>
+</span>
+</a>
+</div>
+
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #D6ECF8; color: #0B5E8C; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">Search technicians</span>
+<span style="font-size: 13px; color: #526274">Privacy-safe profiles</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #D5F2E4; color: #0B6B45; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
+</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">Technician map</span>
+<span style="font-size: 13px; color: #526274">Browse by location</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { primary: this.props.primary ?? '#0B6A9E' };
+  }
+}
+</script>
+</body>
+</html>

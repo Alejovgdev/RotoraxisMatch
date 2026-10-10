@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   Modal,
   FlatList,
-  TextInput,
   StyleSheet,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Text, TextInput } from '../ui/Text';
+import { focusRingWithin } from '../ui/webFocusRing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '../../theme';
 
@@ -106,14 +106,14 @@ export function AuthPickerField({
 
             {/* Search */}
             {searchable ? (
-              <View style={styles.searchRow}>
+              <View style={styles.searchRow} {...focusRingWithin}>
                 <Text style={styles.searchIcon}>⌕</Text>
                 <TextInput
                   style={styles.searchInput}
                   value={query}
                   onChangeText={setQuery}
                   placeholder={searchPlaceholder}
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.placeholder}
                   autoFocus
                   autoCorrect={false}
                 />
@@ -162,32 +162,32 @@ export function AuthPickerField({
   );
 }
 
-const sheetBg = '#0A1628';
-const sheetSurface = '#162236';
-const sheetBorder = '#1E3A5F';
+const sheetBg = '#FFFFFF';
+const sheetSurface = '#F3F6F9';
+const sheetBorder = '#E6ECF1';
 
 const styles = StyleSheet.create({
   field: { gap: 6 },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: 2,
   },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     gap: spacing.sm,
   },
   triggerValue: {
     flex: 1,
-    color: colors.white,
+    color: colors.text,
     fontSize: 15,
   },
   triggerPlaceholder: {
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   },
   modalBg: {
     flex: 1,
-    backgroundColor: Platform.OS === 'web' ? 'rgba(10,22,40,0.7)' : sheetBg,
+    backgroundColor: Platform.OS === 'web' ? colors.overlay : sheetBg,
     ...(Platform.OS === 'web'
       ? { alignItems: 'center', justifyContent: 'center', padding: spacing.lg }
       : {}),
@@ -233,12 +233,12 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
   },
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 999,
     backgroundColor: sheetSurface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   closeBtnText: {
     color: colors.textMuted,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   searchRow: {
     flexDirection: 'row',
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: colors.white,
+    color: colors.text,
     fontSize: 14,
     padding: 0,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: sheetSurface,
   },
   itemSelected: {
-    backgroundColor: 'rgba(0,180,216,0.14)',
+    backgroundColor: 'rgba(11, 106, 158, 0.14)',
     borderWidth: 1,
     borderColor: colors.cyan,
   },
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   itemLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.white,
+    color: colors.text,
   },
   itemLabelSelected: {
     color: colors.cyan,

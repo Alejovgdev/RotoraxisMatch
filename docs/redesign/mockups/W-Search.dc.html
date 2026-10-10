@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Search technicians</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; padding: 14px 16px 0 20px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px">Search technicians</h1>
+</div>
+
+<div style="flex: none; padding: 10px 16px 0">
+<button type="button" onClick="{{ openOffer }}" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; border: {{offerBorder}}; background: {{offerBg}}; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #FFFFFF; border: 1px solid #DDE5EC; color: {{primary}}; display: flex; align-items: center; justify-content: center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 12.5px; font-weight: 700; color: #526274">{{offerKicker}}</span>
+<span style="font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{offerTitle}}</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+</button>
+</div>
+
+<div style="flex: none; display: flex; gap: 8px; padding: 10px 16px 10px; overflow: hidden">
+<a href="W-Filters.dc.html" style="flex: none; height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; text-decoration: none">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+Filters · 4
+</a>
+<span style="flex: none; height: 44px; padding: 0 14px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">Mechanic</span>
+<span style="flex: none; height: 44px; padding: 0 14px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">Airplanes</span>
+<span style="flex: none; height: 44px; padding: 0 14px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">Open to offers</span>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 2px 12px 0">
+<sc-for list="{{ techs }}" as="t" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid #E6ECF1; background: #FFFFFF">
+<div style="position: relative; height: 96px; background: #F3F6F9; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{ t.showScore }}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; top: 8px; left: 8px; height: 24px; padding: 0 8px; border-radius: 12px; background: #FFFFFF; color: {{t.scoreColor}}; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">{{t.score}}</span>
+</sc-if>
+<sc-if value="{{ t.verified }}" hint-placeholder-val="{{ true }}">
+<span aria-label="Verified" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 12px; background: #D3F1E3; color: #157F4F; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</sc-if>
+<dc-import name="WAvatar" who="anon" size="60" hint-size="60px,60px"></dc-import>
+</div>
+<div style="padding: 10px 11px 11px; display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; align-items: center; gap: 4px; font-size: 13.5px; font-weight: 800"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>{{t.code}}</span>
+<span style="font-size: 12.5px; color: #33465A; font-weight: 700">{{t.lic}}</span>
+<span style="font-size: 12.5px; color: #526274">{{t.ratings}}</span>
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: {{t.availColor}}"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{t.dot}}"></span>{{t.avail}}</span>
+<sc-if value="{{ t.canSend }}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{ t.send }}" style="margin-top: 6px; height: 40px; border-radius: 20px; border: 1.5px solid {{primary}}; background: #FFFFFF; color: {{primary}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">Send offer</button>
+</sc-if>
+<sc-if value="{{ t.hasTag }}" hint-placeholder-val="{{ false }}">
+<span style="margin-top: 6px; height: 40px; border-radius: 20px; background: {{t.tagBg}}; color: {{t.tagFg}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">{{t.tag}}</span>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+<a href="W-Map.dc.html" style="position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); height: 46px; padding: 0 20px; border-radius: 23px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 14.5px; font-weight: 800; box-shadow: 0 8px 20px rgba(14, 26, 43, 0.28)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"></path><path d="M15 5.764v15"></path><path d="M9 3.236v15"></path></svg>
+Map
+</a>
+</div>
+
+<div style="flex: none">
+<dc-import name="WTabBar" active="search" primary="{{primary}}" hint-size="390px,84px"></dc-import>
+</div>
+
+<sc-if value="{{ anySheet }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Close" onClick="{{ closeSheet }}" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 0; border: 0; background: rgba(14, 26, 43, 0.45); cursor: pointer"></button>
+</sc-if>
+
+<sc-if value="{{ isOfferSheet }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="Select an offer" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 19px; font-weight: 800">Calculate match against</h2>
+<span style="font-size: 13.5px; color: #526274; margin-bottom: 6px">Only your published offers. You need one to send direct offers.</span>
+<sc-for list="{{ offers }}" as="o" hint-placeholder-count="4">
+<button type="button" onClick="{{ o.pick }}" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0; border: 0; border-bottom: 1px solid #E6ECF1; background: transparent; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: {{o.bg}}; color: {{o.fg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 13px">{{o.code}}</span>
+<span style="flex: 1 1 auto; font-size: 15px; font-weight: 800">{{o.title}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isFilters }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="Filters" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 19px; font-weight: 800">Filters</h2>
+<sc-for list="{{ filterGroups }}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 800; color: #526274">{{g.title}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ g.items }}" as="i" hint-placeholder-count="4">
+<span style="height: 36px; padding: 0 12px; border-radius: 18px; border: {{i.border}}; background: {{i.bg}}; color: {{i.fg}}; display: flex; align-items: center; font-size: 13.5px; font-weight: 800">{{i.label}}</span>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; gap: 10px; margin-top: 4px">
+<button type="button" onClick="{{ closeSheet }}" style="flex: 1 1 0; height: 50px; border-radius: 25px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Clear</button>
+<button type="button" onClick="{{ closeSheet }}" style="flex: 1.6 1 0; height: 50px; border-radius: 25px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Show technicians</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="Send direct offer" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 style="margin: 0; font-size: 19px; font-weight: 800">Send direct offer</h2><span style="font-size: 14px; color: #526274">To {{sendTo}} · {{offerTitle}}</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Personal message (optional)
+<textarea rows="4" placeholder="Add a note to the technician..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; resize: none; outline: none"></textarea>
+</label>
+<button type="button" onClick="{{ doSend }}" style="height: 52px; border-radius: 26px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Send offer</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); height: 46px; padding: 0 20px; border-radius: 23px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14.5px; font-weight: 800; white-space: nowrap">{{toast}}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  flash(text) { this.setState({ toast: text }); setTimeout(() => this.setState({ toast: '' }), 2400); }
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const offer = s.offer || null;
+    const sent = s.sent || {};
+    const sheet = s.sheet || null;
+    const offerList = [
+      ['a320', 'B1', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · A320 family'],
+      ['atr', 'B2', '#D5F2E4', '#0B6B45', 'B2 Avionics · ATR 72'],
+      ['cfm', 'ENG', '#E3E8EE', '#33465A', 'Engine Technician · CFM56-5B'],
+      ['b737', 'B1', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · B737 NG']
+    ];
+    const current = offerList.filter((o) => o[0] === offer)[0];
+    const base = [
+      ['a', 'T7A2C91B04', 'EASA B1.1 · B1.3', '2 type ratings', true, true, 92, 'applied'],
+      ['b', 'T4C81E9A20', 'EASA B1.1', '1 type rating', true, true, 84, ''],
+      ['c', 'T9B07D3E11', 'UK CAA B1.1', '3 type ratings', true, true, 79, ''],
+      ['d', 'T3D19F0C77', 'EASA B1.1 · B2', '2 type ratings', false, true, 72, ''],
+      ['e', 'T6F20B8A15', 'EASA B1.1', '1 type rating', true, false, 70, ''],
+      ['f', 'T1C44D9E02', 'CASA B1.1', 'No type ratings', true, true, 68, '']
+    ];
+    const techs = base.map((t) => {
+      const rel = sent[t[0]] ? 'sent' : t[7];
+      return {
+        code: t[1], lic: t[2], ratings: t[3], verified: t[5],
+        avail: t[4] ? 'Open to offers' : 'Unavailable', availColor: t[4] ? '#157F4F' : '#66768A', dot: t[4] ? '#1F9D62' : '#A7B1BC',
+        showScore: !!offer, score: t[6] + '%', scoreColor: t[6] >= 85 ? '#157F4F' : t[6] >= 70 ? '#0B5E8C' : '#66768A',
+        canSend: !!offer && !rel, hasTag: !!offer && !!rel,
+        tag: rel === 'applied' ? 'Applied to this offer' : 'Offer sent',
+        tagBg: rel === 'applied' ? '#FDE7B5' : '#DCE7FB', tagFg: rel === 'applied' ? '#7A3F06' : '#1E4FB8',
+        send: () => this.setState({ sheet: 'send', target: t[0], targetName: t[1] })
+      };
+    });
+    const chip = (label, on) => ({ label: label, bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6' });
+    const filterGroups = [
+      { title: 'Trade type', items: [chip('Mechanic', true), chip('Avionics Technician', false), chip('Sheet Metal Worker', false), chip('Aircraft Painter', false), chip('Composite Technician', false), chip('Engine Technician', false)] },
+      { title: 'Aircraft', items: [chip('Any', false), chip('Airplane', true), chip('Helicopter', false), chip('Mixed', false)] },
+      { title: 'Licences', items: [chip('B1.1', false), chip('B1.3', false), chip('B2', false), chip('Any', true)] },
+      { title: 'Availability and verification', items: [chip('Open to offers', true), chip('Verified only', true)] }
+    ];
+    return {
+      primary: p, techs: techs, filterGroups: filterGroups,
+      offerKicker: current ? 'Match calculated against' : 'No offer selected',
+      offerTitle: current ? current[4] : 'Select an offer to calculate match',
+      offerBg: current ? '#E6F1F8' : '#FFFFFF', offerBorder: current ? '1px solid #BFDDEF' : '1px dashed #B8C8D9',
+      offers: offerList.map((o) => ({ code: o[1], bg: o[2], fg: o[3], title: o[4], pick: () => this.setState({ offer: o[0], sheet: null, sent: {} }) })),
+      anySheet: !!sheet, isOfferSheet: sheet === 'offer', isFilters: sheet === 'filters', isSend: sheet === 'send',
+      sendTo: s.targetName || '',
+      toastOn: !!s.toast, toast: s.toast || '',
+      openOffer: () => this.setState({ sheet: 'offer' }),
+      openFilters: () => this.setState({ sheet: 'filters' }),
+      closeSheet: () => this.setState({ sheet: null }),
+      doSend: () => { const n = Object.assign({}, sent); n[s.target] = true; this.setState({ sheet: null, sent: n }); this.flash('Direct offer sent'); }
+    };
+  }
+}
+</script>
+</body>
+</html>

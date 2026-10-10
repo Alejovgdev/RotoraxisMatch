@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { Text, TextInput } from '../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import { useAuth } from '../../src/auth/AuthContext';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/theme';
+import { fonts } from '../../src/theme/fonts';
 import { AppRole } from '../../src/types/enums';
 
 function roleRoute(role: AppRole): string {
@@ -24,6 +25,8 @@ function roleRoute(role: AppRole): string {
 }
 
 export default function LoginScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   const { signIn, profile } = useAuth();
@@ -63,7 +66,7 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={desktopScrollbar}
         >
           <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back</Text>
@@ -84,7 +87,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               placeholder="you@example.com"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.placeholder}
               autoComplete="email"
               returnKeyType="next"
             />
@@ -96,7 +99,7 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry
               placeholder="••••••••"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.placeholder}
               autoComplete="current-password"
               returnKeyType="done"
               onSubmitEditing={handleSignIn}
@@ -140,7 +143,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.background,
   },
   scroll: {
     flexGrow: 1,
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   backText: {
-    color: colors.cyanLight,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -169,32 +172,33 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 14,
-    color: colors.cyanLight,
+    fontFamily: fonts.logo,
+    fontSize: 18,
+    color: colors.logo,
     marginTop: 4,
   },
   form: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 15,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,

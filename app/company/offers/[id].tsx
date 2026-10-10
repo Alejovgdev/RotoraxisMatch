@@ -1,56 +1,56 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  Platform,
-  useWindowDimensions,
-  RefreshControl,
-} from 'react-native';
+import { View, StyleSheet, Pressable, Platform, RefreshControl } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
+import { isUnlocked } from '../../../src/types/privacy';
+import { companyTechnicianName, companyTechnicianPhoto } from '../../../src/utils/companyTechnicianIdentity';
 import {
   AlertTriangle,
-  BriefcaseBusiness,
-  CalendarDays,
-  CheckCircle,
-  ClipboardCheck,
-  Clock,
-  Edit3,
-  ListChecks,
-  MapPin,
-  Plane,
+  ChevronDown,
+  ChevronUp,
+  Ellipsis,
+  LockKeyhole,
+  LockOpen,
+  Pencil,
   Send,
   Trash2,
-  UserRound,
-  XCircle,
+  Upload,
 } from 'lucide-react-native';
-import { colors, spacing } from '../../../src/theme';
+import type { LucideProps } from 'lucide-react-native';
+import { colors } from '../../../src/theme';
 import { formatOfferSalary } from '../../../src/utils/offerSalary';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { MatchBadge } from '../../../src/components/MatchBadge';
+import { Avatar, BottomSheet, Text, TextInput, useConfirmDialog } from '../../../src/components/ui';
+import { CompanyScreen } from '../../../src/components/company/CompanyUI';
 import {
-  CompanyBadge,
-  CompanyCard,
-  CompanyChip,
-  CompanyPageHeader,
-  CompanyScreen,
-  EmptyPanel,
-  IconBox,
-  companyStyles,
-  companyUi,
-} from '../../../src/components/company/CompanyUI';
+  Breadcrumb,
+  ButtonRow,
+  CARD_BORDER,
+  EmptyBlock,
+  KeyValueRow,
+  LoadingBlock,
+  OfferTileSquare,
+  OutlineTag,
+  PageBar,
+  PageBody,
+  PillButton,
+  RowList,
+  Section,
+  StatGrid,
+  StatTile,
+  StatusPill,
+  StickyBar,
+  TagRow,
+  TwoColumns,
+  VerificationPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
+import { BreakdownBars, matchScoreColor } from '../../../src/components/company/MatchBreakdownBars';
 import { isOfferOpenForTechnicians, offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
-import { getTechnicianMatchesForOffer, MatchScoreWeights, TechnicianMatchResult } from '../../../src/utils/matchingV2';
-import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
+import { getTechnicianMatchesForOffer, TechnicianMatchResult } from '../../../src/utils/matchingV2';
+import { visibleBreakdownRows, type BreakdownRowSpec } from '../../../src/utils/matchBreakdownRows';
 import { compareOfferCandidates, OFFER_RELATION_STATUS_ORDER } from '../../../src/utils/offerCandidateOrder';
 import { OfferRequiredHabilitation, OfferWithRequirements } from '../../../src/types/offer';
 import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
@@ -64,28 +64,19 @@ import { technicianTypeLabel, technicianTypeLabels } from '../../../src/constant
 import { getOfferProductTypeLabel } from '../../../src/constants/offerProductTypes';
 import { credentialLabel } from '../../../src/constants/licenses';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
+import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText, requirementWithNote } from '../../../src/utils/offerRequirementsText';
 import { offerAircraftAreExperience } from '../../../src/utils/offerShape';
-import { notify, confirmAction } from '../../../src/utils/platformAlert';
-import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
+import { notify } from '../../../src/utils/platformAlert';
 import { formatLocation } from '../../../src/utils/formatLocation';
+import { relativeTime } from '../../../src/utils/companyHome';
+import { offerRelationLook, offerStatusLook } from '../../../src/utils/companyStatus';
 
-type Tone = 'success' | 'warning' | 'error' | 'muted' | 'navy' | 'info' | 'cyan';
-
-function statusTone(status: string): Tone {
-  if (status === 'published') return 'success';
-  if (status === 'draft') return 'warning';
-  if (status === 'expired') return 'error';
-  if (status === 'closed') return 'navy';
-  return 'muted';
-}
-
-function scoreColor(total: number): string {
-  if (total >= 80) return companyUi.green;
-  if (total >= 60) return companyUi.blue;
-  if (total >= 40) return companyUi.amber;
-  return companyUi.textMuted;
-}
+// Una oferta de la empresa (rediseño, fase 3; maquetas W-Offer y W-D-Offer;
+// respuesta 13). Cambia el aspecto; se queda todo lo que hacía:
+//   - la lista de técnicos de siempre: candidaturas y ofertas directas
+//     primero, luego los mejores, con su % y "Send direct offer";
+//   - publicar, cerrar, reabrir y borrar, ahora en el menú "⋯", con las
+//     mismas confirmaciones y las mismas condiciones (borrar, sólo cerrada).
 
 const CONTRACT_LABELS: Record<string, string> = {
   permanent: 'Permanent',
@@ -106,39 +97,6 @@ type OfferRelation = {
   createdAt: string;
 };
 
-function relationStatusTone(status: string): Tone {
-  if (status === 'accepted') return 'success';
-  if (status === 'pending') return 'warning';
-  if (status === 'rejected') return 'error';
-  return 'muted';
-}
-
-function relationStatusLabel(record: OfferRelation): string {
-  const prefix = record.kind === 'application' ? 'Application' : 'Direct offer';
-  if (record.status === 'accepted') return `${prefix} accepted`;
-  if (record.status === 'pending') return `${prefix} pending`;
-  if (record.status === 'rejected') return `${prefix} rejected`;
-  if (record.status === 'withdrawn') return `${prefix} withdrawn`;
-  if (record.status === 'expired') return `${prefix} expired`;
-  return `${prefix} ${record.status}`;
-}
-
-function applicationActionLabel(status: OfferApplication['status']): string {
-  if (status === 'accepted') return 'Application accepted - View application';
-  if (status === 'rejected') return 'Application rejected - View application';
-  if (status === 'pending') return 'Application pending - Review application';
-  if (status === 'withdrawn') return 'Application withdrawn - View details';
-  if (status === 'expired') return 'Application expired - View details';
-  return 'View application';
-}
-
-function applicationActionColor(status: OfferApplication['status']): string {
-  if (status === 'accepted') return companyUi.green;
-  if (status === 'rejected') return companyUi.red;
-  if (status === 'pending') return companyUi.amber;
-  return companyUi.textSoft;
-}
-
 function formatPublishedDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -152,12 +110,15 @@ function shouldPreferRelation(next: OfferRelation, current?: OfferRelation): boo
   return new Date(next.createdAt).getTime() > new Date(current.createdAt).getTime();
 }
 
+// iOS no presenta un Modal mientras otro se está cerrando: la acción del menú
+// espera a que la hoja termine de irse antes de abrir su confirmación.
+const AFTER_SHEET_MS = Platform.OS === 'ios' ? 350 : 0;
+
 export default function OfferDetailScreen() {
   const router = useRouter();
   const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const wide = useIsWide();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const companyMemberRole = companySession?.companyMemberRole;
@@ -171,6 +132,7 @@ export default function OfferDetailScreen() {
   const { ratingIndex, state: catalogState } = useAircraftTypeRatingsCatalog();
   // Paso 5b: sólo para el nombre del motor de una oferta de motor.
   const { engineIndex } = useEnginesCatalog();
+  const { confirm, dialog } = useConfirmDialog();
 
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
   const [matches, setMatches] = useState<TechnicianMatchResult[]>([]);
@@ -180,6 +142,7 @@ export default function OfferDetailScreen() {
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -257,11 +220,7 @@ export default function OfferDetailScreen() {
 
   async function handleClose() {
     if (!offer || !id) return;
-    // Fase 5.7 — esta pantalla tenía su propia rama `Platform.OS === 'web'`
-    // con window.confirm, parcheada solo aquí cuando alguien tropezó con el
-    // Alert no-op de react-native-web. confirmAction() lo centraliza para
-    // toda la app; no reintroduzcas ramas por plataforma en las pantallas.
-    const confirmed = await confirmAction({
+    const confirmed = await confirm({
       title: 'Close offer?',
       message: 'This offer will no longer be visible to technicians.',
       confirmLabel: 'Close offer',
@@ -300,16 +259,16 @@ export default function OfferDetailScreen() {
 
   async function handleDelete() {
     if (!offer || !id) return;
-    const { applications, directOffers } = await offerRepository.getDependentCounts(id);
-    const hasDependents = applications > 0 || directOffers > 0;
-    const message = hasDependents
-      ? `This offer has ${applications} application(s) and ${directOffers} direct offer(s) attached, so it can't be permanently deleted. Archive it instead? It will stop being visible to technicians, but every application, direct offer and chat tied to it stays exactly as it is.`
+    const { applications: dependentApplications, directOffers } = await offerRepository.getDependentCounts(id);
+    const hasDependents = dependentApplications > 0 || directOffers > 0;
+    const text = hasDependents
+      ? `This offer has ${dependentApplications} application(s) and ${directOffers} direct offer(s) attached, so it can't be permanently deleted. Archive it instead? It will stop being visible to technicians, but every application, direct offer and chat tied to it stays exactly as it is.`
       : 'This action cannot be undone.';
     const confirmLabel = hasDependents ? 'Archive' : 'Delete';
 
-    const confirmed = await confirmAction({
+    const confirmed = await confirm({
       title: 'Delete offer?',
-      message,
+      message: text,
       confirmLabel,
       destructive: true,
     });
@@ -422,7 +381,7 @@ export default function OfferDetailScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadingScreen color={colors.blue} role="company" />
+        <LoadingScreen color={colors.primary} role="company" />
       </>
     );
   }
@@ -431,9 +390,10 @@ export default function OfferDetailScreen() {
     return (
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.notFound}>
-          <EmptyPanel title="Offer not found" subtitle="This offer is no longer available." />
-        </View>
+        {!wide ? <PageBar title="Offer" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          <EmptyBlock title="Offer not found" text="This offer is no longer available." />
+        </PageBody>
       </CompanyScreen>
     );
   }
@@ -442,416 +402,422 @@ export default function OfferDetailScreen() {
   const offerCanReceiveDirectOffers = isOfferOpenForTechnicians(offer);
   const canManage = canManageOffers(companyMemberRole);
   const canSend = canSendDirectOffers(companyMemberRole) && offerCanReceiveDirectOffers;
+  const status = offerStatusLook(offer.status);
+  const location = `${formatLocation(offer.locationCity, offer.locationCountry)}${offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}`;
+  const editOffer = () => router.push(`/company/offers/edit?id=${offer.id}` as any);
+
+  // ── Menú "⋯": las mismas acciones y condiciones que el bloque "Actions" de antes.
+  type MenuItem = { key: string; label: string; icon: React.ComponentType<LucideProps>; destructive?: boolean; run: () => void };
+  const menuItems: MenuItem[] = canManage && offer.status !== 'archived'
+    ? [
+        { key: 'edit', label: 'Edit offer', icon: Pencil, run: editOffer },
+        ...(offer.status === 'draft' ? [{ key: 'publish', label: 'Publish', icon: Upload, run: handlePublish }] : []),
+        ...(offer.status === 'closed' ? [{ key: 'reopen', label: 'Reopen offer', icon: LockOpen, run: handlePublish }] : []),
+        ...(offer.status === 'published' ? [{ key: 'close', label: 'Close offer', icon: LockKeyhole, run: handleClose }] : []),
+        ...(offer.status === 'closed' ? [{ key: 'delete', label: 'Delete offer', icon: Trash2, destructive: true, run: handleDelete }] : []),
+      ]
+    : [];
+
+  function runFromMenu(item: MenuItem) {
+    setMenuOpen(false);
+    setTimeout(item.run, AFTER_SHEET_MS);
+  }
+
+  const menuButton = menuItems.length > 0 ? (
+    <Pressable
+      onPress={() => setMenuOpen(true)}
+      disabled={statusChanging}
+      style={({ pressed, hovered }: any) => [wide ? styles.menuButtonWide : styles.menuButton, (pressed || hovered) && styles.menuButtonPressed]}
+      accessibilityRole="button"
+      accessibilityLabel="More actions"
+    >
+      <Ellipsis color={colors.text} size={wide ? 22 : 24} strokeWidth={2.6} />
+    </Pressable>
+  ) : null;
+
+  // Botón principal, a la vista (maqueta): editar; en una cerrada, reabrir; en
+  // un borrador, editar y publicar. Lo demás, en el menú.
+  const primaryActions = canManage && offer.status !== 'archived' ? (
+    offer.status === 'closed'
+      ? <PillButton label="Reopen offer" onPress={handlePublish} loading={statusChanging} size={wide ? 'md' : 'lg'} grow={wide ? undefined : 1} />
+      : offer.status === 'draft'
+        ? (
+          <>
+            <PillButton label="Edit offer" variant="outline" onPress={editOffer} size={wide ? 'md' : 'lg'} grow={wide ? undefined : 1} />
+            <PillButton label="Publish" onPress={handlePublish} loading={statusChanging} size={wide ? 'md' : 'lg'} grow={wide ? undefined : 1} />
+          </>
+        )
+        : <PillButton label="Edit offer" variant="outline" onPress={editOffer} size={wide ? 'md' : 'lg'} grow={wide ? undefined : 1} />
+  ) : null;
+
+  const header = (
+    <View style={styles.header}>
+      <OfferTileSquare offer={offer} size={wide ? 64 : 60} />
+      <View style={styles.headerCopy}>
+        <Text style={[styles.title, wide && styles.titleWide]} accessibilityRole="header">{offer.title}</Text>
+        <View style={styles.statusLine}>
+          <StatusPill label={status.label} tone={status.tone} large={wide} />
+          <Text style={styles.when}>
+            {offer.status === 'draft' ? 'Created' : 'Published'} {relativeTime(offer.createdAt)}
+          </Text>
+        </View>
+      </View>
+      {wide ? (
+        <View style={styles.headerActions}>
+          {primaryActions}
+          {menuButton}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const facts = (
+    <StatGrid>
+      <StatTile label="Contract" value={CONTRACT_LABELS[offer.contractType] ?? offer.contractType} />
+      <StatTile label="Remuneration" value={formatOfferSalary(offer.salary) ?? 'Not specified'} />
+      <StatTile label="Location" value={location} />
+      <StatTile label="Experience" value={`${offer.minYearsExperience} yrs min`} />
+      <StatTile label="Aircraft" value={getOfferProductTypeLabel(offer.productType)} />
+      <StatTile label="Published" value={formatPublishedDate(offer.createdAt)} />
+    </StatGrid>
+  );
+
+  const description = offer.description ? (
+    <Section title="Description" wide={wide}>
+      <Text style={styles.description}>{offer.description}</Text>
+    </Section>
+  ) : null;
+
+  const requirementRows: { label: string; value: React.ReactNode }[] = [
+    // Paso 5b: en una oferta de motor el oficio no puntúa ni filtra; lo que
+    // pide es el motor.
+    offer.offerKind === 'engine'
+      ? { label: 'Engine', value: requirementWithNote(offerEngineText(offer, engineIndex) ?? 'Not specified', offer.requiredEngineNotes) }
+      : { label: 'Profile type', value: technicianTypeLabel(offer.technicianType) },
+    // Fase 6 tanda C: se dice SIEMPRE, no solo cuando exige licencia. "No
+    // licence needed" es información, no ausencia de requisito.
+    { label: 'Certified work', value: offerCertificationText(offer) },
+    ...(offer.licenseCode ? [{ label: 'Licence', value: offerLicenseDetailText(offer)! }] : []),
+    ...(offer.onlyUnlicensed ? [{ label: 'Candidates', value: ONLY_UNLICENSED_TEXT }] : []),
+    ...(offer.requiredHabilitations.length > 0
+      ? [{
+          label: offer.requiresAllAircraft ? 'Aircraft — ALL of these' : 'Aircraft — any one of these',
+          value: (
+            <AircraftList
+              habilitations={offer.requiredHabilitations}
+              licenseCode={offerAircraftAreExperience(offer) ? undefined : offer.licenseCode}
+              ratingIndex={ratingIndex}
+            />
+          ),
+        }]
+      : []),
+  ];
+
+  const requirements = (
+    <Section title="Requirements" wide={wide} gap={2}>
+      <View>
+        {requirementRows.map((row, i) => (
+          <KeyValueRow key={row.label} label={row.label} value={row.value} last={i === requirementRows.length - 1} />
+        ))}
+      </View>
+      {offer.offerKind === 'aircraft' && !offer.licenseCode && offer.requiredHabilitations.length === 0 ? (
+        <Text style={styles.note}>
+          {offer.requiresCertification
+            ? 'No licence or type rating required beyond the profile type.'
+            : 'This job does not need certified work — no licence or type rating applies.'}
+        </Text>
+      ) : null}
+    </Section>
+  );
+
+  const technicians = (
+    <Section title="Technicians for this offer" wide={wide} gap={4}>
+      <Text style={styles.note}>Applications and direct offers first, then the best matches.</Text>
+      <View style={styles.techList}>
+        {loadingMatches ? (
+          <LoadingBlock label="Computing match scores..." />
+        ) : matches.length === 0 ? (
+          <EmptyBlock title="No technicians found" text="There are no technicians available for this offer yet." />
+        ) : (
+          <RowList wide={wide}>
+            {orderedMatches.map((result) => {
+              const techId = result.technician.id;
+              const application = applicationByTechnician[techId];
+              return (
+                <TechnicianRow
+                  key={techId}
+                  result={result}
+                  wide={wide}
+                  relation={offerRelationByTechnician[techId]}
+                  application={application}
+                  directAccepted={acceptedRequestForTech(techId)}
+                  directPending={pendingRequestForTech(techId)}
+                  canSend={canSend}
+                  offerOpen={offerCanReceiveDirectOffers}
+                  ratingIndex={ratingIndex}
+                  breakdownRows={breakdownRows}
+                  onSend={() => { setSelectedTechId(techId); setMessage(''); }}
+                  onViewApplication={application ? () => router.push(`/company/applications/${application.id}` as any) : undefined}
+                  onViewProfile={() => router.push(`/company/technician/${techId}` as any)}
+                />
+              );
+            })}
+          </RowList>
+        )}
+      </View>
+    </Section>
+  );
+
+  const menuSheet = (
+    <BottomSheet visible={menuOpen} onClose={() => setMenuOpen(false)} title={wide ? 'Offer actions' : undefined}>
+      <View>
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const tint = item.destructive ? colors.error : colors.text;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => runFromMenu(item)}
+              style={({ pressed, hovered }: any) => [styles.menuItem, (pressed || hovered) && styles.menuItemPressed]}
+              accessibilityRole="menuitem"
+            >
+              <Icon color={tint} size={20} strokeWidth={2} />
+              <Text style={[styles.menuItemText, { color: tint }]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </BottomSheet>
+  );
+
+  const sendSheet = (
+    <BottomSheet
+      visible={selectedTechId !== null}
+      onClose={() => setSelectedTechId(null)}
+      dismissible={!sending}
+      title="Send direct offer"
+      subtitle={selectedTech
+        ? `To ${companyTechnicianName(selectedTech.technician)} · ${selectedTech.score.total}% match for this offer`
+        : undefined}
+      footer={(
+        <ButtonRow>
+          <PillButton label="Cancel" variant="outline" size="md" onPress={() => setSelectedTechId(null)} disabled={sending} grow={1} />
+          <PillButton label="Send offer" icon={Send} size="md" onPress={handleSendOffer} loading={sending} grow={1} />
+        </ButtonRow>
+      )}
+    >
+      <View style={styles.field}>
+        <Text style={styles.fieldLabel}>Personal message (optional)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Add a note to the technician..."
+          placeholderTextColor={colors.placeholder}
+          value={message}
+          onChangeText={setMessage}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+      </View>
+    </BottomSheet>
+  );
+
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />;
+
+  if (wide) {
+    return (
+      <CompanyScreen>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PageBody wide maxWidth={1240} refreshControl={refresh}>
+          <Breadcrumb parent="Your offers" onParent={() => router.navigate('/company/offers' as any)} current={offer.title} />
+          {header}
+          <TwoColumns
+            main={technicians}
+            aside={(
+              <>
+                {facts}
+                <View style={styles.asideBox}>
+                  {description}
+                  {requirements}
+                </View>
+              </>
+            )}
+          />
+        </PageBody>
+        {menuSheet}
+        {sendSheet}
+        {dialog}
+      </CompanyScreen>
+    );
+  }
 
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[companyStyles.content, isWide && companyStyles.contentWide]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <CompanyPageHeader
-          eyebrow="Offer detail"
-          title={offer.title}
-          subtitle={`${formatLocation(offer.locationCity, offer.locationCountry)}${offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}`}
-          onBack={goBack}
-          right={<CompanyBadge label={offer.status} tone={statusTone(offer.status)} />}
-        />
-
-        <CompanyCard style={styles.summaryCard}>
-          <View style={styles.summaryTop}>
-            <IconBox icon={BriefcaseBusiness} color={statusAccent(offer.status)} backgroundColor={offer.status === 'published' ? companyUi.greenSoft : companyUi.surfaceSoft} />
-            <View style={styles.summaryCopy}>
-              <Text style={styles.summaryTitle}>Summary</Text>
-              <Text style={styles.summaryDescription}>{offer.description}</Text>
-            </View>
-          </View>
-
-          <View style={styles.metaGrid}>
-            <MetaTile label="Aircraft" value={getOfferProductTypeLabel(offer.productType)} icon={Plane} />
-            <MetaTile label="Contract" value={CONTRACT_LABELS[offer.contractType] ?? offer.contractType} />
-            <MetaTile label="Experience" value={`${offer.minYearsExperience} yrs min`} />
-            <MetaTile label="Published" value={formatPublishedDate(offer.createdAt)} icon={CalendarDays} />
-          </View>
-
-          <View style={styles.metaTile}>
-            <Text style={styles.metaLabel}>Remuneration</Text>
-            <Text style={styles.metaValue}>{formatOfferSalary(offer.salary) ?? 'Not specified'}</Text>
-          </View>
-
-          <View style={styles.locationLine}>
-            <MapPin color={companyUi.textMuted} size={15} strokeWidth={2} />
-            <Text style={styles.locationText}>
-              {formatLocation(offer.locationCity, offer.locationCountry)}
-              {offer.locationBaseAirport ? ` - ${offer.locationBaseAirport}` : ''}
-            </Text>
-          </View>
-        </CompanyCard>
-
-        <CompanyCard style={styles.sectionCard}>
-          <SectionTitle title="Requirements" />
-          {/* Paso 5b: en una oferta de motor el oficio no puntúa ni filtra;
-              lo que pide es el motor. */}
-          {offer.offerKind === 'engine' ? (
-            <RequirementRow label="Engine" items={[offerEngineText(offer, engineIndex) ?? 'Not specified']} />
-          ) : (
-            <RequirementRow label="Profile type" items={[technicianTypeLabel(offer.technicianType)]} />
-          )}
-          {/* Fase 6 tanda C: se dice SIEMPRE, no solo cuando exige licencia.
-              "No licence needed" es información, no ausencia de requisito. */}
-          <RequirementRow
-            label="Certified work"
-            items={[offerCertificationText(offer)]}
-          />
-          {offer.licenseCode ? <RequirementRow label="Licence" items={[offerLicenseDetailText(offer)!]} /> : null}
-          {offer.onlyUnlicensed ? <RequirementRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} /> : null}
-          {offer.requiredHabilitations.length > 0 ? (
-            <TypeRatingRequirementsRow
-              habilitations={offer.requiredHabilitations}
-              licenseCode={offerAircraftAreExperience(offer) ? undefined : offer.licenseCode}
-              requiresAll={offer.requiresAllAircraft}
-              ratingIndex={ratingIndex}
-            />
-          ) : null}
-          {offer.offerKind === 'aircraft' && !offer.licenseCode && offer.requiredHabilitations.length === 0 ? (
-            <Text style={styles.noRequirementsText}>
-              {offer.requiresCertification
-                ? 'No licence or type rating required beyond the profile type.'
-                : 'This job does not need certified work — no licence or type rating applies.'}
-            </Text>
-          ) : null}
-        </CompanyCard>
-
-        {canManage && offer.status !== 'archived' ? (
-          <CompanyCard style={styles.sectionCard}>
-            <SectionTitle title="Actions" />
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => router.push(`/company/offers/edit?id=${offer.id}` as any)}
-                activeOpacity={0.75}
-              >
-                <Edit3 color={companyUi.textSoft} size={15} strokeWidth={2} />
-                <Text style={styles.secondaryButtonText}>Edit offer</Text>
-              </TouchableOpacity>
-              {offer.status === 'draft' ? (
-                <TouchableOpacity
-                  style={[styles.primaryButton, statusChanging && styles.btnDisabled]}
-                  onPress={handlePublish}
-                  disabled={statusChanging}
-                  activeOpacity={0.75}
-                >
-                  {statusChanging ? <ActivityIndicator color={colors.white} size="small" /> : <CheckCircle color={colors.white} size={16} strokeWidth={2} />}
-                  <Text style={styles.primaryButtonText}>Publish</Text>
-                </TouchableOpacity>
-              ) : null}
-              {offer.status === 'closed' ? (
-                <TouchableOpacity
-                  style={[styles.primaryButton, statusChanging && styles.btnDisabled]}
-                  onPress={handlePublish}
-                  disabled={statusChanging}
-                  activeOpacity={0.75}
-                >
-                  {statusChanging ? <ActivityIndicator color={colors.white} size="small" /> : <CheckCircle color={colors.white} size={16} strokeWidth={2} />}
-                  <Text style={styles.primaryButtonText}>Reopen offer</Text>
-                </TouchableOpacity>
-              ) : null}
-              {offer.status === 'published' ? (
-                <TouchableOpacity
-                  style={[styles.dangerButton, statusChanging && styles.btnDisabled]}
-                  onPress={handleClose}
-                  disabled={statusChanging}
-                  activeOpacity={0.75}
-                >
-                  {statusChanging ? <ActivityIndicator color={colors.white} size="small" /> : <XCircle color={colors.white} size={16} strokeWidth={2} />}
-                  <Text style={styles.primaryButtonText}>Close offer</Text>
-                </TouchableOpacity>
-              ) : null}
-              {offer.status === 'closed' ? (
-                <TouchableOpacity
-                  style={[styles.deleteButton, statusChanging && styles.btnDisabled]}
-                  onPress={handleDelete}
-                  disabled={statusChanging}
-                  activeOpacity={0.75}
-                >
-                  {statusChanging ? <ActivityIndicator color={colors.white} size="small" /> : <Trash2 color={colors.white} size={16} strokeWidth={2} />}
-                  <Text style={styles.primaryButtonText}>Delete offer</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </CompanyCard>
-        ) : null}
-
-        <View style={styles.matchesHeader}>
-          <Text style={styles.matchesTitle}>Technician matches</Text>
-          <Text style={styles.matchesSub}>Applications and direct offer records appear first: accepted, pending, then rejected.</Text>
-        </View>
-
-        {loadingMatches ? (
-          <CompanyCard style={styles.loadingPanel}>
-            <ActivityIndicator color={companyUi.accent} />
-            <Text style={styles.loadingText}>Computing match scores...</Text>
-          </CompanyCard>
-        ) : null}
-
-        {!loadingMatches && matches.length === 0 ? (
-          <EmptyPanel title="No technicians found" subtitle="There are no technicians available for this offer yet." />
-        ) : null}
-
-        {!loadingMatches && orderedMatches.map(({ technician, score }) => {
-          const isPending = pendingRequestForTech(technician.id);
-          const isAccepted = acceptedRequestForTech(technician.id);
-          const application = applicationByTechnician[technician.id];
-          const relation = offerRelationByTechnician[technician.id];
-          const accent = scoreColor(score.total);
-          const licenses = technician.licenses.slice(0, 4);
-          // displayName completo (célula + MOTOR), no `aircraftFamily` suelta.
-          // Ésta es la pantalla donde la empresa rankea candidatos contra un
-          // type rating que ES célula+motor: mostrar "Airbus A318/A319/A320/A321"
-          // sin el motor impedía distinguir CFM56 de V2500, justo la distinción
-          // que el modelo Part-66 existe para preservar. Misma función que usan
-          // búsqueda y mapa — una sola definición de la etiqueta.
-          const aircraft = resolveTypeRatingLabels(technician.habilitations, ratingIndex).slice(0, 4);
-
-          return (
-            <CompanyCard key={technician.id} style={[styles.techCard, { borderLeftColor: accent }]}>
-              <View style={styles.techHeader}>
-                <IconBox icon={UserRound} color={accent} backgroundColor={score.total >= 60 ? companyUi.blueSoft : companyUi.surfaceSoft} />
-                <View style={styles.techInfo}>
-                  <Text style={styles.techCode}>{technician.anonymousCode}</Text>
-                  <Text style={styles.techMeta}>
-                    {technicianTypeLabels(technician.technicianTypes)} - {formatLocation(technician.city, technician.country)}
-                  </Text>
-                </View>
-                <MatchBadge score={score.total} context="match for this offer" notEligible={score.blockers.length > 0} />
-              </View>
-
-              <View style={styles.badgeRow}>
-                <CompanyBadge
-                  label={technician.verificationStatus === 'verified' ? 'Verified' : technician.verificationStatus}
-                  tone={technician.verificationStatus === 'verified' ? 'success' : 'warning'}
-                  small
-                />
-                <CompanyBadge label={availabilityLabel(technician.availability.status)} tone="cyan" small />
-                {technician.baseAirport ? <CompanyBadge label={technician.baseAirport} tone="muted" small /> : null}
-                {relation ? (
-                  <CompanyBadge
-                    label={relationStatusLabel(relation)}
-                    tone={relationStatusTone(relation.status)}
-                    small
-                  />
-                ) : null}
-              </View>
-
-              {licenses.length > 0 ? (
-                <View style={styles.chipBlock}>
-                  <Text style={styles.chipBlockLabel}>Licenses</Text>
-                  <View style={styles.chipRow}>{licenses.map((l) => <CompanyChip key={`${l.authority}-${l.licenseCode}`} label={credentialLabel(l.authority, l.licenseCode)} />)}</View>
-                </View>
-              ) : null}
-
-              {aircraft.length > 0 ? (
-                <View style={styles.chipBlock}>
-                  <Text style={styles.chipBlockLabel}>Type ratings</Text>
-                  <View style={styles.chipRow}>{aircraft.map((a) => <CompanyChip key={a} label={a} />)}</View>
-                </View>
-              ) : null}
-
-              <View style={styles.breakdown}>
-                {breakdownRows.map((row) => (
-                  <BreakdownItem key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} />
-                ))}
-              </View>
-
-              <CapReasonPanel score={score} />
-              <VigenciaNotices score={score} />
-              <AuthorityEquivalenceNote score={score} />
-
-              {relation?.status === 'accepted' ? (
-                <ViewTechnicianProfileButton technicianId={technician.id} fullWidth />
-              ) : null}
-
-              {application ? (
-                <TouchableOpacity
-                  style={[
-                    styles.viewApplicationButton,
-                    { backgroundColor: applicationActionColor(application.status) },
-                  ]}
-                  onPress={() => router.push(`/company/applications/${application.id}` as any)}
-                  activeOpacity={0.75}
-                >
-                  {application.status === 'accepted' ? (
-                    <CheckCircle color={colors.white} size={16} strokeWidth={2} />
-                  ) : application.status === 'rejected' ? (
-                    <XCircle color={colors.white} size={16} strokeWidth={2} />
-                  ) : application.status === 'pending' ? (
-                    <Clock color={colors.white} size={16} strokeWidth={2} />
-                  ) : (
-                    <ClipboardCheck color={colors.white} size={16} strokeWidth={2} />
-                  )}
-                  <Text style={styles.primaryButtonText}>{applicationActionLabel(application.status)}</Text>
-                </TouchableOpacity>
-              ) : isAccepted ? (
-                <View style={styles.stateNotice}>
-                  <CheckCircle color={companyUi.green} size={16} strokeWidth={2} />
-                  <Text style={[styles.stateNoticeText, { color: companyUi.green }]}>Direct offer accepted</Text>
-                </View>
-              ) : isPending ? (
-                <View style={styles.stateNotice}>
-                  <Clock color={companyUi.amber} size={16} strokeWidth={2} />
-                  <Text style={[styles.stateNoticeText, { color: companyUi.amber }]}>Direct offer sent - pending</Text>
-                </View>
-              ) : canSend ? (
-                <TouchableOpacity
-                  style={styles.sendButton}
-                  onPress={() => { setSelectedTechId(technician.id); setMessage(''); }}
-                  activeOpacity={0.75}
-                >
-                  <Send color={colors.white} size={16} strokeWidth={2} />
-                  <Text style={styles.primaryButtonText}>Send direct offer</Text>
-                </TouchableOpacity>
-              ) : !offerCanReceiveDirectOffers ? (
-                <View style={styles.stateNotice}>
-                  <XCircle color={companyUi.textMuted} size={16} strokeWidth={2} />
-                  <Text style={styles.stateNoticeText}>Closed offers cannot be sent privately</Text>
-                </View>
-              ) : null}
-            </CompanyCard>
-          );
-        })}
-      </ScrollView>
-
-      <Modal
-        visible={selectedTechId !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedTechId(null)}
-      >
-        <View style={modalStyles.overlay}>
-          <CompanyCard style={modalStyles.sheet}>
-            <Text style={modalStyles.title}>Send direct offer</Text>
-            {selectedTech ? (
-              <Text style={modalStyles.techName}>
-                {selectedTech.technician.anonymousCode} - {selectedTech.score.total}% match for this offer
-              </Text>
-            ) : null}
-            <Text style={modalStyles.fieldLabel}>Personal message (optional)</Text>
-            <TextInput
-              style={modalStyles.input}
-              placeholder="Add a note to the technician..."
-              placeholderTextColor={companyUi.textMuted}
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-            <View style={modalStyles.actions}>
-              <TouchableOpacity
-                style={[modalStyles.button, modalStyles.cancelButton]}
-                onPress={() => setSelectedTechId(null)}
-                activeOpacity={0.75}
-              >
-                <Text style={modalStyles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[modalStyles.button, modalStyles.confirmButton, sending && styles.btnDisabled]}
-                onPress={handleSendOffer}
-                disabled={sending}
-                activeOpacity={0.75}
-              >
-                {sending ? <ActivityIndicator color={colors.white} size="small" /> : <Send color={colors.white} size={16} strokeWidth={2} />}
-                <Text style={modalStyles.confirmText}>Send offer</Text>
-              </TouchableOpacity>
-            </View>
-          </CompanyCard>
-        </View>
-      </Modal>
+      <PageBar title="Offer" onBack={goBack} right={menuButton} />
+      <PageBody wide={false} refreshControl={refresh}>
+        {header}
+        {facts}
+        {description}
+        {requirements}
+        {technicians}
+      </PageBody>
+      {primaryActions ? <StickyBar><ButtonRow>{primaryActions}</ButtonRow></StickyBar> : null}
+      {menuSheet}
+      {sendSheet}
+      {dialog}
     </CompanyScreen>
   );
 }
 
-function statusAccent(status: string): string {
-  if (status === 'published') return companyUi.green;
-  if (status === 'draft') return companyUi.amber;
-  if (status === 'expired') return companyUi.red;
-  return companyUi.textMuted;
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
-
-function MetaTile({ label, value, icon: Icon }: { label: string; value: string; icon?: React.ComponentType<{ color: string; size: number; strokeWidth: number }> }) {
-  return (
-    <View style={styles.metaTile}>
-      {Icon ? (
-        <View style={styles.metaLabelRow}>
-          <Icon color={companyUi.textMuted} size={11} strokeWidth={2} />
-          <Text style={styles.metaLabel}>{label}</Text>
-        </View>
-      ) : (
-        <Text style={styles.metaLabel}>{label}</Text>
-      )}
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
-  );
-}
-
-// Renders nothing when empty rather than a placeholder "Any" chip — an
-// unset broad field isn't a requirement worth stating, and showing "Any"
-// reads as if it were deliberately unrestricted. Superseded entirely by
-// TypeRatingRequirementsRow once these legacy fields are removed.
-function RequirementRow({ label, items }: { label: string; items: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <View style={styles.requirementRow}>
-      <View style={styles.requirementLabelRow}>
-        <ListChecks color={companyUi.textMuted} size={14} strokeWidth={2} />
-        <Text style={styles.requirementLabel}>{label}</Text>
-      </View>
-      <View style={styles.chipRow}>
-        {items.map((item) => <CompanyChip key={item} label={item} />)}
-      </View>
-    </View>
-  );
-}
-
-// Fase 6 tanda D: la píldora Mandatory/Preferred por fila desaparece. Era la
-// que nadie sabía combinar — tres "obligatorias" significaban en la práctica
-// "una cualquiera". Ahora la exigencia se dice UNA vez, arriba, y vale para
-// toda la lista.
-function TypeRatingRequirementsRow({
+// Fase 6 tanda D: la exigencia ("todas" o "una cualquiera") se dice UNA vez,
+// en el rótulo, y vale para toda la lista.
+function AircraftList({
   habilitations,
   licenseCode,
-  requiresAll,
   ratingIndex,
 }: {
   habilitations: OfferRequiredHabilitation[];
   licenseCode?: string;
-  requiresAll: boolean;
   ratingIndex: AircraftRatingIndex;
 }) {
   return (
-    <View style={styles.requirementRow}>
-      <View style={styles.requirementLabelRow}>
-        <ListChecks color={companyUi.textMuted} size={14} strokeWidth={2} />
-        <Text style={styles.requirementLabel}>
-          {requiresAll ? 'Aircraft — ALL of these' : 'Aircraft — any one of these'}
+    <View style={styles.aircraftList}>
+      {habilitations.map((req, i) => (
+        <Text key={`${req.aircraftTypeRatingId}-${i}`} style={styles.aircraftItem}>
+          {licenseCode ? `${licenseCode} + ` : ''}
+          {requirementWithNote(getAircraftTypeRatingLabel(req.aircraftTypeRatingId, ratingIndex), req.notes)}
         </Text>
-      </View>
-      <View style={styles.habilitationReqList}>
-        {habilitations.map((req, i) => (
-          <View key={`${req.aircraftTypeRatingId}-${i}`} style={styles.habilitationReqItem}>
-            <Text style={styles.habilitationReqText}>
-              {licenseCode ? `${licenseCode} + ` : ''}
-              {getAircraftTypeRatingLabel(req.aircraftTypeRatingId, ratingIndex)}
+      ))}
+    </View>
+  );
+}
+
+function TechnicianRow({
+  result,
+  wide,
+  relation,
+  application,
+  directAccepted,
+  directPending,
+  canSend,
+  offerOpen,
+  ratingIndex,
+  breakdownRows,
+  onSend,
+  onViewApplication,
+  onViewProfile,
+}: {
+  result: TechnicianMatchResult;
+  wide: boolean;
+  relation?: OfferRelation;
+  application?: OfferRelation;
+  directAccepted: boolean;
+  directPending: boolean;
+  canSend: boolean;
+  offerOpen: boolean;
+  ratingIndex: AircraftRatingIndex;
+  breakdownRows: readonly BreakdownRowSpec[];
+  onSend: () => void;
+  onViewApplication?: () => void;
+  onViewProfile: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { technician, score } = result;
+  const unlocked = isUnlocked(technician);
+  const name = companyTechnicianName(technician);
+  const blocked = score.blockers.length > 0;
+  const firstLicence = technician.licenses[0];
+  const licences = technician.licenses.slice(0, 4);
+  // displayName completo (célula + MOTOR), no `aircraftFamily` suelta. Ésta
+  // es la pantalla donde la empresa rankea candidatos contra un type rating
+  // que ES célula+motor: mostrar "Airbus A318/A319/A320/A321" sin el motor
+  // impedía distinguir CFM56 de V2500. Misma función que usan búsqueda y mapa.
+  const aircraft = resolveTypeRatingLabels(technician.habilitations, ratingIndex).slice(0, 4);
+  const relationLook = relation ? offerRelationLook(relation.kind, relation.status) : null;
+
+  // Lo de siempre, en el mismo orden: una candidatura se abre; si no, el
+  // estado de la oferta directa; si no, enviar; y en una oferta cerrada, por
+  // qué no se puede.
+  let action: React.ReactNode = null;
+  if (application) {
+    action = <PillButton label={application.status === 'pending' ? 'Review application' : 'View application'} variant="outline" size="sm" onPress={onViewApplication} />;
+  } else if (directAccepted || directPending) {
+    action = null; // la etiqueta de la relación ya lo dice
+  } else if (canSend) {
+    action = <PillButton label={wide ? 'Send direct offer' : 'Send offer'} variant="accent" size="sm" onPress={onSend} />;
+  } else if (!offerOpen) {
+    action = <Text style={styles.closedNote}>Closed offers cannot be sent privately</Text>;
+  }
+
+  return (
+    <View style={wide ? styles.techRowWide : styles.techRow}>
+      <View style={styles.techTop}>
+        <View style={styles.techWho}>
+          <Avatar kind="person" size={44} photoPath={companyTechnicianPhoto(technician)} anonymous={!unlocked} name={unlocked ? name : null} />
+          <View style={styles.techCopy}>
+            <Text style={styles.techName} numberOfLines={1}>{name}</Text>
+            <Text style={styles.techLine} numberOfLines={1}>
+              <Text style={[styles.techScore, { color: blocked ? colors.error : matchScoreColor(score.total) }]}>
+                {blocked ? 'Not eligible' : `${score.total}%`}
+              </Text>
+              {firstLicence ? ` · ${credentialLabel(firstLicence.authority, firstLicence.licenseCode)}` : ''}
+            </Text>
+            <Text style={styles.techMeta} numberOfLines={1}>
+              {technicianTypeLabels(technician.technicianTypes)} - {formatLocation(technician.city, technician.country)}
             </Text>
           </View>
-        ))}
+        </View>
+        <View style={styles.techEnd}>
+          {relationLook ? <StatusPill label={relationLook.label} tone={relationLook.tone} /> : null}
+          {action}
+        </View>
       </View>
+
+      <View style={styles.techLinks}>
+        <Pressable
+          onPress={() => setExpanded((v) => !v)}
+          hitSlop={8}
+          style={styles.detailsToggle}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${expanded ? 'Hide' : 'Show'} match details for ${name}`}
+        >
+          <Text style={styles.detailsToggleText}>Match details</Text>
+          {expanded
+            ? <ChevronUp color={colors.primary} size={16} strokeWidth={2.4} />
+            : <ChevronDown color={colors.primary} size={16} strokeWidth={2.4} />}
+        </Pressable>
+        {unlocked ? (
+          <PillButton label="View profile" variant="outline" size="sm" onPress={onViewProfile} />
+        ) : null}
+      </View>
+
+      {expanded ? (
+        <View style={styles.details}>
+          <View style={styles.badges}>
+            <VerificationPill status={technician.verificationStatus} />
+            <StatusPill label={availabilityLabel(technician.availability.status)} tone="info" />
+            {technician.baseAirport ? <StatusPill label={technician.baseAirport} tone="muted" /> : null}
+          </View>
+          {licences.length > 0 ? (
+            <View style={styles.detailBlock}>
+              <Text style={styles.detailLabel}>Licenses</Text>
+              <TagRow>{licences.map((l) => <OutlineTag key={`${l.authority}-${l.licenseCode}`} label={credentialLabel(l.authority, l.licenseCode)} />)}</TagRow>
+            </View>
+          ) : null}
+          {aircraft.length > 0 ? (
+            <View style={styles.detailBlock}>
+              <Text style={styles.detailLabel}>Type ratings</Text>
+              <TagRow>{aircraft.map((a) => <OutlineTag key={a} label={a} />)}</TagRow>
+            </View>
+          ) : null}
+          <BreakdownBars rows={breakdownRows} score={score} />
+          <CapReasonPanel score={score} />
+          <VigenciaNotices score={score} />
+          <AuthorityEquivalenceNote score={score} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -869,32 +835,30 @@ function CapReasonPanel({ score }: { score: MatchScore }) {
   return (
     <View style={styles.capPanel}>
       <View style={styles.capHeaderRow}>
-        <AlertTriangle color={companyUi.amber} size={14} strokeWidth={2} />
+        <AlertTriangle color={colors.warning} size={14} strokeWidth={2} />
         <Text style={styles.capTitle}>Score capped ({rawSum}% raw before cap)</Text>
       </View>
       {score.missingRequirements.map((m: string, i: number) => (
-        <Text key={`mm-${i}`} style={styles.capMissingLine}>Not met: {m}</Text>
+        <Text key={`mm-${i}`} style={styles.capLine}>Not met: {m}</Text>
       ))}
       {score.clarifications.map((c, i) => (
-        <Text key={`cl-${i}`} style={styles.capClarificationLine}>{c}</Text>
+        <Text key={`cl-${i}`} style={styles.capClarification}>{c}</Text>
       ))}
     </View>
   );
 }
 
 // Fase 3 — vigencia: a slight, non-excluding degradation (never a cap, so
-// CapReasonPanel above never catches it — the breakdown bar already
-// reflects the reduced number). Shown unconditionally whenever present,
-// same "always visible" treatment as MatchExplanation's Validity section
-// on the other 3 audited screens.
+// CapReasonPanel above never catches it — the breakdown bar already reflects
+// the reduced number). Shown unconditionally whenever present.
 function VigenciaNotices({ score }: { score: MatchScore }) {
   if (score.vigenciaNotices.length === 0) return null;
   return (
-    <View style={styles.vigenciaBlock}>
+    <View style={styles.noticeList}>
       {score.vigenciaNotices.map((n, i) => (
-        <View key={i} style={styles.vigenciaRow}>
-          <CompanyBadge label={n.label} tone="warning" small />
-          <Text style={styles.vigenciaDetail}>{n.detail}</Text>
+        <View key={i} style={styles.noticeRow}>
+          <StatusPill label={n.label} tone="warning" />
+          <Text style={styles.noticeDetail}>{n.detail}</Text>
         </View>
       ))}
     </View>
@@ -907,488 +871,268 @@ function VigenciaNotices({ score }: { score: MatchScore }) {
 function AuthorityEquivalenceNote({ score }: { score: MatchScore }) {
   if (!score.authorityEquivalence) return null;
   return (
-    <View style={styles.vigenciaRow}>
-      <CompanyBadge label="Equivalent" tone="info" small />
-      <Text style={styles.vigenciaDetail}>{score.authorityEquivalence}</Text>
-    </View>
-  );
-}
-
-function BreakdownItem({ label, value, max }: { label: string; value: number; max: number }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  return (
-    <View style={styles.breakdownItem}>
-      <Text style={styles.breakdownLabel}>{label}</Text>
-      <View style={styles.breakdownTrack}>
-        <View style={[styles.breakdownFill, { width: `${pct}%` as any, backgroundColor: value > 0 ? companyUi.accent : companyUi.border }]} />
-      </View>
-      <Text style={[styles.breakdownValue, { color: value > 0 ? companyUi.green : companyUi.textMuted }]}>
-        {value}/{max}
-      </Text>
+    <View style={styles.noticeRow}>
+      <StatusPill label="Equivalent" tone="info" />
+      <Text style={styles.noticeDetail}>{score.authorityEquivalence}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  notFound: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.md,
-  },
-  summaryCard: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  summaryTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  summaryCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  summaryTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: companyUi.text,
-    marginBottom: 4,
-  },
-  summaryDescription: {
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: companyUi.textSoft,
-  },
-  metaGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  metaTile: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 16,
-    backgroundColor: companyUi.surfaceSoft,
-    borderWidth: 1,
-    borderColor: companyUi.borderSoft,
-    padding: spacing.sm,
-  },
-  metaLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  metaLabel: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-    color: companyUi.textMuted,
-    marginBottom: 4,
-  },
-  metaValue: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  locationLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
-  },
-  locationText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-    color: companyUi.textSoft,
-  },
-  sectionCard: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  requirementRow: {
-    gap: spacing.xs,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
-  },
-  requirementLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  requirementLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: companyUi.textMuted,
-  },
-  chipRow: {
+  header: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  habilitationReqList: {
-    gap: spacing.xs,
-  },
-  habilitationReqItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: 14,
   },
-  habilitationReqText: {
+  headerCopy: {
+    flexGrow: 1,
     flexShrink: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: companyUi.text,
-  },
-  noRequirementsText: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
-    fontStyle: 'italic',
-    color: companyUi.textMuted,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  secondaryButton: {
-    flex: 1,
-    minWidth: 140,
-    minHeight: 42,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: companyUi.border,
-    backgroundColor: companyUi.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  secondaryButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: companyUi.textSoft,
-  },
-  primaryButton: {
-    flex: 1,
-    minWidth: 140,
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.green,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  dangerButton: {
-    flex: 1,
-    minWidth: 140,
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.red,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  deleteButton: {
-    flex: 1,
-    minWidth: 140,
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.textMuted,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  primaryButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  matchesHeader: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  matchesTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  matchesSub: {
-    marginTop: 3,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-    color: companyUi.textSoft,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  loadingText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: companyUi.textSoft,
-  },
-  techCard: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-    borderLeftWidth: 4,
-  },
-  techHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  techInfo: {
-    flex: 1,
+    flexBasis: 200,
     minWidth: 0,
-  },
-  techCode: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  techMeta: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
-    color: companyUi.textSoft,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  chipBlock: {
-    gap: spacing.xs,
-  },
-  chipBlockLabel: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-    color: companyUi.textMuted,
-  },
-  breakdown: {
-    backgroundColor: companyUi.surfaceSoft,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: companyUi.borderSoft,
-    padding: spacing.sm,
     gap: 4,
   },
-  breakdownItem: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
   },
-  breakdownLabel: {
-    width: 76,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
-    color: companyUi.textSoft,
+  title: {
+    fontSize: 21,
+    lineHeight: 26,
+    fontWeight: '800',
+    color: colors.text,
   },
-  breakdownTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 4,
-    backgroundColor: companyUi.borderSoft,
-    overflow: 'hidden',
+  titleWide: {
+    fontSize: 26,
+    lineHeight: 32,
   },
-  breakdownFill: {
-    height: '100%',
-    borderRadius: 4,
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  breakdownValue: {
-    width: 38,
+  when: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonWide: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonPressed: {
+    backgroundColor: colors.surfaceSoft,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+  },
+  menuItemPressed: {
+    backgroundColor: colors.surfaceSoft,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  description: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: '#33465A',
+  },
+  note: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  aircraftList: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  aircraftItem: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
     textAlign: 'right',
-    fontSize: 11,
-    lineHeight: 15,
+  },
+  asideBox: {
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    gap: 18,
+  },
+  techList: {
+    marginTop: 6,
+  },
+  techRow: {
+    paddingVertical: 12,
+    gap: 8,
+  },
+  techRowWide: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    gap: 8,
+  },
+  techTop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 12,
+    rowGap: 8,
+  },
+  techWho: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 200,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  techCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  techName: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  techLine: {
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  techScore: {
+    fontWeight: '800',
+  },
+  techMeta: {
+    fontSize: 12.5,
+    color: colors.textMuted,
+  },
+  techEnd: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginLeft: 'auto',
+  },
+  closedNote: {
+    fontSize: 12.5,
+    color: colors.textMuted,
+  },
+  techLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
+    paddingLeft: 56,
+  },
+  detailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 32,
+  },
+  detailsToggleText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  details: {
+    marginLeft: 56,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSoft,
+    gap: 12,
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  detailBlock: {
+    gap: 6,
+  },
+  detailLabel: {
+    fontSize: 12.5,
     fontWeight: '700',
+    color: colors.textSecondary,
   },
   capPanel: {
-    backgroundColor: companyUi.amberSoft,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: spacing.sm,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFF6E2',
     gap: 4,
   },
   capHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 2,
   },
   capTitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: companyUi.amber,
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.warning,
   },
-  capMissingLine: {
-    fontSize: 12,
+  capLine: {
+    fontSize: 12.5,
     lineHeight: 17,
-    fontWeight: '600',
-    color: companyUi.red,
+    color: colors.warning,
   },
-  capClarificationLine: {
-    fontSize: 12,
+  capClarification: {
+    fontSize: 12.5,
     lineHeight: 17,
-    fontWeight: '500',
-    color: companyUi.amber,
+    color: colors.textSecondary,
   },
-  vigenciaBlock: {
-    gap: 4,
+  noticeList: {
+    gap: 6,
   },
-  vigenciaRow: {
+  noticeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.xs,
+    gap: 8,
   },
-  vigenciaDetail: {
+  noticeDetail: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 17,
-    color: companyUi.textSoft,
+    color: colors.textSecondary,
   },
-  stateNotice: {
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.surfaceSoft,
-    borderWidth: 1,
-    borderColor: companyUi.borderSoft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  stateNoticeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: companyUi.textSoft,
-  },
-  sendButton: {
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.accent,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  viewApplicationButton: {
-    minHeight: 42,
-    borderRadius: 15,
-    backgroundColor: companyUi.blue,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.44)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  sheet: {
-    width: '100%',
-    maxWidth: 480,
-    gap: spacing.sm,
-  },
-  title: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  techName: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: companyUi.textSoft,
+  field: {
+    gap: 6,
   },
   fieldLabel: {
-    marginTop: spacing.sm,
-    fontSize: 12,
-    fontWeight: '700',
-    color: companyUi.textSoft,
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
   },
   input: {
-    minHeight: 92,
+    minHeight: 104,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: companyUi.border,
-    borderRadius: 16,
-    backgroundColor: companyUi.surfaceSoft,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: companyUi.text,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  button: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  cancelButton: {
-    borderWidth: 1,
-    borderColor: companyUi.border,
-    backgroundColor: companyUi.surface,
-  },
-  confirmButton: {
-    backgroundColor: companyUi.accent,
-  },
-  cancelText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: companyUi.textSoft,
-  },
-  confirmText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
+    borderColor: colors.border,
+    fontSize: 15,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
 });

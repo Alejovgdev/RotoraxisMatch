@@ -1,11 +1,14 @@
 import React from 'react';
-import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { Banknote } from 'lucide-react-native';
-import { spacing } from '../../theme';
+import { StyleSheet, View } from 'react-native';
+import { Chip, Text, TextInput, Toggle } from '../ui';
+import { colors } from '../../theme';
 import { SALARY_CURRENCIES, SALARY_PERIODS } from '../../types/offerSalary';
 import { formatOfferSalary, salaryFromForm, salaryFormError, SalaryFormValue } from '../../utils/offerSalary';
-import { CompanyCard, CompanyChip, companyUi, IconBox } from './CompanyUI';
+import { WIZARD_OPTION_BORDER, WizardChipRow, WizardError, WizardNote, wizardInputStyles } from './OfferWizardParts';
 
+// Rediseño, fase 4 (maqueta W-Post4, respuesta 14): el interruptor muestra u
+// oculta los campos. Apagado, `enabled` es false y salaryFromForm devuelve
+// null: no se guarda salario, igual que antes cuando no se añadía.
 export function OfferSalarySection({ value, onChange, error }: {
   value: SalaryFormValue;
   onChange: (value: SalaryFormValue) => void;
@@ -13,100 +16,97 @@ export function OfferSalarySection({ value, onChange, error }: {
 }) {
   const preview = value.enabled && !salaryFormError(value) ? formatOfferSalary(salaryFromForm(value)) : null;
   return (
-    <CompanyCard style={styles.section}>
+    <View style={styles.card}>
       <View style={styles.header}>
-        <IconBox icon={Banknote} color={companyUi.accent} backgroundColor={companyUi.accentSoft} />
         <View style={styles.copy}>
-          <Text style={styles.title}>Remuneration (optional)</Text>
+          <Text style={styles.title}>
+            Remuneration <Text style={styles.optional}>(optional)</Text>
+          </Text>
           <Text style={styles.helper}>All amounts are gross, before taxes. You can publish without adding remuneration.</Text>
         </View>
-      </View>
-      <View style={styles.toggle}>
-        <Text style={styles.label}>Add remuneration</Text>
-        <Switch
+        <Toggle
           accessibilityLabel="Add gross remuneration"
           value={value.enabled}
-          onValueChange={(enabled) => onChange({ ...value, enabled })}
-          trackColor={{ false: companyUi.border, true: companyUi.accent }}
+          onChange={(enabled) => onChange({ ...value, enabled })}
         />
       </View>
       {value.enabled && (
         <>
-          <View style={styles.field}>
+          <View style={wizardInputStyles.field}>
             <Text style={styles.label}>Gross amount</Text>
             <TextInput
               accessibilityLabel="Gross amount"
               accessibilityHint="Use a dot or comma for decimals, without thousands separators"
-              style={[styles.input, error && styles.inputError]}
+              style={[wizardInputStyles.input, error && wizardInputStyles.inputError]}
               value={value.amount}
               onChangeText={(amount) => onChange({ ...value, amount })}
               keyboardType="decimal-pad"
               placeholder="e.g. 3500 or 35.50"
-              placeholderTextColor={companyUi.textMuted}
+              placeholderTextColor={colors.placeholder}
               maxLength={24}
             />
-            <Text style={styles.helper}>Use a dot or comma for decimals, without thousands separators.</Text>
+            <WizardNote>Use a dot or comma for decimals, without thousands separators.</WizardNote>
           </View>
-          <View style={styles.field}>
+          <View style={wizardInputStyles.field}>
             <Text style={styles.label}>Currency</Text>
-            <View style={styles.choices}>
+            <WizardChipRow>
               {SALARY_CURRENCIES.map((currency) => (
-                <CompanyChip key={currency} label={currency} selected={currency === value.currency}
+                <Chip key={currency} label={currency} selected={currency === value.currency}
                   onPress={() => onChange({ ...value, currency })} />
               ))}
-              <CompanyChip label="Other" selected={value.currency === 'other'}
+              <Chip label="Other" selected={value.currency === 'other'}
                 onPress={() => onChange({ ...value, currency: 'other' })} />
-            </View>
+            </WizardChipRow>
             {value.currency === 'other' && (
-              <View style={styles.field}>
+              <View style={wizardInputStyles.field}>
                 <Text style={styles.label}>Currency code</Text>
                 <TextInput
                   accessibilityLabel="Currency code"
                   accessibilityHint="Enter a three-letter code, for example JPY or MXN"
-                  style={styles.input}
+                  style={wizardInputStyles.input}
                   value={value.customCurrency}
                   onChangeText={(customCurrency) => onChange({ ...value, customCurrency })}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   placeholder="e.g. JPY or MXN"
-                  placeholderTextColor={companyUi.textMuted}
+                  placeholderTextColor={colors.placeholder}
                   maxLength={12}
                 />
-                <Text style={styles.helper}>Enter the three-letter currency code. It can differ from the offer country's currency.</Text>
+                <WizardNote>Enter the three-letter currency code. It can differ from the offer country's currency.</WizardNote>
               </View>
             )}
           </View>
-          <View style={styles.field}>
+          <View style={wizardInputStyles.field}>
             <Text style={styles.label}>Amount per</Text>
-            <View style={styles.choices}>
+            <WizardChipRow>
               {SALARY_PERIODS.map((period) => (
-                <CompanyChip key={period.code} label={period.label} selected={period.code === value.period}
+                <Chip key={period.code} label={period.label} selected={period.code === value.period}
                   onPress={() => onChange({ ...value, period: period.code })} />
               ))}
-            </View>
+            </WizardChipRow>
           </View>
           {preview ? <Text style={styles.preview}>{preview}</Text> : null}
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <WizardError>{error}</WizardError>
         </>
       )}
-    </CompanyCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.md, marginBottom: spacing.md },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  copy: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
-  helper: { fontSize: 12, lineHeight: 17, color: companyUi.textSoft, marginTop: 2 },
-  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  label: { fontSize: 12, fontWeight: '700', color: companyUi.textSoft },
-  field: { gap: 6 },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  input: { minHeight: 46, borderWidth: 1, borderColor: companyUi.border, borderRadius: 14,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 14,
-    color: companyUi.text, backgroundColor: companyUi.surfaceSoft },
-  inputError: { borderColor: companyUi.red },
-  preview: { fontSize: 14, fontWeight: '700', color: companyUi.green },
-  error: { fontSize: 12, lineHeight: 17, color: companyUi.red },
+  card: {
+    gap: 14,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: WIZARD_OPTION_BORDER,
+    backgroundColor: colors.surface,
+  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  copy: { flex: 1, minWidth: 0, gap: 2 },
+  title: { fontSize: 14.5, fontWeight: '800', color: colors.text },
+  optional: { fontSize: 14.5, fontWeight: '600', color: colors.textMuted },
+  helper: { fontSize: 12.5, lineHeight: 17, color: colors.textSecondary },
+  label: { fontSize: 12.5, fontWeight: '800', color: colors.textSecondary },
+  preview: { fontSize: 14, fontWeight: '800', color: colors.success },
 });

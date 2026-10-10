@@ -24,11 +24,13 @@ export function typeChangeDropsEngines(prev: readonly string[], next: readonly s
   return engineCount > 0 && showsEngineExperience(prev) && !showsEngineExperience(next);
 }
 
+// Rediseño, fase 6A: los tipos se guardan al tocarlos (respuesta 25), así que
+// el aviso ya no dice "when you save": los motores se borran al confirmar.
 export function engineRemovalWarning(engineCount: number): { title: string; message: string; confirmLabel: string } {
   const engines = engineCount === 1 ? '1 declared engine' : `${engineCount} declared engines`;
   return {
     title: 'Remove Engine Technician?',
-    message: `Only Engine Technician profiles can declare engines. Your ${engines} will be deleted when you save.`,
+    message: `Only Engine Technician profiles can declare engines. Your ${engines} will be deleted.`,
     confirmLabel: 'Remove and delete engines',
   };
 }

@@ -17,7 +17,7 @@
 // instancia real con los repositorios.
 import { OfferWithRequirements } from '../types/offer';
 import { TechnicianWithRelations } from '../types/technician';
-import { SafeTechnicianPreview } from '../types/privacy';
+import { TechnicianView } from '../types/privacy';
 import { MatchScore, TechnicianMatchCandidate } from '../types/matching';
 import { AircraftTypeRatingCatalog, EngineCatalog } from '../types/catalog';
 import { buildAircraftRatingIndex } from '../constants/aircraftTypeRatings';
@@ -25,7 +25,7 @@ import { buildEngineIndex } from '../constants/engines';
 import { PairMatch, matchOfferTechnicianPair, rankOffersForTechnician, rankTechniciansForOffer } from './offerMatchExplain';
 
 export interface TechnicianMatchResult {
-  technician: SafeTechnicianPreview;
+  technician: TechnicianView;
   score: MatchScore;
 }
 

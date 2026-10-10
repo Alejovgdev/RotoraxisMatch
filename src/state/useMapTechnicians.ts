@@ -2,16 +2,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { SafeTechnicianView } from '../types';
 import { indexCountriesByCode, resolveMapPin } from '../utils/locationBridge';
 import { useCountryCatalog } from './useCountryCatalog';
-import { MapFilters } from '../types/filters';
-import { AvailabilityStatus, TechnicianHabilitation } from '../types/technician';
+import type { TechnicianSearchQuery } from '../utils/technicianSearchFilterMatch';
+import { TechnicianHabilitation } from '../types/technician';
 import { TechnicianTypeCode } from '../types/catalog';
 import { technicianRepositoryV2 } from '../repositories/v2/technicianRepositoryV2';
 import { offerRequestRepository } from '../repositories/v2/offerRequestRepository';
 import { offerApplicationRepository } from '../repositories/v2/offerApplicationRepository';
-import { documentRepositoryV2 } from '../repositories/v2/documentRepositoryV2';
 import { catalogRepository } from '../repositories/v2/catalogRepository';
 import { buildAircraftRatingIndex } from '../constants/aircraftTypeRatings';
-import { canRevealIdentity, getUnlockedTechnicianView } from '../utils/privacyV2';
+import { canRevealIdentity } from '../utils/privacyV2';
+import { isUnlocked } from '../types/privacy';
 import {
   v2SafePreviewToSafeView,
   v2UnlockedViewToSafeView,
@@ -33,10 +33,6 @@ interface UseMapTechniciansReturn {
   habilitationsById: Record<string, TechnicianHabilitation[]>;
 }
 
-function selectedValues(values?: string[], legacyValue?: string): string[] {
-  if (values && values.length > 0) return values;
-  return legacyValue ? [legacyValue] : [];
-}
 
 // Internal filter-relevance score used for result ordering only. Never
 // displayed in the UI — not an offer match score. Every technician
@@ -59,7 +55,10 @@ function scoreMapMatch(technician: SafeTechnicianView, filters: {
   return score;
 }
 
-export function useMapTechnicians(filters: MapFilters): UseMapTechniciansReturn {
+// Rediseño, fase 3B: la consulta es la de los filtros COMPARTIDOS con la
+// búsqueda (toTechnicianSearchQuery), y sólo cambia al pulsar "Show
+// technicians", así que el mapa ya no recarga en cada toque del panel.
+export function useMapTechnicians(query: TechnicianSearchQuery): UseMapTechniciansReturn {
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const [technicians, setTechnicians] = useState<SafeTechnicianView[]>([]);
@@ -81,9 +80,9 @@ export function useMapTechnicians(filters: MapFilters): UseMapTechniciansReturn 
     if (!companyId) return;
     setLoading(true);
     const selected = {
-      licenses: selectedValues(filters.licenseCategories, filters.licenseCategory),
-      aircraft: selectedValues(filters.aircraftFamilyKeys, undefined),
-      availability: selectedValues(filters.availabilityStatuses, filters.availabilityStatus),
+      licenses: query.licenseCodes ?? [],
+      aircraft: query.aircraftFamilyKeys ?? [],
+      availability: query.availabilityStatuses ?? [],
     };
 
     // Real server-side filtering (technicianRepositoryV2.search()) — this
@@ -93,11 +92,7 @@ export function useMapTechnicians(filters: MapFilters): UseMapTechniciansReturn 
     // for free: deleted/blocked/suspended technicians are excluded by
     // technician_public_view itself, before this hook ever sees them.
     const [previews, offerRequests, offerApplications, ratings] = await Promise.all([
-      technicianRepositoryV2.search({
-        licenseCodes: selected.licenses.length ? selected.licenses : undefined,
-        aircraftFamilyKeys: selected.aircraft.length ? selected.aircraft : undefined,
-        availabilityStatuses: selected.availability.length ? (selected.availability as AvailabilityStatus[]) : undefined,
-      }),
+      technicianRepositoryV2.search(query),
       offerRequestRepository.getForCompany(companyId),
       offerApplicationRepository.getForCompany(companyId),
       catalogRepository.getAircraftTypeRatings(),
@@ -122,13 +117,9 @@ export function useMapTechnicians(filters: MapFilters): UseMapTechniciansReturn 
 
         if (!accepted) return v2SafePreviewToSafeView(preview, ratingIndex);
 
-        const [withRelations, documents] = await Promise.all([
-          technicianRepositoryV2.getWithRelations(preview.id),
-          documentRepositoryV2.getVerifiedForTechnician(preview.id),
-        ]);
-
-        if (!withRelations) return v2SafePreviewToSafeView(preview, ratingIndex);
-        return v2UnlockedViewToSafeView(getUnlockedTechnicianView(withRelations, documents), ratingIndex);
+        const view = await technicianRepositoryV2.getViewForCompany(preview.id, companyId);
+        if (!view || !isUnlocked(view)) return v2SafePreviewToSafeView(preview, ratingIndex);
+        return v2UnlockedViewToSafeView(view, ratingIndex);
       }),
     );
 
@@ -169,11 +160,7 @@ export function useMapTechnicians(filters: MapFilters): UseMapTechniciansReturn 
     setTechnicianTypesById(nextTechnicianTypesById);
     setLoading(false);
   }, [
-    filters.licenseCategory,
-    filters.availabilityStatus,
-    filters.licenseCategories,
-    filters.aircraftFamilyKeys,
-    filters.availabilityStatuses,
+    query,
     companyId,
     // El catálogo llega asíncrono: sin esta dependencia, los técnicos
     // cargados antes se quedarían para siempre sin pin de país.

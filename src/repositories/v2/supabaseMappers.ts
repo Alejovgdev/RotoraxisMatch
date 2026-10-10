@@ -79,6 +79,7 @@ export function mapCompanyRow(row: DbRow): CompanyProfileView {
   return {
     id: row.id,
     name: row.name,
+    logoPath: row.logo_path ?? null,
     phone: row.phone ?? undefined,
     email: row.email,
     companyType: row.company_type,
@@ -166,6 +167,7 @@ export function mapOfferRow(row: DbRow): Offer {
     // 096: sólo en ofertas FAA con autoridades aceptadas; NULL en las demás.
     acceptedLicenseCode: (row.accepted_license_code as LicenseCode | null) ?? undefined,
     requiredEngineId: row.required_engine_id ?? undefined,
+    requiredEngineNotes: row.required_engine_notes ?? null,
     onlyUnlicensed: Boolean(row.only_unlicensed),
     locationCountry: row.location_country,
     // Fase 7 F2b — `locationCity` y `locationBaseAirport` YA NO SON COLUMNAS:
@@ -430,6 +432,7 @@ export function mapPrivateTechnicianRow(row: DbRow, relations?: Awaited<ReturnTy
     id: row.id,
     userId: row.user_id,
     anonymousCode: row.anonymous_code,
+    photoPath: row.photo_path ?? null,
     firstName: row.first_name,
     lastName: row.last_name,
     email: row.email,
@@ -475,6 +478,7 @@ export function mapPublicTechnicianView(row: DbRow, relations?: Awaited<ReturnTy
   if (!row.first_name || !row.last_name || !row.email) return preview;
   const unlocked: UnlockedTechnicianView = {
     ...preview,
+    photoPath: row.photo_path ?? null,
     firstName: row.first_name,
     lastName: row.last_name,
     email: row.email,
@@ -505,6 +509,7 @@ export function publicRowToPrivateCompat(row: DbRow, relations?: Awaited<ReturnT
     id: row.id,
     userId: row.user_id ?? '',
     anonymousCode: row.anonymous_code,
+    photoPath: row.first_name && row.last_name && row.email ? row.photo_path ?? null : null,
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
     email: row.email ?? '',

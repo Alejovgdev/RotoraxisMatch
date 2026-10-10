@@ -135,18 +135,20 @@ async function deleteAccountTechnician(supabaseAdmin, userId) {
   if (techProfile) {
     // 2. Borrar todos los FICHEROS bajo la carpeta propia, incluso huérfanos
     //    sin fila `documents`. Las FILAS las borra después el trigger SQL.
-    const bucket = supabaseAdmin.storage.from('technician-documents');
-    const paths = await listTechnicianStoragePaths(bucket, techProfile.id);
-    for (let start = 0; start < paths.length; start += STORAGE_BATCH_SIZE) {
-      const { error: storageErr } = await bucket.remove(paths.slice(start, start + STORAGE_BATCH_SIZE));
-      if (storageErr) {
-        throw new AppError(500, 'Could not remove every uploaded document. Some files may already be gone; retry account deletion.');
+    for (const bucketName of ['technician-documents', 'technician-photos']) {
+      const bucket = supabaseAdmin.storage.from(bucketName);
+      const paths = await listTechnicianStoragePaths(bucket, techProfile.id);
+      for (let start = 0; start < paths.length; start += STORAGE_BATCH_SIZE) {
+        const { error: storageErr } = await bucket.remove(paths.slice(start, start + STORAGE_BATCH_SIZE));
+        if (storageErr) {
+          throw new AppError(500, 'Could not remove every uploaded file. Some files may already be gone; retry account deletion.');
+        }
       }
-    }
 
-    const remainingPaths = await listTechnicianStoragePaths(bucket, techProfile.id);
-    if (remainingPaths.length > 0) {
-      throw new AppError(500, 'Storage did not confirm removal of every uploaded document. Retry account deletion.');
+      const remainingPaths = await listTechnicianStoragePaths(bucket, techProfile.id);
+      if (remainingPaths.length > 0) {
+        throw new AppError(500, 'Storage did not confirm removal of every uploaded file. Retry account deletion.');
+      }
     }
   }
 

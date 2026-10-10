@@ -282,7 +282,7 @@ async function main() {
     assert.equal(part66.pickerLabel, 'Aircraft + engine rating');
     assert.equal(
       part66.subtitle,
-      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as set above.",
+      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as chosen in step 1.",
     );
 
     const faa = aircraftRequirementsCopy(baseForm({ licenseAuthority: 'FAA', licenseCode: 'A&P' }));
@@ -291,7 +291,7 @@ async function main() {
     assert.equal(faa.pickerLabel, 'Aircraft + engine', 'sin "rating": no se pide ninguno');
     assert.equal(
       faa.subtitle,
-      'Search and add the aircraft this role works on. Either a type rating, from any authority, or declared experience on the aircraft counts, signed off or not. Limited to airplanes, as set above.',
+      'Search and add the aircraft this role works on. Either a type rating, from any authority, or declared experience on the aircraft counts, signed off or not. Limited to airplanes, as chosen in step 1.',
     );
     // A, P y A&P dicen lo mismo: la firma no distingue ofertas FAA.
     for (const code of ['A', 'P'] as const) {
@@ -304,10 +304,10 @@ async function main() {
     assert.equal(sinLicencia.pickerLabel, 'Aircraft + engine');
     assert.equal(
       sinLicencia.subtitle,
-      'Search and add the aircraft this role works on. Either a type rating or declared experience on the aircraft counts. Limited to airplanes, as set above.',
+      'Search and add the aircraft this role works on. Either a type rating or declared experience on the aircraft counts. Limited to airplanes, as chosen in step 1.',
     );
     assert.ok(
-      aircraftRequirementsCopy(setRequiresCertification(baseForm({ productType: 'Helicopter' }), false)).subtitle.endsWith('Limited to helicopters, as set above.'),
+      aircraftRequirementsCopy(setRequiresCertification(baseForm({ productType: 'Helicopter' }), false)).subtitle.endsWith('Limited to helicopters, as chosen in step 1.'),
     );
   });
 
@@ -316,12 +316,12 @@ async function main() {
     assert.equal(conFaa.title, 'Required type ratings');
     assert.equal(
       conFaa.subtitle,
-      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as set above. For an FAA certificate holder, an aircraft they have signed off on counts as a type rating.",
+      "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence; declared aircraft experience does not count. Limited to airplanes, as chosen in step 1. For an FAA certificate holder, an aircraft they have signed off on counts as a type rating.",
     );
     // Otra Part-66 aceptada no la añade: allí no hay firma que cuente.
     assert.equal(aircraftRequirementsCopy(baseForm({ acceptedAuthorities: ['UK_CAA'] })).subtitle, aircraftRequirementsCopy(baseForm()).subtitle);
 
-    const sinCodigo = "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's licence; declared aircraft experience does not count. Limited to airplanes, as set above.";
+    const sinCodigo = "Search and add the aircraft this role works on. They are matched against type ratings held under the offer's licence; declared aircraft experience does not count. Limited to airplanes, as chosen in step 1.";
     const sinAutoridad = aircraftRequirementsCopy(baseForm({ licenseAuthority: undefined, licenseCode: undefined }));
     assert.equal(sinAutoridad.title, 'Required type ratings');
     assert.equal(sinAutoridad.subtitle, sinCodigo);
@@ -504,8 +504,9 @@ async function main() {
       let one = false;
       let inArgs: [string, unknown[]] | undefined;
       let onConflict: string | undefined;
+      let selection = '*';
       const query = {
-        select() { return query; },
+        select(columns = '*') { selection = columns; return query; },
         eq() { return query; }, order() { return query; },
         in(column: string, values: unknown[]) { inArgs = [column, values]; return query; },
         delete() { op = 'delete'; return query; },
@@ -563,7 +564,8 @@ async function main() {
           if (table === 'offers') {
             if (write && !Array.isArray(write)) offerRow = { id: 'offer-1', created_at: '2026-09-16', updated_at: '2026-09-16', ...offerRow, ...write };
             if (op === 'delete') return Promise.resolve({ data: [{ id: 'offer-1' }], error: null }).then(resolve);
-            return Promise.resolve({ data: one ? { ...offerRow } : [{ ...offerRow }], error: null }).then(resolve);
+            const projected = selection === '*' ? { ...offerRow } : Object.fromEntries(selection.split(',').map(k => [k.trim(), offerRow[k.trim()]]));
+            return Promise.resolve({ data: one ? projected : [projected], error: null }).then(resolve);
           }
           if (table === 'offer_required_habilitations') {
             if (op === 'delete') habilitationRows = [];
@@ -594,6 +596,56 @@ async function main() {
     ? ([...calls].reverse().find((c) => c.table === 'update_offer_with_habilitations')?.data?.p_patch as Record<string, unknown> ?? {})
     : [...calls].reverse().find((c) => c.table === table && c.op === op)?.data ?? {};
   const reset = () => { calls.length = 0; offerRow = {}; habilitationRows = []; };
+
+  await test('097 · Motor — crear y cargar la nota por todas las lecturas de oferta', async () => {
+    reset();
+    const note = 'Experiencia reciente — inspección\ny montaje';
+    const saved = await offerRepository.create({ ...base, technicianType: 'engine_technician', requiresCertification: false,
+      requiredEngineId: 'eng-1', requiredEngineNotes: `  ${note}  ` });
+    assert.equal(lastWrite('offers', 'insert').required_engine_notes, note);
+    assert.equal(saved.requiredEngineNotes, note);
+    assert.equal((await offerRepository.getById(saved.id))?.requiredEngineNotes, note);
+    assert.equal((await offerRepository.getWithRequirements(saved.id))?.requiredEngineNotes, note);
+    for (const rows of [await offerRepository.getAll(), await offerRepository.getPublished(),
+      await offerRepository.getForCompany(base.companyId), await offerRepository.getAllWithRequirements()]) {
+      assert.equal(rows[0].requiredEngineNotes, note, 'SELECT must include the note');
+    }
+  });
+
+  await test('097 · Motor — editar, conservar al cambiar otro campo y borrar la nota', async () => {
+    reset();
+    await offerRepository.create({ ...base, technicianType: 'engine_technician', requiresCertification: false,
+      requiredEngineId: 'eng-1' });
+    assert.equal(offerRow.required_engine_notes, null);
+    const saved = await offerRepository.update('offer-1', { requiredEngineNotes: '  Nueva nota  ' });
+    assert.equal(saved?.requiredEngineNotes, 'Nueva nota');
+    assert.equal(lastWrite('offers', 'update').required_engine_notes, 'Nueva nota');
+    await offerRepository.update('offer-1', { title: 'Renamed' });
+    assert.equal(Object.prototype.hasOwnProperty.call(lastWrite('offers', 'update'), 'required_engine_notes'), false);
+    assert.equal((await offerRepository.getWithRequirements('offer-1'))?.requiredEngineNotes, 'Nueva nota');
+    for (const empty of [null, '', '   ']) {
+      await offerRepository.update('offer-1', { requiredEngineNotes: 'To clear' });
+      assert.equal((await offerRepository.update('offer-1', { requiredEngineNotes: empty }))?.requiredEngineNotes, null);
+      assert.equal(lastWrite('offers', 'update').required_engine_notes, null);
+      assert.equal((await offerRepository.getWithRequirements('offer-1'))?.requiredEngineNotes, null);
+    }
+  });
+
+  await test('097 · Motor — limpiar la nota al cambiar motor o pasar a aeronave', async () => {
+    reset();
+    await offerRepository.create({ ...base, technicianType: 'engine_technician', requiresCertification: false,
+      requiredEngineId: 'eng-1', requiredEngineNotes: 'Original' });
+    assert.equal((await offerRepository.update('offer-1', { requiredEngineId: 'eng-1' }))?.requiredEngineNotes, 'Original');
+    assert.equal((await offerRepository.update('offer-1', { requiredEngineId: 'eng-2' }))?.requiredEngineNotes, null);
+    assert.equal(lastWrite('offers', 'update').required_engine_notes, null);
+    assert.equal((await offerRepository.update('offer-1', { requiredEngineId: 'eng-1', requiredEngineNotes: 'New engine note' }))?.requiredEngineNotes, 'New engine note');
+    assert.equal((await offerRepository.update('offer-1', { technicianType: 'mechanic' }))?.requiredEngineNotes, null);
+    assert.equal(offerRow.required_engine_id, null);
+    assert.equal(offerRow.required_engine_notes, null);
+    await assert.rejects(offerRepository.update('offer-1', { requiredEngineNotes: 'No engine' }), /Only an engine offer/);
+    await assert.rejects(offerRepository.create({ ...base, technicianType: 'mechanic', requiresCertification: false,
+      requiredEngineNotes: 'No engine' }), /Only an engine offer/);
+  });
 
   await test('Repositorio — una oferta FAA A&P se escribe con su autoridad, y sale igual al leerla', async () => {
     reset();

@@ -1,51 +1,45 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  useWindowDimensions,
-  RefreshControl,
-} from 'react-native';
+import { View, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
-import {
-  CheckCircle,
-  Download,
-  FileCheck,
-  Lock,
-  MessageCircle,
-  Send,
-  Unlock,
-  UserRound,
-  XCircle,
-} from 'lucide-react-native';
-import { colors, spacing } from '../../../src/theme';
+import { Lock, LockOpen, UserRound } from 'lucide-react-native';
+import { colors } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { InlineScore } from '../../../src/components/InlineScore';
 import { ExternalLink } from '../../../src/components/ExternalLink';
 import { MatchExplanation } from '../../../src/components/MatchExplanation';
+import { Text, useConfirmDialog } from '../../../src/components/ui';
+import { CompanyScreen } from '../../../src/components/company/CompanyUI';
 import {
-  CompanyBadge,
-  CompanyCard,
-  CompanyChip,
-  CompanyPageHeader,
-  CompanyScreen,
-  EmptyPanel,
-  IconBox,
-  InfoRow,
-  companyStyles,
-  companyUi,
-} from '../../../src/components/company/CompanyUI';
+  AsideCard,
+  Breadcrumb,
+  ButtonRow,
+  EmptyBlock,
+  NoticeBox,
+  OfferLinkCard,
+  PageBar,
+  PageBody,
+  PersonHero,
+  PillButton,
+  QuoteBox,
+  Section,
+  StatGrid,
+  StatTile,
+  StatusPill,
+  StickyBar,
+  TwoColumns,
+  VerificationPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
+import { BreakdownBars, ScoreHeadline, matchScoreColor } from '../../../src/components/company/MatchBreakdownBars';
+import { TechnicianDocumentList } from '../../../src/components/company/TechnicianDocuments';
+import { technicianProfileLine } from '../../../src/components/company/TechnicianQualifications';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
+import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../../../src/lib/documentStorage';
 import { useCompanySession } from '../../../src/state/SessionContext';
@@ -55,42 +49,44 @@ import { OfferWithRequirements } from '../../../src/types/offer';
 import { MatchScore } from '../../../src/types/matching';
 import { Document } from '../../../src/types/document';
 import { ChatRoom } from '../../../src/types/chat';
-import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
-import { notify, confirmAction } from '../../../src/utils/platformAlert';
-import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
-import { formatLocation } from '../../../src/utils/formatLocation';
+import { credentialLabel } from '../../../src/constants/licenses';
+import { notify } from '../../../src/utils/platformAlert';
+import { offerMetaLine } from '../../../src/utils/companyHome';
+import { directOfferStatusLook } from '../../../src/utils/companyStatus';
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  license:  'License',
-  medical:  'Medical',
-  id:       'ID',
-  training: 'Training',
-  resume:   'Resume',
-  other:    'Other',
-};
+// Oferta directa enviada (rediseño, fase 3; maquetas C-DirectDetail y
+// W-D-DirectDetail; respuesta 19). Misma carga y la misma confirmación al
+// retirarla; cambia el aspecto.
 
-function statusInfo(status: string): { label: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
-  if (status === 'pending')   return { label: 'Awaiting response', tone: 'warning' };
-  if (status === 'accepted')  return { label: 'Accepted', tone: 'success' };
-  if (status === 'rejected')  return { label: 'Declined', tone: 'error' };
-  if (status === 'withdrawn') return { label: 'Withdrawn', tone: 'muted' };
-  if (status === 'expired')   return { label: 'Expired', tone: 'muted' };
-  return { label: status, tone: 'muted' };
+function formatSent(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+function availabilityLabel(status?: string): string {
+  if (status === 'open_to_offers') return 'Open to offers';
+  if (status === 'unavailable') return 'Unavailable';
+  return 'Not specified';
+}
+
+function statusSummary(status: string): string {
+  if (status === 'pending') return "Awaiting the technician's response.";
+  if (status === 'accepted') return 'Technician accepted. Identity and documents unlocked.';
+  if (status === 'rejected') return 'Technician declined this offer.';
+  return `Status: ${status}`;
 }
 
 export default function DirectOfferDetailScreen() {
   const router = useRouter();
   const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const wide = useIsWide();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const companyMemberRole = companySession?.companyMemberRole;
+  const { confirm, dialog } = useConfirmDialog();
 
   const [req, setReq] = useState<OfferRequest | null>(null);
   const [offer, setOffer] = useState<OfferWithRequirements | null>(null);
@@ -162,6 +158,8 @@ export default function DirectOfferDetailScreen() {
     }, [load]),
   );
 
+  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
+
   async function handleRefresh() {
     setRefreshing(true);
     await load(loadSignal.current);
@@ -170,7 +168,7 @@ export default function DirectOfferDetailScreen() {
 
   async function handleWithdraw() {
     if (!req) return;
-    const confirmed = await confirmAction({
+    const confirmed = await confirm({
       title: 'Withdraw offer?',
       message: 'The technician will no longer be able to respond to this offer.',
       confirmLabel: 'Withdraw',
@@ -186,10 +184,10 @@ export default function DirectOfferDetailScreen() {
     }
   }
 
-  async function handleViewDoc(docId: string, storagePath: string) {
+  async function handleViewDoc(doc: Document) {
     const win = openDocumentPreWindow();
-    setViewingDocId(docId);
-    const { url, error } = await getDocumentSignedUrl(storagePath, 120, false);
+    setViewingDocId(doc.id);
+    const { url, error } = await getDocumentSignedUrl(doc.storagePath, 120, false);
     setViewingDocId(null);
     if (error || !url) {
       win?.close();
@@ -203,7 +201,7 @@ export default function DirectOfferDetailScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadingScreen color={colors.blue} role="company" />
+        <LoadingScreen color={colors.primary} role="company" />
       </>
     );
   }
@@ -212,12 +210,16 @@ export default function DirectOfferDetailScreen() {
     return (
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.notFound}>
-          <EmptyPanel title="Offer not found" subtitle="This direct offer is no longer available." />
-        </View>
+        {!wide ? <PageBar title="Direct offer" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          <EmptyBlock title="Offer not found" text="This direct offer is no longer available." />
+        </PageBody>
       </CompanyScreen>
     );
   }
+
+  const status = directOfferStatusLook(req.status);
+  const toList = () => router.navigate('/company/direct-offers' as any);
 
   // The technician account behind this direct offer was deleted after the
   // fact (technician_public_view excludes non-active profiles, migration
@@ -228,352 +230,260 @@ export default function DirectOfferDetailScreen() {
     return (
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[companyStyles.content, isWide && companyStyles.contentWide]}
-          showsVerticalScrollIndicator={false}
-        >
-          <CompanyPageHeader
-            eyebrow="Direct offer review"
-            title="[Deleted user]"
-            subtitle={`Sent ${formatDate(req.createdAt)}`}
-            onBack={goBack}
-            right={<CompanyBadge label={statusInfo(req.status).label} tone={statusInfo(req.status).tone} />}
+        {!wide ? <PageBar title="Direct offer" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          {wide ? <Breadcrumb parent="Direct offers" onParent={toList} current="[Deleted user]" /> : null}
+          <PersonHero
+            name="[Deleted user]"
+            anonymous
+            wide={wide}
+            subtitle={`Sent ${formatSent(req.createdAt)}`}
+            chips={<StatusPill label={status.label} tone={status.tone} large={wide} />}
           />
-          <CompanyCard style={styles.sectionCard}>
-            <View style={styles.deletedRow}>
-              <IconBox icon={UserRound} color={companyUi.textMuted} backgroundColor={companyUi.surfaceSoft} />
-              <View style={styles.deletedCopy}>
-                <Text style={styles.deletedTitle}>[Deleted user]</Text>
-                <Text style={styles.deletedSub}>
-                  This technician&apos;s account has been deleted. The direct offer record is kept for your history,
-                  but identity, documents, and messaging are no longer available.
-                </Text>
-              </View>
-            </View>
-          </CompanyCard>
-        </ScrollView>
+          <NoticeBox icon={UserRound} title="[Deleted user]">
+            This technician&apos;s account has been deleted. The direct offer record is kept for your history,
+            but identity, documents, and messaging are no longer available.
+          </NoticeBox>
+        </PageBody>
       </CompanyScreen>
     );
   }
 
-  const unlockedView = techView && isUnlocked(techView) ? techView : null;
-  const unlocked = !!unlockedView;
-  const reqStatus = statusInfo(req.status);
+  const unlockedView = isUnlocked(techView) ? techView : null;
+  const name = unlockedView ? `${unlockedView.firstName} ${unlockedView.lastName}`.trim() : techView.anonymousCode;
+  const openProfile = unlockedView ? () => router.push(`/company/technician/${techView.id}` as any) : undefined;
+  const openChat = req.status === 'accepted' && chatRoom ? () => router.push(`/company/chats/${chatRoom.id}` as any) : undefined;
+  const canWithdraw = req.status === 'pending' && canSendDirectOffers(companyMemberRole);
+
+  const hero = (
+    <PersonHero
+      name={name}
+      photoPath={unlockedView?.photoPath}
+      anonymous={!unlockedView}
+      wide={wide}
+      subtitle={technicianProfileLine(techView)}
+      chips={(
+        <>
+          <StatusPill label={status.label} tone={status.tone} large={wide} />
+          <VerificationPill status={techView.verificationStatus} large={wide} />
+        </>
+      )}
+    />
+  );
+
+  const licences = techView.licenses.length > 0
+    ? techView.licenses.map((l) => credentialLabel(l.authority, l.licenseCode)).join(', ')
+    : 'None listed';
+  const matchValue = score
+    ? (score.blockers.length > 0 ? 'Not eligible' : `${score.total}%`)
+    : match && !match.eligible ? 'Not eligible' : '—';
+  const matchColor = score && score.blockers.length === 0 ? matchScoreColor(score.total) : match ? colors.error : undefined;
+
+  const facts = (
+    <StatGrid>
+      <StatTile label="Licences" value={licences} />
+      <StatTile label="Match" value={matchValue} valueColor={matchColor} />
+      <StatTile
+        label="Availability"
+        value={availabilityLabel(techView.availability.status)}
+        valueColor={techView.availability.status === 'open_to_offers' ? colors.success : undefined}
+      />
+      <StatTile label="Sent" value={formatSent(req.createdAt)} />
+    </StatGrid>
+  );
+
+  const offerLink = offer ? (
+    <OfferLinkCard
+      offer={offer}
+      caption="For your offer"
+      meta={`${offerMetaLine(offer)} · ${offer.minYearsExperience} yrs min`}
+      trailingLabel={wide ? 'View offer' : undefined}
+      onPress={() => router.push(`/company/offers/${offer.id}` as any)}
+    />
+  ) : null;
+
+  const matchBlock = score || (match && !match.eligible) ? (
+    <View style={styles.matchBlock}>
+      {score && offer ? (
+        <>
+          <ScoreHeadline
+            total={score.total}
+            label={getMatchDisplayLabel(offer, score)}
+            notEligible={score.blockers.length > 0}
+            wide={wide}
+          />
+          <BreakdownBars rows={breakdownRows} score={score} />
+          <MatchExplanation score={score} hideBreakdown displayLabel={getMatchDisplayLabel(offer, score)} />
+        </>
+      ) : null}
+      {match && !match.eligible ? (
+        <ScoreHeadline total={0} label="" notEligible reason={ineligibilityReasonText(match.reason)} wide={wide} />
+      ) : null}
+    </View>
+  ) : null;
+
+  const message = req.message ? (
+    <Section title="Your message" wide={wide}>
+      <QuoteBox text={req.message} />
+    </Section>
+  ) : null;
+
+  const identity = unlockedView ? (
+    <NoticeBox icon={LockOpen} tone="success" title="Identity unlocked">
+      <View style={styles.identity}>
+        <Text style={styles.identityNote}>Private contact details and admin-verified documents are available.</Text>
+        <Text style={styles.identityValue}>{unlockedView.email}</Text>
+        {unlockedView.phone ? <Text style={styles.identityValue}>{unlockedView.phone}</Text> : null}
+        {/* Ver la nota gemela en applications/[id].tsx: mismo gate que el
+            email y el telefono, misma rama. */}
+        {Object.entries(unlockedView.socialLinks ?? {}).map(([key, url]) =>
+          url ? <ExternalLink key={key} url={url} color={colors.primary} /> : null,
+        )}
+        {req.status !== 'accepted' && openProfile ? (
+          <View style={styles.identityAction}>
+            <PillButton label="View profile" variant="outline" size="sm" onPress={openProfile} />
+          </View>
+        ) : null}
+      </View>
+    </NoticeBox>
+  ) : (
+    <NoticeBox icon={Lock} title="Identity locked until accepted">
+      Only privacy-safe technician data is visible before acceptance.
+    </NoticeBox>
+  );
+
+  const documents = (
+    <Section title="Documents" wide={wide}>
+      {unlockedView ? (
+        <TechnicianDocumentList
+          documents={unlockedView.documents}
+          viewingId={viewingDocId}
+          onView={handleViewDoc}
+          emptyText="No documents on file."
+        />
+      ) : (
+        <NoticeBox icon={Lock}>
+          {req.status === 'rejected' || req.status === 'withdrawn'
+            ? 'Documents are not available for this offer.'
+            : 'Documents unlock automatically when the technician accepts.'}
+        </NoticeBox>
+      )}
+    </Section>
+  );
+
+  const withdraw = canWithdraw
+    ? <PillButton label="Withdraw offer" variant="danger" onPress={handleWithdraw} loading={withdrawing} />
+    : null;
+  const chat = openChat ? <PillButton label="Open chat" onPress={openChat} grow={wide ? undefined : 1.3} /> : null;
+  const profile = req.status === 'accepted' && openProfile
+    ? <PillButton label="View profile" variant="outline" onPress={openProfile} grow={wide ? undefined : 1} />
+    : null;
+
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />;
+
+  if (wide) {
+    return (
+      <CompanyScreen>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PageBody wide refreshControl={refresh}>
+          <Breadcrumb parent="Direct offers" onParent={toList} current={name} />
+          <TwoColumns
+            main={(
+              <>
+                {hero}
+                {offerLink}
+                {message}
+                {identity}
+                {documents}
+              </>
+            )}
+            aside={(
+              <AsideCard>
+                <StatusPill label={status.label} tone={status.tone} large />
+                <Text style={styles.summary}>{statusSummary(req.status)}</Text>
+                <AsideFact label="Sent" value={formatSent(req.createdAt)} />
+                <AsideFact label="Licences" value={licences} />
+                <AsideFact label="Availability" value={availabilityLabel(techView.availability.status)} />
+                {matchBlock}
+                {withdraw}
+                {chat}
+                {profile}
+              </AsideCard>
+            )}
+          />
+        </PageBody>
+        {dialog}
+      </CompanyScreen>
+    );
+  }
+
+  const sticky = withdraw ?? (chat || profile ? <ButtonRow>{profile}{chat}</ButtonRow> : null);
 
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[companyStyles.content, isWide && companyStyles.contentWide]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <CompanyPageHeader
-          eyebrow="Direct offer review"
-          title={unlockedView ? `${unlockedView.firstName} ${unlockedView.lastName}` : (techView?.anonymousCode ?? '—')}
-          subtitle={`Sent ${formatDate(req.createdAt)}`}
-          onBack={goBack}
-          right={<CompanyBadge label={reqStatus.label} tone={reqStatus.tone} />}
-        />
-
-        {/* ── Overview ─────────────────────────────────── */}
-        <CompanyCard style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <IconBox icon={Send} color={companyUi.accent} backgroundColor={companyUi.accentSoft} />
-            <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>Direct offer overview</Text>
-              <Text style={styles.sectionSub}>
-                {req.status === 'pending'
-                  ? "Awaiting the technician's response."
-                  : req.status === 'accepted'
-                  ? 'Technician accepted. Identity and documents unlocked.'
-                  : req.status === 'rejected'
-                  ? 'Technician declined this offer.'
-                  : `Status: ${req.status}`}
-              </Text>
-            </View>
-          </View>
-          {score && offer ? (
-            <>
-              <InlineScore
-                score={score.total}
-                quality={getMatchDisplayLabel(offer, score)}
-                context="match for this offer"
-                notEligible={score.blockers.length > 0}
-              />
-              <MatchExplanation score={score} displayLabel={getMatchDisplayLabel(offer, score)} offer={offer} />
-            </>
-          ) : null}
-          {match && !match.eligible ? (
-            <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
-          ) : null}
-          {req.message ? (
-            <View style={styles.messageBlock}>
-              <Text style={styles.messageLabel}>Your message</Text>
-              <Text style={styles.messageText}>{req.message}</Text>
-            </View>
-          ) : null}
-        </CompanyCard>
-
-        {/* ── Linked offer ─────────────────────────────── */}
-        {offer ? (
-          <CompanyCard style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <IconBox icon={CheckCircle} color={companyUi.green} backgroundColor={companyUi.greenSoft} />
-              <View style={styles.sectionCopy}>
-                <Text style={styles.sectionTitle}>{offer.title}</Text>
-                <Text style={styles.sectionSub}>{formatLocation(offer.locationCity, offer.locationCountry)}</Text>
-              </View>
-            </View>
-            <InfoRow label="Contract" value={offer.contractType} />
-            <InfoRow label="Experience" value={`${offer.minYearsExperience} yrs min`} />
-            <TouchableOpacity
-              style={styles.textLink}
-              onPress={() => router.push(`/company/offers/${offer.id}` as any)}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.textLinkText}>View full offer details</Text>
-            </TouchableOpacity>
-          </CompanyCard>
-        ) : null}
-
-        {/* ── Technician identity ───────────────────────── */}
-        {techView ? (
-          <CompanyCard style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <IconBox
-                icon={unlocked ? Unlock : Lock}
-                color={unlocked ? companyUi.green : companyUi.amber}
-                backgroundColor={unlocked ? companyUi.greenSoft : companyUi.amberSoft}
-              />
-              <View style={styles.sectionCopy}>
-                <Text style={styles.sectionTitle}>
-                  {unlocked ? 'Identity unlocked' : 'Identity locked until accepted'}
-                </Text>
-                <Text style={styles.sectionSub}>
-                  {unlocked
-                    ? 'Private contact details and admin-verified documents are available.'
-                    : 'Only privacy-safe technician data is visible before acceptance.'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.profileRow}>
-              <View style={[styles.profileAvatar, { backgroundColor: unlocked ? companyUi.accent : companyUi.navy }]}>
-                <UserRound color={colors.white} size={22} strokeWidth={2} />
-              </View>
-              <View style={styles.profileInfo}>
-                {unlocked ? (
-                  <>
-                    <Text style={styles.profileName}>{unlockedView.firstName} {unlockedView.lastName}</Text>
-                    <Text style={styles.profileSub}>{unlockedView.email}</Text>
-                    {unlockedView.phone ? <Text style={styles.profileSub}>{unlockedView.phone}</Text> : null}
-                    {/* Ver la nota gemela en applications/[id].tsx: mismo gate
-                        que el email y el telefono, misma rama. */}
-                    {Object.entries(unlockedView.socialLinks ?? {}).map(([key, url]) =>
-                      url ? <ExternalLink key={key} url={url} color={companyUi.accent} /> : null,
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.profileName}>{techView.anonymousCode}</Text>
-                    <Text style={styles.profileSub}>Anonymous technician profile</Text>
-                  </>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.badgeRow}>
-              <CompanyBadge label={technicianTypeLabels(techView.technicianTypes)} tone="cyan" small />
-              <CompanyBadge label={formatLocation(techView.city, techView.country)} tone="muted" small />
-              <CompanyBadge
-                label={techView.verificationStatus}
-                tone={techView.verificationStatus === 'verified' ? 'success' : 'warning'}
-                small
-              />
-            </View>
-
-            {unlocked ? (
-              <ViewTechnicianProfileButton technicianId={techView.id} fullWidth />
-            ) : null}
-          </CompanyCard>
-        ) : null}
-
-        {/* ── Documents ────────────────────────────────── */}
-        <CompanyCard style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <IconBox
-              icon={FileCheck}
-              color={unlocked ? companyUi.green : companyUi.amber}
-              backgroundColor={unlocked ? companyUi.greenSoft : companyUi.amberSoft}
-            />
-            <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>Documents</Text>
-              <Text style={styles.sectionSub}>
-                {unlocked ? 'Admin-verified documents only.' : 'Locked until the technician accepts.'}
-              </Text>
-            </View>
-          </View>
-
-          {unlocked ? (
-            unlockedView.documents.length === 0 ? (
-              <Text style={styles.emptyText}>No documents on file.</Text>
-            ) : (
-              unlockedView.documents.map((doc: Document) => (
-                <View key={doc.id} style={styles.docRow}>
-                  <View style={styles.docInfo}>
-                    <Text style={styles.docName}>{doc.fileName}</Text>
-                    <Text style={styles.docMeta}>
-                      {DOC_TYPE_LABELS[doc.type] ?? doc.type}
-                      {doc.expiresAt ? ` · Expires ${formatDate(doc.expiresAt)}` : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.docActions}>
-                    <CompanyBadge
-                      label={doc.status}
-                      tone={doc.status === 'verified' ? 'success' : doc.status === 'pending' ? 'warning' : 'error'}
-                      small
-                    />
-                    {doc.storagePath ? (
-                      <TouchableOpacity
-                        style={styles.viewDocBtn}
-                        onPress={() => handleViewDoc(doc.id, doc.storagePath)}
-                        disabled={viewingDocId !== null}
-                        activeOpacity={0.75}
-                      >
-                        {viewingDocId === doc.id ? (
-                          <ActivityIndicator size="small" color={companyUi.accent} />
-                        ) : (
-                          <Download size={15} color={companyUi.accent} strokeWidth={2.2} />
-                        )}
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            )
-          ) : (
-            <View style={styles.lockedPanel}>
-              <Lock color={companyUi.amber} size={20} strokeWidth={2} />
-              <Text style={styles.lockedText}>
-                {req.status === 'rejected' || req.status === 'withdrawn'
-                  ? 'Documents are not available for this offer.'
-                  : 'Documents unlock automatically when the technician accepts.'}
-              </Text>
-            </View>
-          )}
-        </CompanyCard>
-
-        {/* ── Chat ─────────────────────────────────────── */}
-        {req.status === 'accepted' && chatRoom ? (
-          <TouchableOpacity
-            style={styles.chatButton}
-            onPress={() => router.push(`/company/chats/${chatRoom.id}` as any)}
-            activeOpacity={0.75}
-          >
-            <MessageCircle color={colors.white} size={16} strokeWidth={2} />
-            <Text style={styles.chatButtonText}>Open chat</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* ── Withdraw (pending only, admin/recruiter only) ── */}
-        {req.status === 'pending' && canSendDirectOffers(companyMemberRole) ? (
-          <TouchableOpacity
-            style={[styles.withdrawButton, withdrawing && styles.disabled]}
-            onPress={handleWithdraw}
-            disabled={withdrawing}
-            activeOpacity={0.75}
-          >
-            {withdrawing ? (
-              <ActivityIndicator color={companyUi.red} size="small" />
-            ) : (
-              <XCircle color={companyUi.red} size={15} strokeWidth={2} />
-            )}
-            <Text style={styles.withdrawButtonText}>Withdraw offer</Text>
-          </TouchableOpacity>
-        ) : null}
-      </ScrollView>
+      <PageBar title="Direct offer" onBack={goBack} />
+      <PageBody wide={false} refreshControl={refresh}>
+        {hero}
+        <Text style={styles.summary}>{statusSummary(req.status)}</Text>
+        {facts}
+        {offerLink}
+        {matchBlock}
+        {message}
+        {identity}
+        {documents}
+      </PageBody>
+      {sticky ? <StickyBar>{sticky}</StickyBar> : null}
+      {dialog}
     </CompanyScreen>
   );
 }
 
+function AsideFact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fact}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  notFound: { flex: 1, justifyContent: 'center', padding: spacing.md },
-  sectionCard: { gap: spacing.md, marginBottom: spacing.md },
-  deletedRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
+  matchBlock: {
+    gap: 12,
   },
-  deletedCopy: { flex: 1, minWidth: 0, gap: 4 },
-  deletedTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: companyUi.textMuted,
+  identity: {
+    gap: 4,
   },
-  deletedSub: {
-    fontSize: 13,
+  identityNote: {
+    fontSize: 13.5,
     lineHeight: 19,
-    fontWeight: '500',
-    color: companyUi.textSoft,
+    color: '#2D5A45',
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  sectionCopy: { flex: 1, minWidth: 0 },
-  sectionTitle: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
-  sectionSub: { marginTop: 2, fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
-  messageBlock: { borderLeftWidth: 3, borderLeftColor: companyUi.border, paddingLeft: spacing.sm },
-  messageLabel: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: companyUi.textMuted, marginBottom: 4 },
-  messageText: { fontSize: 13, lineHeight: 19, fontWeight: '500', color: companyUi.textSoft },
-  textLink: { minHeight: 34, alignSelf: 'flex-start', justifyContent: 'center' },
-  textLinkText: { fontSize: 13, fontWeight: '700', color: companyUi.accent },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  profileAvatar: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  profileInfo: { flex: 1, minWidth: 0 },
-  profileName: { fontSize: 16, lineHeight: 21, fontWeight: '700', color: companyUi.text },
-  profileSub: { marginTop: 2, fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  docRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
+  identityAction: {
+    marginTop: 6,
+    alignItems: 'flex-start',
   },
-  docInfo: { flex: 1, minWidth: 0 },
-  docName: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.text },
-  docMeta: { marginTop: 2, fontSize: 11, lineHeight: 15, fontWeight: '500', color: companyUi.textMuted },
-  docActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexShrink: 0 },
-  viewDocBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    borderWidth: 1, borderColor: companyUi.accent + '44',
-    backgroundColor: companyUi.accentSoft,
-    alignItems: 'center', justifyContent: 'center',
+  identityValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
   },
-  emptyText: { fontSize: 13, lineHeight: 19, fontWeight: '500', color: companyUi.textSoft },
-  lockedPanel: {
-    minHeight: 68, borderRadius: 16, borderWidth: 1,
-    borderColor: '#FDE68A', backgroundColor: companyUi.amberSoft,
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md,
+  summary: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
-  lockedText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: '600', color: companyUi.amber },
-  chatButton: {
-    minHeight: 48, borderRadius: 16, backgroundColor: companyUi.accent,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.xs, marginBottom: spacing.md,
+  fact: {
+    gap: 2,
   },
-  chatButtonText: { fontSize: 14, fontWeight: '700', color: colors.white },
-  withdrawButton: {
-    minHeight: 44, borderRadius: 16, borderWidth: 1, borderColor: '#FECACA',
-    backgroundColor: companyUi.surface,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.xs, marginBottom: spacing.md,
+  factLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  withdrawButtonText: { fontSize: 14, fontWeight: '700', color: companyUi.red },
-  disabled: { opacity: 0.6 },
+  factValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
 });

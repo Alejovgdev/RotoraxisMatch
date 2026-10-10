@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
+import { Text } from './ui/Text';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { DateFieldProps, DEFAULT_DATE_FIELD_PALETTE } from './DateField.types';
 import { formatDisplayDate, isoToLocalDate, localDateToIso } from '../utils/dateField';

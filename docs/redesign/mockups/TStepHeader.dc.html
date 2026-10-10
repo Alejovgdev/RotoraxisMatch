@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wizard step header</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 76px; box-sizing: border-box; padding: 8px 20px 0 4px; display: flex; flex-direction: column; gap: 6px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div style="display: flex; align-items: center; gap: 4px">
+<a href="{{back}}" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+</a>
+<span style="flex: 1 1 auto; font-size: 15px; font-weight: 800">{{flow}}</span>
+<span style="flex: none; font-size: 14px; font-weight: 700; color: #526274">{{label}}</span>
+</div>
+<div style="display: flex; gap: 6px; padding-left: 16px">
+<sc-for list="{{ segs }}" as="s" hint-placeholder-count="2">
+<span style="flex: 1 1 0; height: 5px; border-radius: 3px; background: {{s.bg}}"></span>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"flow":{"editor":"text","default":"Add licence"},"step":{"editor":"int","default":1,"min":1,"max":4},"total":{"editor":"int","default":2,"min":1,"max":4},"back":{"editor":"text","default":"T-Add.dc.html"},"primary":{"editor":"color","default":"#0B6A9E"},"$preview":{"width":390,"height":76}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const n = parseInt(this.props.step ?? 1, 10) || 1;
+    const total = parseInt(this.props.total ?? 2, 10) || 2;
+    const p = this.props.primary ?? '#0B6A9E';
+    const segs = [];
+    for (let i = 1; i <= total; i++) segs.push({ bg: i <= n ? p : '#E3E9EF' });
+    return {
+      flow: this.props.flow ?? 'Add licence',
+      back: this.props.back ?? 'T-Add.dc.html',
+      label: 'Step ' + n + ' of ' + total,
+      segs: segs
+    };
+  }
+}
+</script>
+</body>
+</html>

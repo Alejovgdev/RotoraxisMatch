@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician · Direct offers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column">
+
+<div style="display: flex; align-items: center; gap: 4px; padding: 8px 16px 0 4px">
+<a href="T-Home.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+</a>
+<h1 style="margin: 0; font-size: 20px; font-weight: 800">Direct offers</h1>
+</div>
+<p style="margin: 0; padding: 0 20px 0 48px; font-size: 14px; color: #526274">Companies that invited you</p>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 0">
+<sc-for list="{{ items }}" as="d" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 18px; border: 1px solid #E1E8EE">
+<div style="display: flex; align-items: center; gap: 12px">
+<dc-import name="WAvatar" who="{{d.logo}}" size="48" hint-size="48px,48px"></dc-import>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15.5px; font-weight: 800">{{d.title}}</span>
+<span style="font-size: 13px; color: #526274">{{d.meta}}</span>
+</span>
+<span style="flex: none; font-size: 17px; font-weight: 800; color: #157F4F">{{d.match}}</span>
+</div>
+<sc-if value="{{ d.waiting }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{ d.decline }}" style="flex: 1 1 0; height: 46px; border-radius: 23px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Decline</button>
+<button type="button" onClick="{{ d.accept }}" style="flex: 1.5 1 0; height: 46px; border-radius: 23px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Accept and chat</button>
+</div>
+</sc-if>
+<sc-if value="{{ d.done }}" hint-placeholder-val="{{ false }}">
+<span style="align-self: flex-start; height: 30px; padding: 0 12px; border-radius: 15px; background: {{d.chipBg}}; color: {{d.chipFg}}; display: flex; align-items: center; font-size: 13px; font-weight: 800">{{d.chip}}</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: none">
+<dc-import name="TTabBar" active="home" primary="{{primary}}" hint-size="390px,84px"></dc-import>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const st = s.status || { a: 'waiting', b: 'accepted' };
+    const set = (k, v) => { const n = Object.assign({}, st); n[k] = v; this.setState({ status: n }); };
+    const base = [
+      { k: 'a', logo: 'northwing', title: 'B1 Mechanic · A320 family', meta: 'Northwing MRO · Dublin, Ireland · Long-term', match: '88%' },
+      { k: 'b', logo: 'halcon', title: 'B1.3 Technician · H145', meta: 'Halcón Aero · Madrid, Spain · Permanent', match: '74%' }
+    ];
+    const items = base.map((d) => {
+      const v = st[d.k];
+      return Object.assign({}, d, {
+        waiting: v === 'waiting', done: v !== 'waiting',
+        chip: v === 'accepted' ? 'Accepted · chat open in Inbox' : 'Declined',
+        chipBg: v === 'accepted' ? '#D3F1E3' : '#E9EDF1',
+        chipFg: v === 'accepted' ? '#0B5B3A' : '#4A5A6C',
+        accept: () => set(d.k, 'accepted'),
+        decline: () => set(d.k, 'declined')
+      });
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', items: items };
+  }
+}
+</script>
+</body>
+</html>

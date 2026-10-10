@@ -142,6 +142,7 @@ export function getUnlockedTechnicianView(
 ): UnlockedTechnicianView {
   return {
     ...getSafeTechnicianPreview(technician),
+    photoPath: technician.photoPath ?? null,
     firstName: technician.firstName,
     lastName: technician.lastName,
     email: technician.email,

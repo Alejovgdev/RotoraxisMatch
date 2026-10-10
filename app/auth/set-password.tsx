@@ -6,11 +6,11 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text, TextInput } from '../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
@@ -73,6 +73,8 @@ function cleanUrl() {
 }
 
 export default function SetPasswordScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const [preparing, setPreparing] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
@@ -191,7 +193,7 @@ export default function SetPasswordScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={desktopScrollbar}
         >
           <TouchableOpacity onPress={() => router.replace('/auth/login' as any)} style={styles.back}>
             <Text style={styles.backText}>Back to sign in</Text>
@@ -219,7 +221,7 @@ export default function SetPasswordScreen() {
                   onChangeText={setPassword}
                   secureTextEntry
                   placeholder="Min 8 characters"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.placeholder}
                   autoComplete="new-password"
                   editable={sessionReady && !saving}
                 />
@@ -231,7 +233,7 @@ export default function SetPasswordScreen() {
                   onChangeText={setConfirmPassword}
                   secureTextEntry
                   placeholder="Repeat password"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.placeholder}
                   autoComplete="new-password"
                   returnKeyType="done"
                   onSubmitEditing={handleSavePassword}
@@ -261,7 +263,7 @@ export default function SetPasswordScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.background,
   },
   keyboard: {
     flex: 1,
@@ -279,7 +281,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   backText: {
-    color: colors.cyanLight,
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -290,22 +292,22 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     textAlign: 'center',
   },
   subtitle: {
     marginTop: spacing.sm,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   form: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
   },
   loadingRow: {
     minHeight: 96,
@@ -314,25 +316,25 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   loadingText: {
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: 6,
   },
   confirmLabel: {
     marginTop: spacing.md,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 15,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,

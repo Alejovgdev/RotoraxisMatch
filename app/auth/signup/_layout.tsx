@@ -6,7 +6,7 @@ export default function SignupLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.navy },
+        contentStyle: { backgroundColor: colors.background },
       }}
     />
   );

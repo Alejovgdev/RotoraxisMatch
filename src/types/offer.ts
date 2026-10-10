@@ -182,6 +182,8 @@ export interface Offer extends PersistedLocation {
   acceptedLicenseCode?: LicenseCode;
   /** El motor que pide una oferta de motor. Presente sólo si `offerKind` es 'engine'. */
   requiredEngineId?: string;
+  /** Optional display-only note for the engine (097). null explicitly clears it on edit. */
+  requiredEngineNotes?: string | null;
   /**
    * "Sólo técnicos sin licencia". Vale en ofertas de aeronave y de motor, y
    * sólo en las que NO exigen licencia (chk_offers_only_unlicensed_without_license,

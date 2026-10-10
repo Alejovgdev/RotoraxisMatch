@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from './ui/Text';
 import { colors, spacing } from '../theme';
 import { AircraftTypeRatingCatalog } from '../types/catalog';
 import { searchRatings, getByProductType } from '../constants/aircraftTypeRatingViews';
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
   inactiveBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#7A3F06',
   },
   hintRow: {
     flexDirection: 'row',
@@ -282,13 +283,13 @@ const styles = StyleSheet.create({
   retryButton: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
   },
   retryButtonText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
   input: {

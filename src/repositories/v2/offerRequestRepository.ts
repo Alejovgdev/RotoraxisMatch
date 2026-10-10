@@ -38,6 +38,22 @@ export const offerRequestRepository = {
     return ((data ?? []) as any[]).map(mapOfferRequestRow);
   },
 
+  /**
+   * Ofertas directas pendientes del técnico (las que esperan su respuesta),
+   * sólo el número: las mismas filas que la lista cuenta como "pending", con la
+   * consulta `head` que hacía la Home vieja. La usan el círculo Direct offers
+   * de la Home y su sección de escritorio (fase 5B).
+   */
+  async countPendingForTechnician(technicianId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('offer_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('technician_id', technicianId)
+      .eq('status', 'pending');
+    throwIfError(error);
+    return count ?? 0;
+  },
+
   async getForCompany(companyId: string): Promise<OfferRequest[]> {
     const { data, error } = await supabase
       .from('offer_requests')

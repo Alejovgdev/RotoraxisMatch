@@ -49,6 +49,12 @@ export function offerEngineText(offer: Pick<Offer, 'offerKind' | 'requiredEngine
 
 export const ONLY_UNLICENSED_TEXT = 'Only technicians without a licence';
 
+/** Display-only annotation, shared by the review and offer details. */
+export function requirementWithNote(label: string, notes?: string | null): string {
+  const note = notes?.trim();
+  return note ? `${label} — ${note}` : label;
+}
+
 /**
  * La fila "Certified work". En una oferta de motor la licencia es opcional y
  * sólo puntúa (sesión 2): "required" prometería un filtro que no existe.

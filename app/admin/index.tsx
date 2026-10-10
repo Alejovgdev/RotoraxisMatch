@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { Stack, useRouter } from 'expo-router';
 import {
   Archive,
@@ -792,8 +792,8 @@ const styles = StyleSheet.create({
     flexBasis: 132,
   },
   metricTileUrgent: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFBEB',
+    borderColor: '#F3DDA4',
+    backgroundColor: '#FFF6E2',
   },
   metricTop: {
     flexDirection: 'row',
@@ -873,7 +873,7 @@ const styles = StyleSheet.create({
   switchButton: {
     marginTop: spacing.lg,
     minHeight: 44,
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: adminUi.border,
     alignItems: 'center',
@@ -888,9 +888,9 @@ const styles = StyleSheet.create({
   },
   signOutBtn: {
     minHeight: 48,
-    borderRadius: 16,
+    borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
     backgroundColor: adminUi.redSoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -899,7 +899,7 @@ const styles = StyleSheet.create({
   },
   signOutBtnText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: adminUi.red,
   },
 });

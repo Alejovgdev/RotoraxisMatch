@@ -61,6 +61,7 @@ export interface Technician {
   id: string;
   anonymousCode: string;
   fullName: string;
+  photoPath?: string | null;
   email: string;
   phone: string;
   country: string;
@@ -266,6 +267,7 @@ export interface TechnicianProfile extends PersistedLocation {
   anonymousCode: string;
 
   // Private
+  photoPath?: string | null;
   firstName: string;
   lastName: string;
   email: string;

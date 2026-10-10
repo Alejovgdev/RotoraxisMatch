@@ -1,17 +1,19 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from './ui/Text';
 import { notify } from '../utils/platformAlert';
+import { toggleProfileType } from '../utils/profileTypes';
 import { TechnicianTypeOption } from '../auth/useCatalogOptions';
 
 /**
  * Selección MÚLTIPLE de tipos de perfil de técnico (Fase 6 tanda A).
  *
- * Un único componente para el alta (`app/auth/signup/technician.tsx`) y para
- * el perfil (`app/technician/profile.tsx`), a propósito: son el mismo campo
- * en dos momentos distintos, y cuando cada pantalla tenía su propio control
- * (picker de un solo valor en el alta, chips en el perfil) también tenían su
- * propia idea de qué es válido. La regla del mínimo de uno vive AQUÍ DENTRO,
- * no en cada pantalla, para que no pueda divergir.
+ * Lo usa el alta (`app/auth/signup/technician.tsx`). El perfil lo usó hasta el
+ * rediseño (fase 6A): desde entonces My work pinta sus propios chips
+ * (ProfileTypeChips), pero con LA MISMA regla, `toggleProfileType`
+ * (src/utils/profileTypes.ts). Cuando cada pantalla tenía su propio control
+ * también tenía su propia idea de qué es válido; por eso la regla del mínimo
+ * de uno vive en una función compartida y no en cada pantalla.
  *
  * Sin restricción de mezcla: se puede ser aviónico y pintor a la vez. Y el
  * tipo NUNCA limita lo que se puede declarar: el eje Part-66 se muestra
@@ -40,13 +42,13 @@ export interface TechnicianTypeSelectorPalette {
 }
 
 export const DEFAULT_TECHNICIAN_TYPE_PALETTE: TechnicianTypeSelectorPalette = {
-  text: '#1A2332',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
+  text: '#0E1A2B',
+  muted: '#66768A',
+  border: '#D5DEE6',
   surface: '#FFFFFF',
-  accent: '#2563EB',
-  accentText: '#2563EB',
-  accentSurface: '#2563EB1A',
+  accent: '#0B6A9E',
+  accentText: '#0B6A9E',
+  accentSurface: '#E6F1F8',
 };
 
 export interface TechnicianTypeSelectorProps {
@@ -83,34 +85,15 @@ export function TechnicianTypeSelector({
   const p = { ...DEFAULT_TECHNICIAN_TYPE_PALETTE, ...palette };
   const locked = new Set(lockedCodes ?? []);
 
+  // La regla (bloqueo por licencia y mínimo de uno) vive en
+  // src/utils/profileTypes.ts, compartida con los chips de My work.
   function toggle(code: string) {
-    const isSelected = selected.includes(code);
-    if (!isSelected) {
-      onChange([...selected, code]);
+    const result = toggleProfileType(selected, code, [...locked], (c) => options.find((o) => o.code === c)?.label ?? c);
+    if (result.kind === 'notice') {
+      notify(result.title, result.message);
       return;
     }
-    // Implicado por una licencia declarada. Se avisa por el mismo motivo que
-    // el mínimo de uno, justo abajo: el chip está deshabilitado, pero un
-    // toque sin respuesta parece la app rota y no una regla — y aquí además
-    // hay que decir DÓNDE se quita, que no es en esta sección.
-    if (locked.has(code)) {
-      const label = options.find((o) => o.code === code)?.label ?? code;
-      notify(
-        `${label} comes from your licences`,
-        'You hold a licence of this trade, so the type stays while you declare it. Remove that licence in the Licenses section and this comes off with it.',
-      );
-      return;
-    }
-    // Mínimo uno. Se avisa en vez de dejar el toque sin efecto: un chip que
-    // no responde parece la app rota, no una regla.
-    if (selected.length === 1) {
-      notify(
-        'Keep at least one profile type',
-        'Your profile needs at least one type. Select another one first, then remove this.',
-      );
-      return;
-    }
-    onChange(selected.filter((c) => c !== code));
+    onChange(result.next);
   }
 
   if (loading) {

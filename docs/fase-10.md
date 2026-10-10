@@ -35,6 +35,17 @@ Hallazgos corregidos:
 
 Migraciones aplicadas y registradas en `supabase_migrations.schema_migrations`:
 
+- **097** `20261008072830` (2026-10-08) — nota opcional de motor en
+  `offers.required_engine_notes`, sólo informativa. CHECK para ofertas de
+  motor y ampliación de `update_offer_with_habilitations`; al cambiar motor o
+  pasar a aeronave, limpia la nota omitida. Aplicada con OK explícito mediante
+  Management API, antes del cliente. MD5 del archivo y del SQL registrado:
+  `ae2b08eb3b61302bc062dbdc0d260174`. Ensayo: 20 casos, cuatro controles
+  negativos y regresiones 23 + 27 + H3 412. Sobre el esquema instalado:
+  `node scripts/rehearseOfferEngineNotes.cjs --installed`, mismas suites en
+  verde y rollback verificado sin residuos. Sin cambios de matching ni login;
+  las comprobaciones de pantalla con sesión quedan a cargo del propietario.
+
 - **081** `20260917071326` — participantes inmutables, autorización previa a
   hechos privados y RLS de cualificaciones por visibilidad o relación.
 - **082** `20260917071907` — `replace_technician_habilitations`,

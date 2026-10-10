@@ -1,19 +1,31 @@
+// Los controles que flotan sobre el mapa de técnicos de empresa: la cabecera
+// (atrás, título, cuántos hay, "Filters" y "List") y la leyenda.
+//
+// Rediseño, fase 3B (respuesta 22): el mapa se queda como estaba —marcadores,
+// colores, agrupación y hojas— y sólo cambian estos controles de alrededor y el
+// botón nuevo para volver a la lista. El panel de filtros lo abre quien monta
+// el mapa: es el mismo que el de la búsqueda.
 import React from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { ArrowLeft, SlidersHorizontal } from 'lucide-react-native';
-import { colors, spacing } from '../../theme';
-import { techUi } from '../technician/TechnicianUI';
+import { ActivityIndicator, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ChevronLeft, List, SlidersHorizontal } from 'lucide-react-native';
+import { Text } from '../ui/Text';
+import { colors } from '../../theme';
+import { TOUCH_TARGET, WIDE_BREAKPOINT } from '../../theme/ui';
+
+/** Ancho de la cabecera del mapa en escritorio. */
+const MAP_HEADER_MAX_WIDTH = 560;
+
+// Los mismos colores que pintan los marcadores (TechnicianMapLeafletImpl y el
+// WebView de TechnicianMap.native), para que la leyenda explique lo que se ve.
+const LEGEND = {
+  available: '#10B981',
+  unavailable: '#94A3B8',
+  group: '#0A1628',
+} as const;
 
 export const TECHNICIAN_MAP_AVAILABILITY = [
-  { value: 'open_to_offers' as const, label: 'Open to offers', color: colors.success },
-  { value: 'unavailable' as const, label: 'Unavailable', color: colors.textMuted },
+  { value: 'open_to_offers' as const, label: 'Open to offers', color: LEGEND.available },
+  { value: 'unavailable' as const, label: 'Unavailable', color: LEGEND.unavailable },
 ] as const;
 
 export function TechnicianMapHeader({
@@ -22,61 +34,74 @@ export function TechnicianMapHeader({
   loading,
   onBack,
   onOpenFilters,
+  onShowList,
 }: {
   visibleCount: number;
   filterCount: number;
   loading: boolean;
   onBack?: () => void;
   onOpenFilters: () => void;
+  onShowList?: () => void;
 }) {
+  // En un teléfono estrecho los dos botones se quedan en icono, como antes
+  // "Filters": la cabecera no debe partirse en dos filas y tapar el zoom.
   const { width } = useWindowDimensions();
   const compact = width < 520;
+  // Escritorio: la barra superior ya lleva la navegación; sin flecha (fase 8).
+  const wide = width >= WIDE_BREAKPOINT;
   const subtitle = filterCount > 0
     ? `${visibleCount} matching technician${visibleCount === 1 ? '' : 's'} · ${filterCount} active filter${filterCount === 1 ? '' : 's'}`
     : `${visibleCount} technician${visibleCount === 1 ? '' : 's'} on the map`;
 
   return (
-    <View style={styles.header}>
-      {onBack ? (
-        <TouchableOpacity
+    <View style={[styles.header, wide && styles.headerWide]}>
+      {onBack && !wide ? (
+        <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
-          activeOpacity={0.75}
           onPress={onBack}
-          style={styles.headerIconButton}
+          hitSlop={4}
+          style={styles.back}
         >
-          <ArrowLeft color={techUi.text} size={20} strokeWidth={2.4} />
-        </TouchableOpacity>
+          <ChevronLeft color={colors.text} size={26} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
 
-      <View style={styles.headerCopy}>
-        <Text style={styles.headerEyebrow}>Talent directory</Text>
-        <Text style={styles.headerTitle} numberOfLines={1}>Technician Map</Text>
+      <View style={styles.copy}>
+        <Text style={styles.title} numberOfLines={1} accessibilityRole="header">Technician map</Text>
         {loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator color={techUi.accent} size="small" />
-            <Text style={styles.headerSubtitle} numberOfLines={1}>Loading technicians...</Text>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={styles.subtitle} numberOfLines={1}>Loading technicians...</Text>
           </View>
         ) : (
-          <Text style={styles.headerSubtitle} numberOfLines={1}>{subtitle}</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
         )}
       </View>
 
-      <TouchableOpacity
+      <Pressable
         accessibilityRole="button"
         accessibilityLabel={filterCount > 0 ? `Filters, ${filterCount} active` : 'Filters'}
-        activeOpacity={0.75}
         onPress={onOpenFilters}
-        style={styles.filterButton}
+        style={({ pressed, hovered }: any) => [styles.pill, (pressed || hovered) && styles.pillPressed]}
       >
-        <SlidersHorizontal color={techUi.accent} size={18} strokeWidth={2.2} />
-        {!compact ? <Text style={styles.filterButtonText}>Filters</Text> : null}
-        {filterCount > 0 ? (
-          <View style={styles.filterCount}>
-            <Text style={styles.filterCountText}>{filterCount}</Text>
-          </View>
-        ) : null}
-      </TouchableOpacity>
+        <SlidersHorizontal color={colors.text} size={17} strokeWidth={2.2} />
+        {compact
+          ? (filterCount > 0 ? <Text style={styles.pillText}>{filterCount}</Text> : null)
+          : <Text style={styles.pillText}>{filterCount > 0 ? `Filters · ${filterCount}` : 'Filters'}</Text>}
+      </Pressable>
+
+      {onShowList ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show as list"
+          onPress={onShowList}
+          style={({ pressed, hovered }: any) => [styles.pill, (pressed || hovered) && styles.pillPressed]}
+        >
+          <List color={colors.text} size={17} strokeWidth={2.2} />
+          {!compact ? <Text style={styles.pillText}>List</Text> : null}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -84,7 +109,6 @@ export function TechnicianMapHeader({
 export function TechnicianMapLegend() {
   return (
     <View style={styles.legend} pointerEvents="none">
-      <Text style={styles.legendTitle}>Availability</Text>
       <View style={styles.legendGrid}>
         {TECHNICIAN_MAP_AVAILABILITY.map((item) => (
           <View key={item.value} style={styles.legendItem}>
@@ -93,132 +117,153 @@ export function TechnicianMapLegend() {
           </View>
         ))}
       </View>
-
-      <View style={styles.legendDetails}>
-        <View style={styles.detailRow}>
-          <View style={styles.precisionDot} />
-          <Text style={styles.detailText}>Dashed marker = country-level location</Text>
+      <View style={styles.legendItem}>
+        <View style={styles.groupDot}>
+          <Text style={styles.groupDotText}>2</Text>
         </View>
-        <View style={styles.detailRow}>
-          <View style={styles.groupDot}>
-            <Text style={styles.groupDotText}>2</Text>
-          </View>
-          <Text style={styles.detailText}>Numbered marker = multiple technicians</Text>
-        </View>
+        <Text style={styles.legendText}>Several technicians</Text>
+      </View>
+      <View style={styles.legendItem}>
+        <View style={styles.precisionDot} />
+        <Text style={styles.legendText}>Country-level location</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /** Escritorio (fase 8): a la izquierda y con ancho máximo, no de borde a borde. */
+  headerWide: {
+    right: 'auto',
+    width: MAP_HEADER_MAX_WIDTH,
+    maxWidth: '96%',
+    // Sin la flecha, el título no se pega al borde.
+    paddingLeft: 16,
+  },
   header: {
     position: 'absolute',
     top: 12,
     left: 12,
     right: 12,
     zIndex: 1002,
-    minHeight: 76,
-    padding: 10,
+    minHeight: 64,
+    paddingVertical: 8,
+    paddingLeft: 4,
+    paddingRight: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
+    borderColor: '#E1E8EE',
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    shadowColor: '#0E1A2B',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
-    shadowRadius: 18,
+    shadowRadius: 16,
     elevation: 8,
   },
-  headerIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: techUi.borderSoft,
-    backgroundColor: techUi.surfaceSoft,
+  back: {
+    width: TOUCH_TARGET,
+    height: TOUCH_TARGET,
+    borderRadius: TOUCH_TARGET / 2,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  headerCopy: { flex: 1, minWidth: 0 },
-  headerEyebrow: { fontSize: 10, lineHeight: 13, fontWeight: '700', color: techUi.accent },
-  headerTitle: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: techUi.text },
-  headerSubtitle: { marginTop: 2, fontSize: 11, lineHeight: 14, fontWeight: '600', color: techUi.textMuted },
-  loadingRow: { minHeight: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  filterButton: {
-    minWidth: 48,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: techUi.accent,
-    backgroundColor: techUi.accentSoft,
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    paddingLeft: 4,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  subtitle: {
+    marginTop: 1,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+  },
+  pill: {
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
     justifyContent: 'center',
-    gap: 7,
+    paddingHorizontal: 13,
+    borderRadius: TOUCH_TARGET / 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     flexShrink: 0,
   },
-  filterButtonText: { fontSize: 12, fontWeight: '800', color: techUi.accent },
-  filterCount: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: techUi.accent,
+  pillPressed: {
+    backgroundColor: colors.surfaceSoft,
   },
-  filterCountText: { color: colors.white, fontSize: 10, fontWeight: '800' },
+  pillText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
   legend: {
     position: 'absolute',
     left: 12,
     bottom: 18,
     zIndex: 1001,
-    width: 224,
-    padding: 11,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    gap: 5,
   },
-  legendTitle: { marginBottom: 7, fontSize: 11, fontWeight: '800', color: techUi.text },
-  legendGrid: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 9, height: 9, borderRadius: 5 },
-  legendText: { fontSize: 10, lineHeight: 13, fontWeight: '700', color: techUi.textSoft },
-  legendDetails: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: techUi.borderSoft,
+  legendGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#33465A',
+  },
   precisionDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: techUi.textMuted,
+    borderColor: '#33465A',
   },
   groupDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: techUi.navy,
+    backgroundColor: LEGEND.group,
   },
-  groupDotText: { color: colors.white, fontSize: 8, lineHeight: 10, fontWeight: '800' },
-  detailText: { flex: 1, fontSize: 9, lineHeight: 12, fontWeight: '600', color: techUi.textMuted },
+  groupDotText: {
+    color: colors.white,
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '800',
+  },
 });

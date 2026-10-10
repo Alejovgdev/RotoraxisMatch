@@ -261,7 +261,8 @@ check(
   !authenticatedDeletionPage.includes('all personal information'),
 );
 
-const documentsPage = readFileSync(join(root, 'app', 'technician', 'documents.tsx'), 'utf8');
+// Documents vive en el grupo (you) desde la fase 8 (la URL no cambia).
+const documentsPage = readFileSync(join(root, 'app', 'technician', '(you)', 'documents.tsx'), 'utf8');
 const medicalConsentIndex = documentsPage.indexOf("consent_type: 'medical_document'");
 const documentUploadIndex = documentsPage.indexOf('const { storagePath, error: storageError } = await uploadDocumentToStorage(');
 check(

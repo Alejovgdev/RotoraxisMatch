@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your offers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 16px 0 4px">
+<a href="W-Home.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+<h1 style="flex: 1 1 auto; margin: 0; font-size: 20px; font-weight: 800">Your offers</h1>
+<a href="W-Post.dc.html" style="flex: none; height: 44px; padding: 0 16px 0 12px; border-radius: 22px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; gap: 6px; text-decoration: none; font-size: 14.5px; font-weight: 800"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>New</a>
+</div>
+
+<div style="flex: none; display: flex; gap: 8px; padding: 12px 20px 6px; overflow: hidden">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="flex: none; height: 44px; padding: 0 16px; border-radius: 22px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}<span style="opacity: 0.7">{{c.count}}</span></button>
+</sc-for>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 20px">
+<sc-for list="{{ rows }}" as="o" hint-placeholder-count="6">
+<a href="{{o.href}}" style="display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B; opacity: {{o.opacity}}">
+<span style="flex: none; width: 52px; height: 52px; border-radius: 15px; background: {{o.bg}}; color: {{o.fg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: {{o.size}}">{{o.code}}</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{o.title}}</span>
+<span style="font-size: 13px; color: #526274; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{o.meta}}</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="height: 22px; padding: 0 8px; border-radius: 11px; background: {{o.chipBg}}; color: {{o.chipFg}}; font-size: 11.5px; font-weight: 800; display: flex; align-items: center">{{o.status}}</span><span style="font-size: 12.5px; color: #66768A">{{o.when}}</span></span>
+</span>
+<sc-if value="{{ o.hasNew }}" hint-placeholder-val="{{ false }}">
+<span style="flex: none; height: 26px; padding: 0 10px; border-radius: 13px; background: #FDE7B5; color: #7A3F06; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">1 new</span>
+</sc-if>
+</a>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filter = (this.state && this.state.filter) || 'all';
+    const tile = { B1: ['#D6ECF8', '#0B5E8C', '17px'], B2: ['#D5F2E4', '#0B6B45', '17px'], ENG: ['#E3E8EE', '#33465A', '14px'], SM: ['#F1E9DC', '#5B4528', '15px'] };
+    const st = {
+      published: ['Published', '#D3F1E3', '#0B5B3A'],
+      draft: ['Draft', '#FDE7B5', '#7A3F06'],
+      closed: ['Closed', '#E9EDF1', '#4A5A6C'],
+      expired: ['Expired', '#FDECEC', '#B42318']
+    };
+    const all = [
+      ['B1', 'B1 Mechanic · A320 family', 'Barcelona, Spain · Permanent', 'published', 'Published 5 days ago', true, 'W-Offer.dc.html'],
+      ['B2', 'B2 Avionics · ATR 72', 'Valencia, Spain · Long-term', 'published', 'Published 1 week ago', false, '#'],
+      ['ENG', 'Engine Technician · CFM56-5B', 'Madrid, Spain · Short-term', 'published', 'Published 2 weeks ago', false, '#'],
+      ['B1', 'B1 Mechanic · B737 NG', 'Palma, Spain · Permanent', 'published', 'Published 3 weeks ago', false, '#'],
+      ['SM', 'Sheet Metal Worker · A330', 'Seville, Spain · Long-term', 'draft', 'Created 2 days ago', false, '#'],
+      ['B1', 'B1.3 Technician · H145', 'Bilbao, Spain · Permanent', 'closed', 'Closed 1 month ago', false, '#'],
+      ['B2', 'B2 Avionics · A350', 'Madrid, Spain · Permanent', 'expired', 'Expired 2 months ago', false, '#']
+    ];
+    const rows = all.filter((r) => filter === 'all' || r[3] === filter || (filter === 'closed' && r[3] === 'expired')).map((r) => ({
+      code: r[0], bg: tile[r[0]][0], fg: tile[r[0]][1], size: tile[r[0]][2],
+      title: r[1], meta: r[2], status: st[r[3]][0], chipBg: st[r[3]][1], chipFg: st[r[3]][2],
+      when: r[4], hasNew: r[5], href: r[6], opacity: r[3] === 'closed' || r[3] === 'expired' ? '0.75' : '1'
+    }));
+    const count = (k) => all.filter((r) => k === 'all' || r[3] === k || (k === 'closed' && r[3] === 'expired')).length;
+    const chips = [['all', 'All'], ['published', 'Published'], ['draft', 'Drafts'], ['closed', 'Closed']].map((c) => {
+      const on = c[0] === filter;
+      return {
+        label: c[1], count: count(c[0]), pressed: on ? 'true' : 'false',
+        bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6',
+        pick: () => this.setState({ filter: c[0] })
+      };
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', chips: chips, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

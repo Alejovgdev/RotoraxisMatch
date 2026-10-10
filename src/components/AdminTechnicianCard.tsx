@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Text,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text } from './ui/Text';
+import { Avatar } from './ui/Avatar';
 import { BriefcaseBusiness, Cake, CheckCircle, Clock, Mail, MapPin, UserRound, XCircle } from 'lucide-react-native';
 import type { LucideProps } from 'lucide-react-native';
 import type { Technician, TechnicianWithRelations, UserStatus, VerificationStatus } from '../types';
@@ -164,7 +165,7 @@ export function AdminTechnicianCard({ technician, details, typeRatingLabels, acc
     >
       <View style={styles.header}>
         <View style={styles.identity}>
-          <AdminInitialAvatar label={technician.fullName} color={adminUi.navy} />
+          <Avatar name={technician.fullName} photoPath={technician.photoPath} />
           <View style={styles.titleBlock}>
             <Text style={styles.name}>{technician.fullName}</Text>
             <Text style={styles.code}>{technician.anonymousCode}</Text>
@@ -318,11 +319,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardPending: {
-    borderColor: '#FDE68A',
+    borderColor: '#F3DDA4',
     borderLeftWidth: 3,
   },
   cardRejected: {
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
   },
   // Atenuada, no alarmante: una cuenta borrada es archivo, no incidencia.
   cardDeleted: {
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
     flexBasis: 112,
     minHeight: 38,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     alignItems: 'center',
@@ -432,6 +433,6 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

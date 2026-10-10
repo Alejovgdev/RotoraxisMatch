@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
+import { Text } from '../src/components/ui/Text';
+import { useDesktopScrollbar } from '../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Button } from '../src/components/Button';
 import { colors, spacing } from '../src/theme';
+import { fonts } from '../src/theme/fonts';
 import { hasSeenIntro } from '../src/storage/introStorage';
 import { useAuth } from '../src/auth/AuthContext';
 // La misma tabla que usa la flecha de atrás cuando no hay historial
@@ -44,6 +46,8 @@ const VALUE_PROPS = [
 ];
 
 export default function HomeScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const { width } = useWindowDimensions();
@@ -79,7 +83,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={desktopScrollbar}
       >
         <View style={styles.hero}>
           <View style={styles.logoWrap}>
@@ -175,13 +179,13 @@ const vpStyles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: colors.borderLight,
   },
   iconWrap: {
     width: 42,
     height: 42,
     borderRadius: 11,
-    backgroundColor: 'rgba(0,180,216,0.18)',
+    backgroundColor: 'rgba(11, 106, 158, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -192,12 +196,12 @@ const vpStyles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.white,
+    color: colors.text,
     marginBottom: 3,
   },
   description: {
     fontSize: 13,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     lineHeight: 19,
   },
 });
@@ -205,7 +209,7 @@ const vpStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.background,
   },
   scroll: {
     flexGrow: 1,
@@ -239,24 +243,24 @@ const styles = StyleSheet.create({
   },
   logoIcon: { fontSize: 38 },
   appName: {
+    fontFamily: fonts.logo,
     fontSize: 30,
-    fontWeight: '700',
-    color: colors.white,
+    color: colors.logo,
     marginBottom: spacing.sm,
     letterSpacing: -0.5,
   },
   tagline: {
     fontSize: 16,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surfaceSoft,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.borderLight,
     marginBottom: spacing.lg,
     paddingVertical: spacing.md,
   },
@@ -267,35 +271,35 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.borderLight,
     marginVertical: 4,
   },
   statValue: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     lineHeight: 28,
   },
   statLabel: {
     fontSize: 11,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
   propsCard: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.borderLight,
   },
   cta: {
     marginBottom: spacing.lg,
   },
   secondaryBtn: {
     marginTop: spacing.sm,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.border,
   },
   settingsLink: {
     alignSelf: 'center',

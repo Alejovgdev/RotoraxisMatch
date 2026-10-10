@@ -36,6 +36,10 @@ export default function TechnicianOfferMapScreen() {
         unmappedCount={unmappedCount}
         onRetry={retry}
         onBack={goBack}
+        // Rediseño, fase 5A: vuelve a la pestaña Offers que hay debajo (o la
+        // abre si se llegó al mapa desde la Home), sin apilar pantallas. El
+        // mapa en sí se queda como estaba (respuesta 22).
+        onShowList={() => router.dismissTo('/technician/offers' as never)}
         onViewOffer={(offerId) => router.push(`/technician/offers/${offerId}` as any)}
       />
     </SafeAreaView>

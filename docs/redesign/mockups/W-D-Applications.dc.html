@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Applications · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="min-height: 780px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="applications" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+<div style="max-width: 1160px; margin: 0 auto; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px">Applications</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 42px; padding: 0 16px; border-radius: 21px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}<span style="opacity: 0.7">{{c.count}}</span></button>
+</sc-for>
+</div>
+<div style="border-radius: 20px; border: 1px solid #E1E8EE; overflow: hidden">
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+<a href="{{r.href}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 20px; border-bottom: {{r.line}}; text-decoration: none; color: #0E1A2B">
+<span style="position: relative; flex: none; opacity: {{r.fade}}"><dc-import name="WAvatar" who="{{r.face}}" size="48" hint-size="48px,48px"></dc-import>
+<sc-if value="{{ r.isNew }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 0; right: 0; width: 12px; height: 12px; border-radius: 6px; background: #D42C2C; border: 2px solid #FFFFFF"></span></sc-if>
+</span>
+<span style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15.5px; font-weight: 800">{{r.name}}</span><span style="font-size: 13.5px; color: #526274">{{r.offer}}</span></span>
+<span style="flex: 0 1 220px; font-size: 13.5px; color: #66768A">{{r.when}}</span>
+<span style="flex: none; height: 28px; padding: 0 11px; border-radius: 14px; background: {{r.chipBg}}; color: {{r.chipFg}}; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">{{r.status}}</span>
+<span style="flex: none; height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">{{r.action}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filter = (this.state && this.state.filter) || 'all';
+    const st = { pending: ['Needs review', '#FDE7B5', '#7A3F06'], accepted: ['Accepted', '#D3F1E3', '#0B5B3A'], rejected: ['Rejected', '#E9EDF1', '#4A5A6C'], withdrawn: ['Withdrawn', '#E9EDF1', '#4A5A6C'], expired: ['Expired', '#E9EDF1', '#4A5A6C'] };
+    const all = [
+      ['anon', 'Technician T7A2C91B04', 'B1 Mechanic · A320 family', 'Applied 2h ago', 'pending', 'W-D-Candidate.dc.html', 'Review'],
+      ['t1193', 'Lucía Moreno', 'B2 Avionics · ATR 72', 'Accepted 3 days ago · chat open', 'accepted', 'W-D-Tech.dc.html', 'View'],
+      ['anon', 'Technician T2E55A0C31', 'B1 Mechanic · A320 family', 'Applied 1 week ago', 'rejected', '#', 'View'],
+      ['anon', 'Technician T5B83C1A90', 'B1 Mechanic · B737 NG', 'Applied 2 weeks ago', 'withdrawn', '#', 'View'],
+      ['anon', 'Technician T8D02E7F46', 'B2 Avionics · ATR 72', 'Applied 1 month ago', 'expired', '#', 'View']
+    ];
+    const filtered = all.filter((r) => filter === 'all' || r[4] === filter);
+    const rows = filtered.map((r, i) => ({
+      face: r[0], name: r[1], offer: r[2], when: r[3], href: r[5], action: r[6],
+      status: st[r[4]][0], chipBg: st[r[4]][1], chipFg: st[r[4]][2], isNew: r[4] === 'pending',
+      fade: ['rejected', 'withdrawn', 'expired'].indexOf(r[4]) !== -1 ? '0.6' : '1',
+      line: i === filtered.length - 1 ? '0' : '1px solid #E6ECF1'
+    }));
+    const count = (k) => all.filter((r) => k === 'all' || r[4] === k).length;
+    const chips = [['all', 'All'], ['pending', 'Pending'], ['accepted', 'Accepted'], ['rejected', 'Rejected']].map((c) => {
+      const on = c[0] === filter;
+      return { label: c[1], count: count(c[0]), pressed: on ? 'true' : 'false', bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6', pick: () => this.setState({ filter: c[0] }) };
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', chips: chips, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

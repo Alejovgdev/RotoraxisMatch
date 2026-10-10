@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Search technicians · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="position: relative; min-height: 900px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="none" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+
+<div style="max-width: 1240px; margin: 0 auto; padding: 26px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px">Search technicians</h1>
+<div style="display: flex; gap: 2px; padding: 3px; border-radius: 24px; background: #EEF3F7">
+<span aria-current="page" style="height: 42px; padding: 0 18px; border-radius: 21px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(14, 26, 43, 0.12); display: flex; align-items: center; font-size: 14.5px; font-weight: 800">List</span>
+<a href="W-D-Map.dc.html" style="height: 42px; padding: 0 18px; border-radius: 21px; display: flex; align-items: center; text-decoration: none; color: #526274; font-size: 14.5px; font-weight: 700">Map</a>
+</div>
+</div>
+
+<div style="position: relative">
+<button type="button" aria-expanded="{{offerOpen}}" onClick="{{ toggleOffer }}" style="width: 100%; max-width: 560px; display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border-radius: 16px; border: {{offerBorder}}; background: {{offerBg}}; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #FFFFFF; border: 1px solid #DDE5EC; color: {{primary}}; display: flex; align-items: center; justify-content: center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 12.5px; font-weight: 700; color: #526274">{{offerKicker}}</span><span style="font-size: 15px; font-weight: 800">{{offerTitle}}</span></span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+</button>
+<sc-if value="{{ isOfferOpen }}" hint-placeholder-val="{{ false }}">
+<div role="listbox" aria-label="Your published offers" style="position: absolute; z-index: 4; top: 66px; left: 0; width: 100%; max-width: 560px; box-sizing: border-box; padding: 8px; border-radius: 16px; background: #FFFFFF; border: 1px solid #DDE5EC; box-shadow: 0 16px 40px rgba(14, 26, 43, 0.18)">
+<sc-for list="{{ offers }}" as="o" hint-placeholder-count="4">
+<button type="button" role="option" aria-selected="{{o.sel}}" onClick="{{ o.pick }}" style="width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border: 0; border-radius: 12px; background: {{o.bgRow}}; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 36px; height: 36px; border-radius: 10px; background: {{o.bg}}; color: {{o.fg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 12px">{{o.code}}</span>
+<span style="font-size: 14.5px; font-weight: 800">{{o.title}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+<aside aria-label="Filters" style="flex: 1 1 240px; max-width: 100%; display: flex; flex-direction: column; gap: 18px; padding: 18px; border-radius: 20px; border: 1px solid #E1E8EE; box-sizing: border-box">
+<div style="display: flex; align-items: center; justify-content: space-between"><h2 style="margin: 0; font-size: 17px; font-weight: 800">Filters</h2><button type="button" style="height: 36px; padding: 0 10px; border: 0; background: transparent; color: {{primary}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">Clear</button></div>
+<dc-import name="WFilters" primary="{{primary}}" hint-size="100%,980px"></dc-import>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
+<sc-for list="{{ techs }}" as="t" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; border: 1px solid #E1E8EE; background: #FFFFFF">
+<div style="position: relative; height: 110px; background: #F3F6F9; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{ t.showScore }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 10px; left: 10px; height: 26px; padding: 0 9px; border-radius: 13px; background: #FFFFFF; color: {{t.scoreColor}}; font-size: 13px; font-weight: 800; display: flex; align-items: center">{{t.score}}</span></sc-if>
+<sc-if value="{{ t.verified }}" hint-placeholder-val="{{ true }}"><span aria-label="Verified" style="position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 13px; background: #D3F1E3; color: #157F4F; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span></sc-if>
+<dc-import name="WAvatar" who="anon" size="64" hint-size="64px,64px"></dc-import>
+</div>
+<div style="padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 800"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>{{t.code}}</span>
+<span style="font-size: 13px; color: #33465A; font-weight: 700">{{t.lic}} · {{t.ratings}}</span>
+<span style="display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: {{t.availColor}}"><span style="width: 7px; height: 7px; border-radius: 4px; background: {{t.dot}}"></span>{{t.avail}}</span>
+<sc-if value="{{ t.canSend }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ t.send }}" style="margin-top: 8px; height: 40px; border-radius: 20px; border: 1.5px solid {{primary}}; background: #FFFFFF; color: {{primary}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">Send offer</button></sc-if>
+<sc-if value="{{ t.hasTag }}" hint-placeholder-val="{{ false }}"><span style="margin-top: 8px; height: 40px; border-radius: 20px; background: {{t.tagBg}}; color: {{t.tagFg}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">{{t.tag}}</span></sc-if>
+</div>
+</div>
+</sc-for>
+</main>
+</div>
+</div>
+
+<sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Close" onClick="{{ closeSheet }}" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 0; border: 0; background: rgba(14, 26, 43, 0.45); cursor: pointer"></button>
+<div role="dialog" aria-label="Send direct offer" style="position: absolute; left: 50%; top: 200px; transform: translateX(-50%); width: 480px; max-width: calc(100% - 40px); box-sizing: border-box; border-radius: 22px; background: #FFFFFF; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 20px 50px rgba(14, 26, 43, 0.3)">
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 style="margin: 0; font-size: 20px; font-weight: 800">Send direct offer</h2><span style="font-size: 14px; color: #526274">To {{sendTo}} · {{offerTitle}}</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Personal message (optional)
+<textarea rows="4" placeholder="Add a note to the technician..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; resize: none; outline: none"></textarea>
+</label>
+<div style="display: flex; gap: 10px; justify-content: flex-end">
+<button type="button" onClick="{{ closeSheet }}" style="height: 48px; padding: 0 20px; border-radius: 24px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Cancel</button>
+<button type="button" onClick="{{ doSend }}" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Send offer</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; top: 150px; transform: translateX(-50%); height: 46px; padding: 0 20px; border-radius: 23px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14.5px; font-weight: 800; white-space: nowrap">{{toast}}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  flash(text) { this.setState({ toast: text }); setTimeout(() => this.setState({ toast: '' }), 2400); }
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const offer = s.offer || null;
+    const sent = s.sent || {};
+    const list = [
+      ['a320', 'B1', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · A320 family'],
+      ['atr', 'B2', '#D5F2E4', '#0B6B45', 'B2 Avionics · ATR 72'],
+      ['cfm', 'ENG', '#E3E8EE', '#33465A', 'Engine Technician · CFM56-5B'],
+      ['b737', 'B1', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · B737 NG']
+    ];
+    const cur = list.filter((o) => o[0] === offer)[0];
+    const base = [
+      ['a', 'T7A2C91B04', 'EASA B1.1 · B1.3', '2 type ratings', true, true, 92, 'applied'],
+      ['b', 'T4C81E9A20', 'EASA B1.1', '1 type rating', true, true, 84, ''],
+      ['c', 'T9B07D3E11', 'UK CAA B1.1', '3 type ratings', true, true, 79, ''],
+      ['d', 'T3D19F0C77', 'EASA B1.1 · B2', '2 type ratings', false, true, 72, ''],
+      ['e', 'T6F20B8A15', 'EASA B1.1', '1 type rating', true, false, 70, ''],
+      ['f', 'T1C44D9E02', 'CASA B1.1', 'no type ratings', true, true, 68, ''],
+      ['g', 'T8A61C0D53', 'EASA B1.1', '2 type ratings', true, true, 66, ''],
+      ['h', 'T0E92B4F18', 'EASA B1.3', '1 type rating', false, true, 58, '']
+    ];
+    const techs = base.map((t) => {
+      const rel = sent[t[0]] ? 'sent' : t[7];
+      return {
+        code: t[1], lic: t[2], ratings: t[3], verified: t[5],
+        avail: t[4] ? 'Open to offers' : 'Unavailable', availColor: t[4] ? '#157F4F' : '#66768A', dot: t[4] ? '#1F9D62' : '#A7B1BC',
+        showScore: !!offer, score: t[6] + '%', scoreColor: t[6] >= 85 ? '#157F4F' : t[6] >= 70 ? '#0B5E8C' : '#66768A',
+        canSend: !!offer && !rel, hasTag: !!offer && !!rel,
+        tag: rel === 'applied' ? 'Applied to this offer' : 'Offer sent',
+        tagBg: rel === 'applied' ? '#FDE7B5' : '#DCE7FB', tagFg: rel === 'applied' ? '#7A3F06' : '#1E4FB8',
+        send: () => this.setState({ sheet: 'send', target: t[0], targetName: t[1] })
+      };
+    });
+    const chip = (label, on) => ({ label: label, bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6' });
+    return {
+      primary: p, techs: techs,
+      filterGroups: [
+        { title: 'Trade type', items: [chip('Mechanic', true), chip('Avionics Technician', false), chip('Sheet Metal Worker', false), chip('Aircraft Painter', false), chip('Composite Technician', false), chip('Engine Technician', false)] },
+        { title: 'Aircraft', items: [chip('Any', false), chip('Airplane', true), chip('Helicopter', false), chip('Mixed', false)] },
+        { title: 'Licences', items: [chip('Any', true), chip('B1.1', false), chip('B1.3', false), chip('B2', false)] },
+        { title: 'Availability', items: [chip('Any', false), chip('Open to offers', true), chip('Unavailable', false)] },
+        { title: 'Verification', items: [chip('Verified only', true)] }
+      ],
+      offerKicker: cur ? 'Match calculated against' : 'No offer selected',
+      offerTitle: cur ? cur[4] : 'Select an offer to calculate match and send direct offers',
+      offerBg: cur ? '#E6F1F8' : '#FFFFFF', offerBorder: cur ? '1px solid #BFDDEF' : '1px dashed #B8C8D9',
+      isOfferOpen: !!s.offerOpen, offerOpen: s.offerOpen ? 'true' : 'false',
+      offers: list.map((o) => ({ code: o[1], bg: o[2], fg: o[3], title: o[4], sel: o[0] === offer ? 'true' : 'false', bgRow: o[0] === offer ? '#EEF3F7' : 'transparent', pick: () => this.setState({ offer: o[0], offerOpen: false, sent: {} }) })),
+      toggleOffer: () => this.setState({ offerOpen: !s.offerOpen }),
+      isSend: s.sheet === 'send', sendTo: s.targetName || '',
+      toastOn: !!s.toast, toast: s.toast || '',
+      closeSheet: () => this.setState({ sheet: null }),
+      doSend: () => { const n = Object.assign({}, sent); n[s.target] = true; this.setState({ sheet: null, sent: n }); this.flash('Direct offer sent'); }
+    };
+  }
+}
+</script>
+</body>
+</html>
