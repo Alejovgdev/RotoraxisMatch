@@ -5,8 +5,9 @@ confirmar con el propietario que `rwauwuremzkizeoginza` es desarrollo.
 Registro: `20261009094539`; md5 del SQL `19325dde24127874320c10429176ed93`.
 No editar ni volver a aplicar 098. El ensayo original del paso 1 queda abajo.
 Cliente implementado; verificaciones con sesión pendientes del propietario.
-**`delete-account` preparado y probado localmente, aún NO desplegado:** requiere
-el OK específico solicitado por el propietario antes de desplegar.
+**`delete-account` desplegado como versión 8 el 2026-10-10** con el OK del propietario:
+el fichero del repo tal cual (fotos, y recorrido de la carpeta propia para documentos
+del 2026-08-14), `verify_jwt` true; fuente publicada idéntica al blob de git.
 Mandan la petición de esta sesión, `UI_REDESIGN.md` §8 (4, 30 y 35) y `CLAUDE.md`.
 Los cambios previos de la rama se conservan; no se ha hecho ningún commit.
 
