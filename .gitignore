@@ -3,6 +3,7 @@ node_modules/
 dist/
 web-build/
 .tmp-*/
+.tmp-*.log
 *.jks
 *.p8
 *.p12
