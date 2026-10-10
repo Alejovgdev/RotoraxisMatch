@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician map</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px 6px 4px">
+<a href="W-Search.dc.html" aria-label="Back to list" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+<h1 style="flex: 1 1 auto; margin: 0; font-size: 20px; font-weight: 800">Technician map</h1>
+<a href="W-Filters.dc.html" style="flex: none; height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; text-decoration: none">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+Filters
+</a>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden; background: #CFE3EE">
+<svg viewBox="0 0 390 640" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%">
+<path d="M20 360 L35 300 L120 285 L140 230 L120 200 L170 175 L240 120 L330 95 L390 100 L390 270 L345 270 L320 295 L345 345 L372 400 L352 410 L310 350 L290 300 L250 290 L200 320 L190 400 L130 430 L60 420 Z" fill="#F4F1EA" stroke="#E2DCCF" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+<path d="M130 40 L170 25 L195 80 L185 140 L140 155 L160 105 L125 85 Z" fill="#F4F1EA" stroke="#E2DCCF" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+<path d="M60 70 L95 62 L100 110 L70 122 L52 98 Z" fill="#F4F1EA" stroke="#E2DCCF" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+<path d="M120 285 L160 305 L200 320 M140 230 L200 250 L250 290 M240 120 L262 200 L290 300 M330 95 L322 200 L345 270" fill="none" stroke="#D9D2C2" stroke-width="1.2" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></path>
+</svg>
+
+<span aria-label="5 technicians" style="position: absolute; left: 44%; top: 30%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; border: 3px solid #FFFFFF; box-shadow: 0 3px 10px rgba(14, 26, 43, 0.25); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800">5</span>
+<span aria-label="3 technicians" style="position: absolute; left: 78%; top: 20%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 20px; background: #0E1A2B; color: #FFFFFF; border: 3px solid #FFFFFF; box-shadow: 0 3px 10px rgba(14, 26, 43, 0.25); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800">3</span>
+<span aria-label="Technician with country-level location" style="position: absolute; left: 84%; top: 46%; transform: translate(-50%, -50%); width: 36px; height: 36px; border-radius: 18px; background: rgba(255, 255, 255, 0.7); border: 2px dashed #33465A"></span>
+<span aria-label="Technician with country-level location" style="position: absolute; left: 16%; top: 13%; transform: translate(-50%, -50%); width: 36px; height: 36px; border-radius: 18px; background: rgba(255, 255, 255, 0.7); border: 2px dashed #33465A"></span>
+
+<sc-for list="{{ pins }}" as="m" hint-placeholder-count="2">
+<button type="button" aria-label="{{m.aria}}" aria-pressed="{{m.pressed}}" onClick="{{ m.pick }}" style="position: absolute; left: {{m.x}}; top: {{m.y}}; transform: translate(-50%, -100%); width: 44px; height: 52px; padding: 0; border: 0; background: transparent; cursor: pointer">
+<svg width="44" height="52" viewBox="0 0 44 52" aria-hidden="true"><path d="M22 51 C22 51 4 32 4 20 A18 18 0 0 1 40 20 C40 32 22 51 22 51 Z" fill="{{m.fill}}" stroke="#FFFFFF" stroke-width="3"></path><circle cx="22" cy="20" r="7" fill="#FFFFFF"></circle></svg>
+</button>
+</sc-for>
+
+<div style="position: absolute; left: 12px; top: 12px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.92); display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 700; color: #33465A">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 14px; height: 14px; border-radius: 7px; background: #0E1A2B"></span>Several technicians</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 7px; border: 2px dashed #33465A"></span>Country-level location</span>
+</div>
+
+<a href="W-Search.dc.html" style="position: absolute; left: 50%; bottom: 312px; transform: translateX(-50%); height: 44px; padding: 0 18px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 14px; font-weight: 800; box-shadow: 0 8px 20px rgba(14, 26, 43, 0.28)">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg>
+List
+</a>
+
+<div style="position: absolute; left: 8px; right: 8px; bottom: 8px; border-radius: 22px; background: #FFFFFF; box-shadow: 0 10px 30px rgba(14, 26, 43, 0.22); padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 8px">
+<span style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #D5DEE6"></span>
+<div style="display: flex; align-items: center; gap: 12px">
+<dc-import name="WAvatar" who="{{selFace}}" size="48" hint-size="48px,48px"></dc-import>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15.5px; font-weight: 800">{{selName}}</span>
+<span style="font-size: 13px; color: #526274">{{selMeta}}</span>
+</span>
+<sc-if value="{{ selUnlocked }}" hint-placeholder-val="{{ false }}">
+<a href="C-Tech.dc.html" style="flex: none; height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 13.5px; font-weight: 800">View profile</a>
+</sc-if>
+</div>
+<span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #66768A">Match with your offers</span>
+<sc-for list="{{ selOffers }}" as="o" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; min-height: 44px">
+<span style="flex: none; width: 46px; font-size: 16px; font-weight: 800; color: {{o.color}}">{{o.score}}</span>
+<span style="flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{o.title}}</span>
+<sc-if value="{{ o.canSend }}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{ o.send }}" style="flex: none; height: 40px; padding: 0 14px; border-radius: 20px; border: 1.5px solid {{primary}}; background: #FFFFFF; color: {{primary}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">Send offer</button>
+</sc-if>
+<sc-if value="{{ o.hasTag }}" hint-placeholder-val="{{ false }}">
+<span style="flex: none; height: 28px; padding: 0 10px; border-radius: 14px; background: {{o.tagBg}}; color: {{o.tagFg}}; display: flex; align-items: center; font-size: 12px; font-weight: 800">{{o.tag}}</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: none">
+<dc-import name="WTabBar" active="search" primary="{{primary}}" hint-size="390px,84px"></dc-import>
+</div>
+
+<sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Close" onClick="{{ closeSheet }}" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 0; border: 0; background: rgba(14, 26, 43, 0.45); cursor: pointer"></button>
+<div role="dialog" aria-label="Send direct offer" style="position: absolute; left: 0; right: 0; bottom: 0; border-radius: 24px 24px 0 0; background: #FFFFFF; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px"><h2 style="margin: 0; font-size: 19px; font-weight: 800">Send direct offer</h2><span style="font-size: 14px; color: #526274">To {{selName}} · {{sendOffer}}</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Personal message (optional)
+<textarea rows="4" placeholder="Add a note to the technician..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; resize: none; outline: none"></textarea>
+</label>
+<button type="button" onClick="{{ doSend }}" style="height: 52px; border-radius: 26px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Send offer</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 50%; top: 80px; transform: translateX(-50%); height: 46px; padding: 0 20px; border-radius: 23px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14.5px; font-weight: 800; white-space: nowrap">{{toast}}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  flash(text) { this.setState({ toast: text }); setTimeout(() => this.setState({ toast: '' }), 2400); }
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const sel = s.sel || 'a';
+    const sent = s.sent || {};
+    const techs = {
+      a: { face: 'anon', name: 'Technician T4C81E9A20', meta: 'EASA B1.1 · Open to offers · Verified', unlocked: false, x: '34%', y: '52%',
+        offers: [['a320', 'B1 Mechanic · A320 family', 84, ''], ['b737', 'B1 Mechanic · B737 NG', 76, ''], ['atr', 'B2 Avionics · ATR 72', 41, '']] },
+      b: { face: 't4410', name: 'Pablo Serrano', meta: 'EASA B1.1 · Open to offers · Verified', unlocked: true, x: '58%', y: '40%',
+        offers: [['a320', 'B1 Mechanic · A320 family', 88, 'accepted'], ['b737', 'B1 Mechanic · B737 NG', 80, ''], ['cfm', 'Engine Technician · CFM56-5B', 52, '']] }
+    };
+    const t = techs[sel];
+    const tags = { accepted: ['Accepted', '#D3F1E3', '#0B5B3A'], sent: ['Offer sent', '#DCE7FB', '#1E4FB8'] };
+    const selOffers = t.offers.map((o) => {
+      const rel = sent[sel + o[0]] ? 'sent' : o[3];
+      return {
+        title: o[1], score: o[2] + '%', color: o[2] >= 85 ? '#157F4F' : o[2] >= 70 ? '#0B5E8C' : '#66768A',
+        canSend: !rel, hasTag: !!rel, tag: rel ? tags[rel][0] : '', tagBg: rel ? tags[rel][1] : '', tagFg: rel ? tags[rel][2] : '',
+        send: () => this.setState({ sheet: 'send', sendKey: sel + o[0], sendOffer: o[1] })
+      };
+    });
+    const pins = Object.keys(techs).map((k) => ({
+      x: techs[k].x, y: techs[k].y, aria: techs[k].name, pressed: k === sel ? 'true' : 'false',
+      fill: k === sel ? p : '#33465A', pick: () => this.setState({ sel: k })
+    }));
+    return {
+      primary: p, pins: pins, selOffers: selOffers,
+      selFace: t.face, selName: t.name, selMeta: t.meta, selUnlocked: t.unlocked,
+      isSend: s.sheet === 'send', sendOffer: s.sendOffer || '',
+      toastOn: !!s.toast, toast: s.toast || '',
+      closeSheet: () => this.setState({ sheet: null }),
+      doSend: () => { const n = Object.assign({}, sent); n[s.sendKey] = true; this.setState({ sheet: null, sent: n }); this.flash('Direct offer sent'); }
+    };
+  }
+}
+</script>
+</body>
+</html>

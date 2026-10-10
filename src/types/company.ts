@@ -32,6 +32,7 @@ export type CompanyType =
 export interface Company {
   id: string;
   companyName: string;
+  logoPath?: string | null;
   country: string;
   city: string;
   website: string;
@@ -45,6 +46,7 @@ export interface Company {
 // Fase 7: ver la nota de TechnicianProfile. Mismo modelo, y también sin
 // `locationCityId` desde F2d.
 export interface CompanyProfile extends PersistedLocation {
+  logoPath?: string | null;
   id: string;
   name: string;
   phone?: string;

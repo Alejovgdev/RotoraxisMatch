@@ -41,6 +41,10 @@ for (const [name, moduleExports] of [
   require.cache[path] = { id: path, filename: path, loaded: true, exports: moduleExports } as NodeModule;
 }
 const { technicianRepositoryV2: repository } = require('../src/repositories/v2/technicianRepositoryV2') as typeof import('../src/repositories/v2/technicianRepositoryV2');
+// Después de los mocks: el caso de uso importa el repositorio, que importa supabase.
+const { saveTechnicianProfile } = require('../src/usecases/technicianProfile') as typeof import('../src/usecases/technicianProfile');
+type TechnicianProfileStore = import('../src/usecases/technicianProfile').TechnicianProfileStore;
+type WorkChanges = import('../src/usecases/technicianProfile').WorkChanges;
 async function main() {
   assert.deepEqual(profileHabilitationProblems([original], [b11], ratings, engines), []);
   const removal = profileHabilitationProblems([original], [b12], ratings, engines).join(' ');
@@ -84,89 +88,68 @@ async function main() {
   });
   assert.equal(writeCalls, 1, 'failed write is never automatically retried');
 
-  // Execute the actual button handler, extracted by AST, with screen state
-  // injected. Checks ordering before writes and the rendered error state;
-  // the save algorithm is never copied into this test.
-  const screenPath = path.join(process.cwd(), 'app/technician/profile.tsx');
-  const source = ts.createSourceFile(screenPath, fs.readFileSync(screenPath, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let saveFunction: ts.FunctionDeclaration | undefined;
-  const visit = (node: ts.Node) => {
-    if (ts.isFunctionDeclaration(node) && node.name?.text === 'handleSave') saveFunction = node;
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  assert.ok(saveFunction, 'real Save Changes handler exists');
-  const handlerCode = ts.transpileModule(saveFunction.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-  let visibleError: string | null = null;
-  let profileWrites = 0;
+  // El guardado de My work es el caso de uso (src/usecases/technicianProfile.ts;
+  // respuesta 29 de docs/UI_REDESIGN.md): se ejecuta la función REAL con un
+  // almacén falso que cuenta las escrituras. Era handleSave, extraído por AST
+  // de la pantalla del perfil; la pantalla ya no tiene otra copia del
+  // algoritmo, así que el test apunta aquí.
+  let writes = 0;
   let credentialRejects = true;
-  const query = { update: () => query, eq: () => query, select: async () => ({ data: [{ id: 'tech' }], error: null }) };
-  const context = {
-    form: { fullName: 'Test Technician', email: 'test@example.invalid', availability: { contractTypes: [], status: 'open_to_offers' }, licenseCategories: ['B1.1'] },
-    isDirty: true, techId: 'tech', typesLoaded: true, technicianTypes: ['mechanic'], yearsInput: '5',
-    validateProfileYearsExperience: () => null,
-    // Computed exactly as the screen does, with the real functions.
-    blockingIssues: blockingHabilitationIssues(profileHabilitationIssues([original], [b12], ratings, engines), false),
-    habDirty: false,
-    setProfileError: (message: string | null) => { visibleError = message; },
-    supabase: { from: () => { profileWrites++; return query; } },
-    heldLicenses: [b11], habilitations: [original], ratingsById: ratings,
-    authorityLicenseCanExpire: () => true, isValidDateOrder: () => true,
-    SOCIAL_FIELDS: [], unknownSocialKeys: {}, persistedLocationFromValue: () => ({}), location: {},
-    setSaving: () => {}, setLicenseRemovalWarning: () => {},
-    isHabilitationScopeRejection,
-    setForm: () => {}, setIsDirty: () => {}, setHabDirty: () => {},
-    experienceDirty: false, enginesDirty: false, aircraftExperience: [], engines: [],
-    setExperienceDirty: () => {}, setEnginesDirty: () => {}, loadProfile: async () => {},
-    technicianRepositoryV2: {
-      replaceProfileTypes: async () => {},
-      upsertLicenses: async () => {
-        if (credentialRejects) throw new Error('Existing type rating is outside the new licence scope.');
-      },
-      removeUnreferencedLicenses: async () => ({ blocked: [] }),
-      describeHabilitationScopeRejection: repository.describeHabilitationScopeRejection,
+  const store = {
+    getOwnJsonColumns: async () => ({ availability: { immediately: true, contractTypes: [] }, socialLinks: null }),
+    updateOwnProfile: async () => { writes++; return true; },
+    replaceProfileTypes: async () => { writes++; },
+    upsertLicenses: async () => {
+      writes++;
+      if (credentialRejects) throw new Error('Existing type rating is outside the new licence scope.');
     },
+    replaceHabilitations: async () => { writes++; },
+    replaceAircraftExperience: async () => { writes++; },
+    replaceEngineExperience: async () => { writes++; },
+    removeUnreferencedLicenses: async () => ({ blocked: [] }),
+    describeHabilitationScopeRejection: repository.describeHabilitationScopeRejection,
+  } as unknown as TechnicianProfileStore;
+  const work = (over: Partial<WorkChanges>): WorkChanges => ({
+    types: ['mechanic'], licenses: [b12], habilitations: [original], habDirty: false,
+    aircraftExperience: [], experienceDirty: false, engines: [], enginesDirty: false,
+    ratingsById: ratings, engineIndex: engines, ...over,
+  });
+  const save = async (w: WorkChanges) => {
+    const result = await saveTechnicianProfile('tech', { work: w }, store);
+    return result.ok ? null : result.error;
   };
-  vm.createContext(context);
-  vm.runInContext(handlerCode, context);
-  await vm.runInContext('handleSave()', context);
-  assert.equal(visibleError, removal);
-  assert.equal(profileWrites, 0, 'incompatible removal stops before any profile write');
-  context.blockingIssues = blockingHabilitationIssues(profileHabilitationIssues([incompatible], [b12], ratings, engines), false);
-  await vm.runInContext('handleSave()', context);
-  assert.equal(visibleError, mismatch);
-  assert.equal(profileWrites, 0, 'bypassing the picker still stops before any write');
 
-  // Catálogo de motores caído y habilitaciones SIN tocar: el resto del perfil
-  // se guarda. Era el bloqueo del perfil entero que encontró la revisión.
-  const staleEngines = profileHabilitationIssues([original], [b11], ratings, new Map());
-  context.blockingIssues = blockingHabilitationIssues(staleEngines, false);
-  context.habDirty = false;
-  visibleError = null;
+  let visibleError = await save(work({}));
+  assert.equal(visibleError, removal);
+  assert.equal(writes, 0, 'incompatible removal stops before any profile write');
+  visibleError = await save(work({ habilitations: [incompatible] }));
+  assert.equal(visibleError, mismatch);
+  assert.equal(writes, 0, 'bypassing the picker still stops before any write');
+
+  // Catálogo de motores caído y habilitaciones SIN tocar: lo demás se guarda.
+  // Era el bloqueo del perfil entero que encontró la revisión.
   credentialRejects = false;
-  await vm.runInContext('handleSave()', context);
+  visibleError = await save(work({ licenses: [b11], engineIndex: new Map() }));
   assert.equal(visibleError, null, 'a failed engine catalog does not block an untouched rating list');
-  assert.ok(profileWrites > 0, 'the rest of the profile is saved');
+  assert.ok(writes > 0, 'the rest of My work is saved');
 
   // Mismo catálogo caído, pero el técnico SÍ tocó las habilitaciones: se para
   // antes de escribir y se dice por qué y qué hacer.
-  profileWrites = 0;
-  context.blockingIssues = blockingHabilitationIssues(staleEngines, true);
-  context.habDirty = true;
-  await vm.runInContext('handleSave()', context);
+  writes = 0;
+  visibleError = await save(work({ licenses: [b11], engineIndex: new Map(), habDirty: true }));
   assert.match(visibleError!, /cannot confirm.*Airbus A320/);
   assert.match(visibleError!, /could not be checked, so they were not saved/);
   assert.match(visibleError!, /undo your type-rating changes to save the rest/);
-  assert.equal(profileWrites, 0, 'an unverifiable rating change stops before any write');
+  assert.equal(writes, 0, 'an unverifiable rating change stops before any write');
 
-  profileWrites = 0;
-  context.habDirty = false;
+  // Datos del cliente desfasados: el cliente no ve nada, pero la base rechaza
+  // la credencial (083). Se explica por habilitación, sin el texto de la base.
+  writes = 0;
   credentialRejects = true;
-  context.blockingIssues = []; // simulate stale client facts; DB still rejects
-  await vm.runInContext('handleSave()', context);
+  visibleError = await save(work({ licenses: [b11] }));
   assert.match(visibleError!, /Airbus A320/);
   assert.doesNotMatch(visibleError!, /outside the new licence scope/);
-  assert.equal(profileWrites, 1, 'only the pre-existing main-profile write ran before the parent rejection');
+  assert.equal(writes, 2, 'only the profile types and the rejected credential write ran before the parent rejection');
 
   diagnosticFails = true;
   await assert.rejects(repository.replaceHabilitations('tech', [incompatible]), /could not confirm which rating.*Airbus A320/);

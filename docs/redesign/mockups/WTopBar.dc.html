@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Desktop top bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 14px 32px; border-bottom: 1px solid #E6ECF1">
+<a href="W-D-Home.dc.html" style="text-decoration: none; font-family: 'Nunito', 'Nunito Sans', sans-serif; font-weight: 900; font-size: 24px; letter-spacing: -0.2px; color: #0E8FB0">Aviation Job Talent</a>
+<a href="W-D-Search.dc.html" style="flex: 1 1 320px; max-width: 560px; display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 18px; box-sizing: border-box; border-radius: 25px; background: #EEF3F7; color: #526274; text-decoration: none; font-size: 15px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+Search technicians
+</a>
+<div style="position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto">
+<a href="W-D-Inbox.dc.html" aria-current="{{inboxCur}}" style="height: 44px; padding: 0 12px; border-radius: 22px; display: flex; align-items: center; gap: 10px; text-decoration: none; color: #0E1A2B; font-size: 14.5px; font-weight: 700">
+<span style="position: relative; display: flex">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+<span style="position: absolute; top: -6px; right: -9px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #D42C2C; color: #FFFFFF; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #FFFFFF">1</span>
+</span>
+Inbox
+</a>
+<a href="W-D-You.dc.html" aria-current="{{youCur}}" style="height: 44px; padding: 0 12px; border-radius: 22px; display: flex; align-items: center; gap: 10px; text-decoration: none; color: #0E1A2B; font-size: 14.5px; font-weight: 700">
+<span style="display: flex"><dc-import name="WAvatar" who="airbus1" size="28" hint-size="28px,28px"></dc-import></span>
+You
+</a>
+<sc-if value="{{ canPost }}" hint-placeholder-val="{{ true }}">
+<a href="W-D-Post.dc.html" style="height: 46px; padding: 0 22px 0 18px; margin-left: 6px; border-radius: 23px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 15px; font-weight: 800">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+Post offer
+</a>
+</sc-if>
+<sc-if value="{{ isViewer }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-disabled="true" onClick="{{ explain }}" style="height: 46px; padding: 0 22px 0 18px; margin-left: 6px; border: 0; border-radius: 23px; background: #C9D3DD; color: #FFFFFF; display: flex; align-items: center; gap: 8px; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+Post offer
+</button>
+<sc-if value="{{ showNote }}" hint-placeholder-val="{{ false }}">
+<span role="status" style="position: absolute; right: 0; top: 54px; z-index: 5; width: 240px; padding: 10px 12px; border-radius: 12px; background: #0E1A2B; color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.35">Viewers can't post offers. Ask an admin to change your role.</span>
+</sc-if>
+</sc-if>
+</div>
+</header>
+<nav aria-label="Sections" style="display: flex; flex-wrap: wrap; gap: 0 28px; padding: 0 32px; border-bottom: 1px solid #E6ECF1">
+<a href="W-D-Home.dc.html" aria-current="{{home.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{home.line}}; display: flex; align-items: center; text-decoration: none; color: {{home.color}}; font-size: 14.5px; font-weight: {{home.weight}}">Home</a>
+<a href="W-D-Applications.dc.html" aria-current="{{apps.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{apps.line}}; display: flex; align-items: center; gap: 6px; text-decoration: none; color: {{apps.color}}; font-size: 14.5px; font-weight: {{apps.weight}}">Applications <span style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: #FDE7B5; color: #7A3F06; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center">1</span></a>
+<a href="W-D-Direct.dc.html" aria-current="{{direct.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{direct.line}}; display: flex; align-items: center; text-decoration: none; color: {{direct.color}}; font-size: 14.5px; font-weight: {{direct.weight}}">Direct offers</a>
+<a href="W-D-Offers.dc.html" aria-current="{{offers.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{offers.line}}; display: flex; align-items: center; text-decoration: none; color: {{offers.color}}; font-size: 14.5px; font-weight: {{offers.weight}}">Your offers</a>
+<a href="W-D-Map.dc.html" aria-current="{{map.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{map.line}}; display: flex; align-items: center; text-decoration: none; color: {{map.color}}; font-size: 14.5px; font-weight: {{map.weight}}">Map</a>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="W-D-Team.dc.html" aria-current="{{team.cur}}" style="height: 50px; box-sizing: border-box; padding-top: 3px; border-bottom: 3px solid {{team.line}}; display: flex; align-items: center; text-decoration: none; color: {{team.color}}; font-size: 14.5px; font-weight: {{team.weight}}">Team</a>
+</sc-if>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["home","applications","direct","offers","map","team","inbox","you","none"],"default":"home"},"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E"},"$preview":{"width":1440,"height":132}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'home';
+    const role = this.props.role ?? 'admin';
+    const p = this.props.primary ?? '#0B6A9E';
+    const t = (k) => ({ color: a === k ? '#0E1A2B' : '#526274', weight: a === k ? 800 : 700, line: a === k ? p : 'transparent', cur: a === k ? 'page' : undefined });
+    return {
+      primary: p, home: t('home'), apps: t('applications'), direct: t('direct'), offers: t('offers'), map: t('map'), team: t('team'),
+      inboxCur: a === 'inbox' ? 'page' : undefined, youCur: a === 'you' ? 'page' : undefined,
+      isAdmin: role === 'admin', canPost: role !== 'viewer', isViewer: role === 'viewer',
+      showNote: !!(this.state && this.state.note),
+      explain: () => { this.setState({ note: true }); setTimeout(() => this.setState({ note: false }), 2600); }
+    };
+  }
+}
+</script>
+</body>
+</html>

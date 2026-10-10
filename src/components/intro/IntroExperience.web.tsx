@@ -2,11 +2,11 @@ import { gsap } from 'gsap';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '../../theme';
 
@@ -158,7 +158,7 @@ const hv = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 24,
   },
-  logoIcon: { fontSize: 46, color: colors.navy },
+  logoIcon: { fontSize: 46, color: colors.white },
 });
 
 // ── Slide 2: Profiles ──────────────────────────────────────────────────────
@@ -166,8 +166,8 @@ const hv = StyleSheet.create({
 const BADGES = [
   { label: 'B1.1', color: colors.cyan },
   { label: 'B2', color: colors.blue },
-  { label: 'A320', color: colors.cyanLight },
-  { label: 'Line Maint.', color: '#7C3AED' },
+  { label: 'A320', color: colors.info },
+  { label: 'Line Maint.', color: colors.navy },
   { label: '✓ Verified', color: colors.success },
 ];
 
@@ -254,11 +254,11 @@ function ProfilesVisual({ active }: { active: boolean }) {
 
 const pv = StyleSheet.create({
   card: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.borderLight,
     width: 290,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
@@ -270,11 +270,11 @@ const pv = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0,180,216,0.25)',
+    backgroundColor: 'rgba(11, 106, 158, 0.25)',
     marginRight: spacing.sm,
   },
   meta: { flex: 1 },
-  code: { color: colors.white, fontWeight: '700', fontSize: 15 },
+  code: { color: colors.text, fontWeight: '700', fontSize: 15 },
   sub: { color: colors.textMuted, fontSize: 12 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
@@ -365,11 +365,11 @@ const prv = StyleSheet.create({
     minHeight: 100,
   },
   hiddenCard: {
-    backgroundColor: 'rgba(10,22,40,0.95)',
-    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.surfaceSoft,
+    borderColor: colors.border,
   },
   revealedCard: {
-    backgroundColor: 'rgba(0,180,216,0.12)',
+    backgroundColor: 'rgba(11, 106, 158, 0.12)',
     borderColor: `${colors.cyan}55`,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
@@ -377,17 +377,17 @@ const prv = StyleSheet.create({
   hiddenCode: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
   hiddenBadge: {
     marginLeft: 'auto',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surfaceSoft,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
   hiddenBadgeText: { color: colors.textMuted, fontSize: 11 },
   redactedLines: { gap: 8 },
-  line: { height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4 },
+  line: { height: 8, backgroundColor: colors.surfaceSoft, borderRadius: 4 },
   revealedTitle: { color: colors.cyan, fontWeight: '700', fontSize: 14 },
-  revealedName: { color: colors.white, fontWeight: '600', fontSize: 14, marginBottom: 4 },
-  revealedContact: { color: colors.cyanLight, fontSize: 12 },
+  revealedName: { color: colors.text, fontWeight: '600', fontSize: 14, marginBottom: 4 },
+  revealedContact: { color: colors.textSecondary, fontSize: 12 },
 });
 
 // ── Slide 4: Search ────────────────────────────────────────────────────────
@@ -463,7 +463,7 @@ const sv = StyleSheet.create({
   wrap: { width: 290, gap: 12 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    backgroundColor: 'rgba(0,180,216,0.15)',
+    backgroundColor: 'rgba(11, 106, 158, 0.15)',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -472,19 +472,19 @@ const sv = StyleSheet.create({
   },
   chipText: { color: colors.cyan, fontSize: 13, fontWeight: '600' },
   resultCard: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.borderLight,
   },
   resultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
-  resultCode: { color: colors.white, fontSize: 13, fontWeight: '600', flex: 1 },
+  resultCode: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
   matchScore: { color: colors.cyan, fontSize: 12, fontWeight: '700' },
   barTrack: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surfaceSoft,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -562,21 +562,21 @@ function PlatformVisual({ active }: { active: boolean }) {
 const plv = StyleSheet.create({
   row: { flexDirection: 'row', gap: 14 },
   card: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: spacing.md,
     alignItems: 'center',
     gap: 8,
     minWidth: 86,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.borderLight,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
   },
   icon: { fontSize: 30 },
-  label: { color: colors.cyanLight, fontSize: 12, fontWeight: '600' },
+  label: { color: colors.text, fontSize: 12, fontWeight: '600' },
 });
 
 // ── Visual dispatcher ──────────────────────────────────────────────────────
@@ -717,7 +717,7 @@ export function IntroExperience({ onComplete }: IntroExperienceProps) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   inner: { flex: 1 },
   innerWide: {
     maxWidth: 560,
@@ -728,21 +728,21 @@ const styles = StyleSheet.create({
   glowTR: {
     width: 420,
     height: 420,
-    backgroundColor: 'rgba(0,180,216,0.07)',
+    backgroundColor: 'rgba(11, 106, 158, 0.07)',
     top: -120,
     right: -120,
   },
   glowBL: {
     width: 340,
     height: 340,
-    backgroundColor: 'rgba(37,99,235,0.05)',
+    backgroundColor: 'rgba(11, 106, 158, 0.05)',
     bottom: -100,
     left: -100,
   },
   glowCenter: {
     width: 500,
     height: 500,
-    backgroundColor: 'rgba(0,180,216,0.025)',
+    backgroundColor: 'rgba(11, 106, 158, 0.025)',
     top: '20%',
     left: '50%',
     marginLeft: -250,
@@ -759,10 +759,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.border,
   },
   dotActive: { width: 24, backgroundColor: colors.cyan },
-  dotPast: { backgroundColor: 'rgba(0,180,216,0.35)' },
+  dotPast: { backgroundColor: 'rgba(11, 106, 158, 0.35)' },
   skipBtn: { paddingVertical: 4, paddingHorizontal: 6 },
   skipText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
   slideBody: {
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     letterSpacing: -0.6,
     marginBottom: spacing.sm,
     lineHeight: 34,
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     lineHeight: 23,
   },
   nav: {
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
   },
   btn: {
     backgroundColor: colors.blue,
-    borderRadius: 14,
+    borderRadius: 999,
     paddingVertical: 17,
     alignItems: 'center',
     shadowColor: colors.blue,
@@ -818,9 +818,9 @@ const styles = StyleSheet.create({
     shadowColor: colors.cyan,
   },
   btnText: {
-    color: colors.navy,
+    color: colors.white,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 0.3,
   },
   stepHint: {

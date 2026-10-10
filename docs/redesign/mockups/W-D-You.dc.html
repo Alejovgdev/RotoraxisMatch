@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Company profile · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="min-height: 800px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div>
+<dc-import name="WTopBar" active="you" role="{{role}}" primary="{{primary}}" hint-size="100%,132px"></dc-import>
+</div>
+
+<div style="max-width: 1160px; margin: 0 auto; padding: 32px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<nav aria-label="Account" style="flex: 1 1 220px; max-width: 100%; display: flex; flex-direction: column; gap: 2px">
+<a href="W-D-You.dc.html" aria-current="page" style="height: 46px; padding: 0 14px; border-radius: 12px; background: #EEF3F7; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 800">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path><path d="M10 6h4"></path><path d="M10 10h4"></path><path d="M10 14h4"></path><path d="M10 18h4"></path></svg>
+Company profile
+</a>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="W-D-Team.dc.html" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+Team access
+</a>
+</sc-if>
+<a href="#" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+Settings
+</a>
+<a href="#" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+Help
+</a>
+<button type="button" style="height: 46px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; gap: 12px; font-family: inherit; color: #B42318; font-size: 15px; font-weight: 800; cursor: pointer">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg>
+Log out
+</button>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 24px; border-radius: 22px; border: 1px solid #E1E8EE">
+<span style="flex: none"><dc-import name="WAvatar" who="airbus1" size="80" hint-size="80px,80px"></dc-import></span>
+<div style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800">Airbus1</h1>
+<span style="font-size: 15px; color: #526274">Liège, Belgium</span>
+<span style="display: flex; gap: 6px; margin-top: 2px">
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid #D5DEE6; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">MRO</span>
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; background: #D3F1E3; color: #0B5B3A; font-size: 12.5px; font-weight: 800; display: flex; align-items: center; gap: 4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Verified</span>
+</span>
+</div>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="W-D-EditCompany.dc.html" style="flex: none; height: 44px; padding: 0 20px; border-radius: 22px; border: 1px solid #D5DEE6; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 14.5px; font-weight: 800">Edit profile</a>
+</sc-if>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Marketplace activity</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<a href="#" style="padding: 16px 18px; border-radius: 16px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.1">1</span><span style="font-size: 14px; font-weight: 700; color: #526274">Requests sent</span></a>
+<a href="#" style="padding: 16px 18px; border-radius: 16px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.1; color: #0B5B3A">1</span><span style="font-size: 14px; font-weight: 700; color: #526274">Accepted</span></a>
+<a href="#" style="padding: 16px 18px; border-radius: 16px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; line-height: 1.1">0</span><span style="font-size: 14px; font-weight: 700; color: #526274">Awaiting reply</span></a>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 22px; border: 1px solid #E1E8EE">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Company details</h2>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="W-D-EditCompany.dc.html" style="height: 44px; display: flex; align-items: center; font-size: 14.5px; font-weight: 800; text-decoration: none; color: {{primary}}">Edit</a>
+</sc-if>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">Company name</span><span style="font-size: 15.5px; font-weight: 700">Airbus1</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">Type</span><span style="font-size: 15.5px; font-weight: 700">MRO</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">Country</span><span style="font-size: 15.5px; font-weight: 700">Belgium</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">City</span><span style="font-size: 15.5px; font-weight: 700">Liège</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 13px; font-weight: 700; color: #526274">Contact email</span><span style="font-size: 15.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">josecuentaparaia1@gmail.com</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">Phone</span><span style="font-size: 15.5px; font-weight: 600; color: #66768A">Not provided</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700; color: #526274">Website</span><span style="font-size: 15.5px; font-weight: 700">avsmartech.com</span></div>
+</div>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const role = this.props.role ?? 'admin';
+    return { primary: this.props.primary ?? '#0B6A9E', role: role, isAdmin: role === 'admin' };
+  }
+}
+</script>
+</body>
+</html>

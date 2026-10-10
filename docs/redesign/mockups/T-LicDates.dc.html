@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add licence · Step 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="TStepHeader" flow="Add licence" step="2" total="2" back="T-Lic.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Dates and proof</h1>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">Both are optional. You can add them later.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 18px; border: 1px solid #E1E8EE">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="flex: none; width: 44px; height: 44px; border-radius: 13px; background: #E6F1F8; color: #0B5E8C; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 14px">B2</span>
+<span style="display: flex; flex-direction: column"><span style="font-size: 16px; font-weight: 800">EASA B2</span><span style="font-size: 13px; color: #526274">Avionics</span></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 800">Issued
+<input type="date" style="height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; background: #FFFFFF">
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; font-weight: 800">Expires
+<input type="date" style="height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; background: #FFFFFF">
+</label>
+</div>
+</div>
+
+<button type="button" style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 18px; border: 2px dashed #B8C8D9; background: #F7FAFC; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 46px; height: 46px; border-radius: 23px; background: #FFFFFF; color: {{primary}}; border: 1px solid #D5DEE6; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15.5px; font-weight: 800">Photo or PDF of the licence</span><span style="font-size: 13px; color: #526274">Needed to verify it</span></span>
+</button>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="T-LicDone.dc.html" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Add licence</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { primary: this.props.primary ?? '#0B6A9E' };
+  }
+}
+</script>
+</body>
+</html>

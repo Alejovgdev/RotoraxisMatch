@@ -3,11 +3,11 @@ import {
   Linking,
   StyleProp,
   StyleSheet,
-  Text,
   TextStyle,
   TouchableOpacity,
   ViewStyle,
 } from 'react-native';
+import { Text } from './ui/Text';
 import { isValidUrl, normalizeUrl } from '../utils/urlValidation';
 
 /**

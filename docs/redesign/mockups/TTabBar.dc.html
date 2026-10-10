@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician tab bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<nav aria-label="Main" style="width: 390px; height: 84px; box-sizing: border-box; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; padding: 0 6px 14px; border-top: 1px solid #E6ECF1; background: #FFFFFF; font-family: 'Nunito Sans', system-ui, sans-serif; color: #0E1A2B">
+<a href="T-Home.dc.html" aria-current="{{home.cur}}" style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; text-decoration: none; color: {{home.color}}; font-size: 11.5px; font-weight: {{home.weight}}">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+<span>Home</span>
+</a>
+<a href="T-Search.dc.html" aria-current="{{search.cur}}" style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; text-decoration: none; color: {{search.color}}; font-size: 11.5px; font-weight: {{search.weight}}">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+<span>Offers</span>
+</a>
+<a href="T-Add.dc.html" style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; text-decoration: none; color: #0E1A2B; font-size: 11.5px; font-weight: 800">
+<span style="width: 50px; height: 50px; margin-top: -20px; border-radius: 25px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 14px rgba(11, 106, 158, 0.28)">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+</span>
+<span>Add</span>
+</a>
+<a href="#" aria-current="{{inbox.cur}}" style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; text-decoration: none; color: {{inbox.color}}; font-size: 11.5px; font-weight: {{inbox.weight}}">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+<span>Inbox</span>
+</a>
+<a href="T-You.dc.html" aria-current="{{you.cur}}" style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; text-decoration: none; color: {{you.color}}; font-size: 11.5px; font-weight: {{you.weight}}">
+<span style="display: flex; border-radius: 50%; box-shadow: 0 0 0 2px {{you.ring}}"><dc-import name="WAvatar" who="alejo" size="26" hint-size="26px,26px"></dc-import></span>
+<span>You</span>
+</a>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["home","search","inbox","you","none"],"default":"home"},"primary":{"editor":"color","default":"#0B6A9E"},"$preview":{"width":390,"height":84}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'home';
+    const t = (k) => ({ color: a === k ? '#0E1A2B' : '#66768A', weight: a === k ? 800 : 700, cur: a === k ? 'page' : undefined, ring: a === k ? '#0E1A2B' : 'transparent' });
+    return { primary: this.props.primary ?? '#0B6A9E', home: t('home'), search: t('search'), inbox: t('inbox'), you: t('you') };
+  }
+}
+</script>
+</body>
+</html>

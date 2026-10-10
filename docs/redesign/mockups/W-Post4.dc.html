@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Step 4</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder,textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="width: 390px; height: 1180px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="WPostHeader" step="4" total="4" back="W-Post3.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Offer details</h1>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: #526274">Describe the work clearly enough for match scoring.</p>
+</div>
+
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Title
+<input type="text" value="B1 Mechanic · A320 family" placeholder="e.g. B1.1 Line Maintenance Technician" style="height: 50px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B">
+</label>
+
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Description
+<textarea rows="4" placeholder="Describe the role, responsibilities and context..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; line-height: 1.45; color: #0E1A2B; resize: none"></textarea>
+</label>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 14px; font-weight: 800">Contract type</span>
+<div role="radiogroup" aria-label="Contract type" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: #EEF3F7">
+<sc-for list="{{ contracts }}" as="c" hint-placeholder-count="3">
+<button type="button" role="radio" aria-checked="{{c.checked}}" onClick="{{ c.pick }}" style="height: 44px; border-radius: 12px; border: 0; background: {{c.bg}}; box-shadow: {{c.shadow}}; color: {{c.fg}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span style="font-size: 14px; font-weight: 800">Minimum years of experience</span>
+<div style="display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 24px; background: #EEF3F7">
+<button type="button" aria-label="Fewer years" onClick="{{ dec }}" style="width: 44px; height: 44px; padding: 0; border: 0; border-radius: 22px; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 20px; font-weight: 800; cursor: pointer">−</button>
+<span style="min-width: 36px; text-align: center; font-size: 17px; font-weight: 800">{{years}}</span>
+<button type="button" aria-label="More years" onClick="{{ inc }}" style="width: 44px; height: 44px; padding: 0; border: 0; border-radius: 22px; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 20px; font-weight: 800; cursor: pointer">+</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; border: 1px solid #DDE5EC">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span style="display: flex; flex-direction: column"><span style="font-size: 14.5px; font-weight: 800">Remuneration <span style="font-weight: 600; color: #66768A">(optional)</span></span><span style="font-size: 12.5px; color: #526274">All amounts are gross, before taxes.</span></span>
+<button type="button" role="switch" aria-checked="{{salaryChecked}}" aria-label="Add remuneration" onClick="{{ toggleSalary }}" style="position: relative; flex: none; width: 52px; height: 32px; padding: 0; border: 0; border-radius: 16px; background: {{salaryTrack}}; cursor: pointer"><span style="position: absolute; top: 4px; left: {{salaryKnob}}; width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(14, 26, 43, 0.25)"></span></button>
+</div>
+<sc-if value="{{ hasSalary }}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: 1.3fr 0.8fr; gap: 8px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 800; color: #526274">Gross amount<input type="text" inputmode="decimal" value="3200" style="height: 46px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 800; color: #526274">Currency<input type="text" value="EUR" style="height: 46px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+</div>
+<div role="radiogroup" aria-label="Amount per" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ periods }}" as="c" hint-placeholder-count="4">
+<button type="button" role="radio" aria-checked="{{c.checked}}" onClick="{{ c.pick }}" style="height: 40px; padding: 0 12px; border-radius: 20px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 800">Location</span><span style="font-size: 12.5px; color: #526274">The country is what candidates are matched on. The city only helps them place the role.</span></span>
+<button type="button" aria-label="Country: Spain. Change" style="display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 700; text-align: left; cursor: pointer">
+<span style="flex: 1 1 auto">Spain</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+</button>
+<input type="text" aria-label="City (optional)" value="Barcelona" placeholder="City (optional)" style="height: 50px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B">
+</div>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="W-PostReview.dc.html" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Review offer</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const contract = s.contract || 'permanent';
+    const years = s.years === undefined ? 3 : s.years;
+    const salary = s.salary === undefined ? true : s.salary;
+    const period = s.period || 'month';
+    const seg = (on) => ({ bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#0E1A2B' : '#526274', shadow: on ? '0 1px 3px rgba(14, 26, 43, 0.14)' : 'none' });
+    const contracts = [['permanent', 'Permanent'], ['long', 'Long-term'], ['short', 'Short-term']].map((c) => Object.assign({ label: c[1], checked: c[0] === contract ? 'true' : 'false', pick: () => this.setState({ contract: c[0] }) }, seg(c[0] === contract)));
+    const periods = [['hour', 'Hour'], ['day', 'Day'], ['month', 'Month'], ['year', 'Year']].map((c) => {
+      const on = c[0] === period;
+      return { label: 'Per ' + c[1].toLowerCase(), checked: on ? 'true' : 'false', bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6', pick: () => this.setState({ period: c[0] }) };
+    });
+    return {
+      primary: p, contracts: contracts, periods: periods, years: years,
+      hasSalary: salary, noSalary: !salary,
+      salaryChecked: salary ? 'true' : 'false', salaryTrack: salary ? p : '#C9D3DD', salaryKnob: salary ? '24px' : '4px',
+      toggleSalary: () => this.setState({ salary: !salary }),
+      dec: () => this.setState({ years: Math.max(0, years - 1) }),
+      inc: () => this.setState({ years: years + 1 })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -4,11 +4,11 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text, TextInput } from '../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
@@ -22,6 +22,8 @@ function isValidEmail(s: string) {
 }
 
 export default function ForgotPasswordScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   const [email, setEmail] = useState('');
@@ -62,7 +64,7 @@ export default function ForgotPasswordScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={desktopScrollbar}
         >
           <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back to sign in</Text>
@@ -100,7 +102,7 @@ export default function ForgotPasswordScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 placeholder="you@example.com"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 autoComplete="email"
                 returnKeyType="done"
                 onSubmitEditing={handleSubmit}
@@ -126,7 +128,7 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
     padding: spacing.lg,
@@ -136,31 +138,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
-  backText: { color: colors.cyanLight, fontSize: 14, fontWeight: '500' },
+  backText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
   logoIcon: { fontSize: 40, marginBottom: spacing.md },
-  title: { fontSize: 28, fontWeight: '700', color: colors.white },
+  title: { fontSize: 28, fontWeight: '700', color: colors.text },
   subtitle: {
     fontSize: 13,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
     marginTop: 4,
   },
   form: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
   },
-  label: { fontSize: 13, fontWeight: '600', color: colors.cyanLight, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 6 },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 15,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
@@ -168,18 +170,18 @@ const styles = StyleSheet.create({
   errorText: { color: colors.error, fontSize: 13, marginTop: spacing.sm, textAlign: 'center' },
   btn: { marginTop: spacing.lg },
   successCard: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
     alignItems: 'center',
     gap: spacing.md,
   },
   successIcon: { fontSize: 40 },
   successText: {
     fontSize: 14,
-    color: colors.cyanLight,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
   },

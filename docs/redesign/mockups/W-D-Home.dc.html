@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="min-height: 830px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div>
+<dc-import name="WTopBar" active="home" role="{{role}}" primary="{{primary}}" hint-size="100%,132px"></dc-import>
+</div>
+
+<div style="max-width: 1240px; margin: 0 auto; padding: 32px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 28px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 20px; background: #FFF6E2; border: 1px solid #F3DDA4">
+<span style="flex: none; width: 52px; height: 52px; border-radius: 16px; background: #FDE7B5; color: #8A4A0C; display: flex; align-items: center; justify-content: center">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="m9 14 2 2 4-4"></path></svg>
+</span>
+<div style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 17px; font-weight: 800">1 new application waiting</span>
+<span style="font-size: 14px; color: #526274">B1 Mechanic · A320 family · applied 2h ago</span>
+</div>
+<a href="W-D-Candidate.dc.html" style="flex: none; height: 44px; padding: 0 22px; border-radius: 22px; background: {{primary}}; color: #FFFFFF; font-size: 15px; font-weight: 800; text-decoration: none; display: flex; align-items: center">Review</a>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h1 style="margin: 0; font-size: 20px; font-weight: 800">Your offers <span style="color: #66768A; font-weight: 700">9</span></h1>
+<a href="W-D-Offers.dc.html" style="font-size: 14.5px; font-weight: 700; text-decoration: none; color: {{primary}}">See all</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px">
+<sc-for list="{{ offers }}" as="o" hint-placeholder-count="6">
+<a href="{{o.href}}" style="display: flex; flex-direction: column; border-radius: 18px; border: 1px solid #E1E8EE; overflow: hidden; text-decoration: none; color: #0E1A2B; background: #FFFFFF">
+<span style="position: relative; height: 104px; box-sizing: border-box; padding: 14px 16px; background: {{o.bg}}; color: {{o.fg}}; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px">
+<sc-if value="{{ o.isNew }}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; top: 12px; right: 12px; height: 24px; padding: 0 10px; border-radius: 12px; background: #FDE7B5; color: #7A3F06; font-size: 12px; font-weight: 800; display: flex; align-items: center">1 new</span>
+</sc-if>
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 34px; line-height: 1">{{o.code}}</span>
+<span style="font-size: 13px; font-weight: 800">{{o.type}}</span>
+</span>
+<span style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 15.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{o.title}}</span>
+<span style="font-size: 13px; color: #526274">{{o.meta}}</span>
+<span style="margin-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: {{o.countColor}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+{{o.count}}
+</span>
+</span>
+</a>
+</sc-for>
+</div>
+</section>
+</main>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="border: 1px solid #E1E8EE; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Inbox</h2>
+<a href="#" style="font-size: 14px; font-weight: 700; text-decoration: none; color: {{primary}}">See all</a>
+</div>
+<a href="W-D-Inbox.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 44px; text-decoration: none; color: #0E1A2B">
+<span style="flex: none"><dc-import name="WAvatar" who="t1193" size="42" hint-size="42px,42px"></dc-import></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 14.5px; font-weight: 800">Lucía Moreno</span>
+<span style="font-size: 13px; color: #526274; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">B2 Avionics · ATR 72 · 1 unread</span>
+</span>
+<span style="flex: none; width: 10px; height: 10px; border-radius: 5px; background: {{primary}}"></span>
+</a>
+</section>
+
+<section style="border: 1px solid #E1E8EE; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="flex: none"><dc-import name="WAvatar" who="airbus1" size="48" hint-size="48px,48px"></dc-import></span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 16px; font-weight: 800">Airbus1</span>
+<span style="font-size: 13px; color: #526274">Jose 1 · Admin</span>
+</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; background: #D3F1E3; color: #0B5B3A; font-size: 12.5px; font-weight: 800; display: flex; align-items: center; gap: 4px">
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+Verified
+</span>
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; background: #EEF3F7; color: #33465A; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">2 members</span>
+</div>
+<a href="W-D-You.dc.html" style="height: 44px; border-radius: 12px; border: 1px solid #D9E2EA; display: flex; align-items: center; justify-content: center; text-decoration: none; color: #0E1A2B; font-size: 14.5px; font-weight: 700">Company profile</a>
+</section>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":830}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const o = (code, type, bg, fg, title, meta, isNew) => ({ code: code, type: type, bg: bg, fg: fg, title: title, meta: meta, isNew: isNew, href: isNew ? 'W-D-Offer.dc.html' : '#', count: isNew ? '1 applicant' : 'No applicants yet', countColor: isNew ? '#33465A' : '#66768A' });
+    return {
+      primary: this.props.primary ?? '#0B6A9E',
+      role: this.props.role ?? 'admin',
+      offers: [
+        o('B1', 'Mechanic', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · A320 family', 'Line maintenance · Spain', true),
+        o('B2', 'Avionics', '#D5F2E4', '#0B6B45', 'B2 Avionics · ATR 72', 'Base maintenance · Spain', false),
+        o('ENG', 'Enginetech', '#E3E8EE', '#33465A', 'Enginetech · CFM56-5B', 'Engine shop · Spain', false),
+        o('B1', 'Mechanic', '#D6ECF8', '#0B5E8C', 'B1 Mechanic · B737 NG', 'Line maintenance · Spain', false),
+        o('SM', 'Sheet metal', '#F1E9DC', '#5B4528', 'Sheet metal · A330', 'Structures · Spain', false),
+        o('B2', 'Avionics', '#D5F2E4', '#0B6B45', 'B2 Avionics · A350', 'Base maintenance · Spain', false)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

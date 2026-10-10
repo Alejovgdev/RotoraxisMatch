@@ -3,10 +3,10 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import {
@@ -492,11 +492,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardPending: {
-    borderColor: '#FDE68A',
+    borderColor: '#F3DDA4',
     borderLeftWidth: 3,
   },
   cardAccepted: {
-    borderColor: '#BBF7D0',
+    borderColor: '#A7DCC3',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
   },
   flagChipOn: {
     backgroundColor: adminUi.greenSoft,
-    borderColor: '#BBF7D0',
+    borderColor: '#A7DCC3',
   },
   flagChipOff: {
     backgroundColor: adminUi.surfaceSoft,

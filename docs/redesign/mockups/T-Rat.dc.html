@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add type rating · Step 1</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="TStepHeader" flow="Add type rating" step="1" total="2" back="T-Add.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Which aircraft?</h1>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">First, the licence it was issued under.</p>
+</div>
+
+<div role="radiogroup" aria-label="Licence" style="display: flex; gap: 8px">
+<sc-for list="{{ lics }}" as="l" hint-placeholder-count="2">
+<button type="button" role="radio" aria-checked="{{l.checked}}" onClick="{{ l.pick }}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: {{l.border}}; background: {{l.bg}}; color: {{l.fg}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{l.label}}</button>
+</sc-for>
+</div>
+
+<label style="display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 18px; border-radius: 25px; background: #EEF3F7; color: #526274">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+<input type="search" aria-label="Search aircraft or engine" placeholder="{{placeholder}}" value="{{q}}" onChange="{{ onQ }}" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font-family: inherit; font-size: 15.5px; font-weight: 700; color: #0E1A2B; outline: none">
+</label>
+
+<div role="radiogroup" aria-label="Aircraft" style="display: flex; flex-direction: column">
+<sc-for list="{{ results }}" as="r" hint-placeholder-count="5">
+<sc-if value="{{ r.held }}" hint-placeholder-val="{{ false }}">
+<a href="T-Quals.dc.html" aria-label="{{r.aria}}" style="display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 6px 0; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">{{r.name}}</span>
+<span style="font-size: 13px; color: #526274">{{r.engine}}</span>
+</span>
+<span style="flex: none; height: 26px; padding: 0 10px; border-radius: 13px; background: #E5F4EC; border: 1px solid #A7DCC3; color: #0B5B3A; font-size: 12.5px; font-weight: 800; display: flex; align-items: center; gap: 4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Added</span>
+</a>
+</sc-if>
+<sc-if value="{{ r.free }}" hint-placeholder-val="{{ true }}">
+<button type="button" role="radio" aria-checked="{{r.checked}}" onClick="{{ r.pick }}" style="display: flex; align-items: center; gap: 14px; width: 100%; min-height: 58px; padding: 6px 0; border: 0; border-bottom: 1px solid #E6ECF1; background: #FFFFFF; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">{{r.name}}</span>
+<span style="font-size: 13px; color: #526274">{{r.engine}}</span>
+</span>
+<sc-if value="{{ r.on }}" hint-placeholder-val="{{ false }}">
+<span style="flex: none; width: 26px; height: 26px; border-radius: 13px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</sc-if>
+</button>
+</sc-if>
+</sc-for>
+<sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+<p style="margin: 8px 0 0; font-size: 14.5px; color: #526274">Nothing found for this licence. <a href="#" style="font-weight: 800; text-decoration: none; color: {{primary}}">Request it</a></p>
+</sc-if>
+</div>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="{{nextHref}}" aria-disabled="{{nextDisabled}}" style="height: 52px; border-radius: 26px; background: {{nextBg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Continue</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const lic = s.lic || 'b11';
+    const q = s.q === undefined ? '' : s.q;
+    const picked = s.picked === undefined ? 'a320leap' : s.picked;
+    const all = {
+      b11: [
+        ['a320cfm', 'Airbus A320 family', 'CFM56', true],
+        ['a320iae', 'Airbus A320 family', 'IAE V2500', false],
+        ['a320leap', 'Airbus A320neo family', 'CFM LEAP-1A', false],
+        ['a320pw', 'Airbus A320neo family', 'PW1100G', false],
+        ['b737', 'Boeing 737-600/700/800/900', 'CFM56', false],
+        ['atr', 'ATR 42/72', 'PW100 series', false],
+        ['q400', 'Dash 8 Q400', 'PW150', false]
+      ],
+      b13: [
+        ['h145', 'Airbus H145 / BK117 D2', 'Arriel 2', true],
+        ['aw139', 'Leonardo AW139', 'PT6C-67C', false],
+        ['aw169', 'Leonardo AW169', 'PW210A', false],
+        ['h135', 'Airbus H135', 'Arrius 2B2', false],
+        ['h125', 'Airbus H125', 'Arriel 2D', false]
+      ]
+    };
+    const lics = [['b11', 'EASA B1.1'], ['b13', 'EASA B1.3']].map((l) => {
+      const on = l[0] === lic;
+      return {
+        label: l[1], checked: on ? 'true' : 'false',
+        bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B',
+        border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6',
+        pick: () => this.setState({ lic: l[0], picked: '', q: '' })
+      };
+    });
+    const needle = q.trim().toLowerCase();
+    const results = all[lic]
+      .filter((a) => !needle || (a[1] + ' ' + a[2]).toLowerCase().indexOf(needle) !== -1)
+      .slice(0, 6)
+      .map((a) => {
+        const on = a[0] === picked;
+        return {
+          name: a[1], engine: a[2], held: a[3], free: !a[3], on: on && !a[3],
+          aria: a[1] + ' ' + a[2] + ' is already on your profile. Open My work',
+          checked: on ? 'true' : 'false',
+          pick: () => { if (!a[3]) this.setState({ picked: a[0] }); }
+        };
+      });
+    const ok = !!picked;
+    return {
+      primary: p, lics: lics, q: q, results: results, empty: results.length === 0,
+      placeholder: lic === 'b11' ? 'A320neo, LEAP, CFM56, Dash 8…' : 'H145, AW139, Arriel…',
+      onQ: (e) => this.setState({ q: e.target.value }),
+      nextHref: ok ? 'T-RatDetails.dc.html' : '#',
+      nextDisabled: ok ? 'false' : 'true',
+      nextBg: ok ? p : '#A9B6C3'
+    };
+  }
+}
+</script>
+</body>
+</html>

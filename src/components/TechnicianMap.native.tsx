@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { SafeTechnicianView } from '../types';
 import type { TechnicianHabilitation } from '../types/technician';
-import type { MapFilters, MapFilterValue } from '../types/filters';
 import type { MapOfferMatchOption } from '../types/mapOffers';
 import type { TechnicianTypeCode } from '../types/catalog';
 import { useAircraftTypeRatingsCatalog } from '../state/useAircraftTypeRatingsCatalog';
@@ -13,9 +12,7 @@ import { resolveTypeRatingLabels } from '../utils/v2CompatAdapters';
 import { groupTechnicianMapMarkers } from '../utils/technicianMapMarkers';
 import { TechnicianMapHeader, TechnicianMapLegend } from './technician-map/TechnicianMapControls';
 import {
-  activeTechnicianMapFilterCount,
   TechnicianMapDetailSheet,
-  TechnicianMapFilterSheet,
   TechnicianOfferSelectionSheet,
 } from './technician-map/TechnicianMapSheets';
 
@@ -23,8 +20,11 @@ export interface TechnicianMapProps {
   technicians: SafeTechnicianView[];
   habilitationsById: Record<string, TechnicianHabilitation[]>;
   technicianTypesById: Record<string, TechnicianTypeCode[]>;
-  filters: MapFilters;
-  onFilterChange: (key: keyof MapFilters, value: MapFilterValue) => void;
+  /** Los filtros son los compartidos con la búsqueda (fase 3B): el panel lo abre quien monta el mapa. */
+  filterCount: number;
+  onOpenFilters: () => void;
+  /** El botón para volver a la lista. */
+  onShowList?: () => void;
   loading: boolean;
   onBack?: () => void;
   offerMatchesByTechnician?: Record<string, MapOfferMatchOption[]>;
@@ -196,8 +196,9 @@ export function TechnicianMap({
   technicians,
   habilitationsById,
   technicianTypesById,
-  filters,
-  onFilterChange,
+  filterCount,
+  onOpenFilters,
+  onShowList,
   loading,
   onBack,
   offerMatchesByTechnician = {},
@@ -207,7 +208,6 @@ export function TechnicianMap({
 }: TechnicianMapProps) {
   const webViewRef = useRef<WebView>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [selectedOfferTechId, setSelectedOfferTechId] = useState<string | null>(null);
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null);
@@ -319,20 +319,14 @@ export function TechnicianMap({
 
       <TechnicianMapHeader
         visibleCount={technicians.length}
-        filterCount={activeTechnicianMapFilterCount(filters)}
+        filterCount={filterCount}
         loading={loading}
         onBack={onBack}
-        onOpenFilters={() => setFilterSheetOpen(true)}
+        onOpenFilters={onOpenFilters}
+        onShowList={onShowList}
       />
 
       {!loading && markerGroups.length > 0 ? <TechnicianMapLegend /> : null}
-
-      <TechnicianMapFilterSheet
-        visible={filterSheetOpen}
-        filters={filters}
-        onFilterChange={onFilterChange}
-        onClose={() => setFilterSheetOpen(false)}
-      />
 
       <TechnicianMapDetailSheet
         group={selectedGroup}

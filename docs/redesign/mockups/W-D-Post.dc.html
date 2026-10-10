@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder,textarea::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F7F9FB; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="offers" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+<div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+
+<nav aria-label="Steps" style="flex: 1 1 240px; max-width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 20px; background: #FFFFFF; border: 1px solid #E1E8EE; box-sizing: border-box">
+<span style="padding: 4px 10px 10px; font-size: 18px; font-weight: 800">New offer</span>
+<sc-for list="{{ steps }}" as="s" hint-placeholder-count="5">
+<button type="button" aria-current="{{s.cur}}" onClick="{{ s.go }}" style="display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 10px; border: 0; border-radius: 12px; background: {{s.bg}}; color: {{s.fg}}; font-family: inherit; font-size: 15px; font-weight: 800; text-align: left; cursor: pointer">
+<span style="flex: none; width: 28px; height: 28px; border-radius: 14px; background: {{s.dotBg}}; color: {{s.dotFg}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">{{s.n}}</span>{{s.label}}
+</button>
+</sc-for>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px; border-radius: 22px; background: #FFFFFF; border: 1px solid #E1E8EE; display: flex; flex-direction: column; gap: 22px">
+
+<sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800">Who are you hiring?</h1>
+<div role="radiogroup" aria-label="Profile type" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{ types }}" as="t" hint-placeholder-count="6">
+<button type="button" role="radio" aria-checked="{{t.checked}}" onClick="{{ t.pick }}" style="height: 88px; box-sizing: border-box; padding: 12px 14px; border-radius: 16px; border: {{t.border}}; background: {{t.bg}}; color: #0E1A2B; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; font-family: inherit; text-align: left; cursor: pointer">
+<span style="width: 34px; height: 34px; border-radius: 10px; background: {{t.tileBg}}; color: {{t.tileFg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 12px">{{t.code}}</span>
+<span style="font-size: 14.5px; font-weight: 800">{{t.label}}</span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Airplanes or helicopters?</h2>
+<div style="display: flex; gap: 8px"><span style="height: 44px; padding: 0 20px; border-radius: 22px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14.5px; font-weight: 800">Airplanes</span><span style="height: 44px; padding: 0 20px; border-radius: 22px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14.5px; font-weight: 800">Helicopters</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800">Does this job need certified work?</h1>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{ certOpts }}" as="c" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 46px; padding: 0 20px; border-radius: 23px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">{{certHelper}}</p>
+<sc-if value="{{ certYes }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 13px; font-weight: 800; color: #526274">Issuing authority</span><div style="display: flex; flex-wrap: wrap; gap: 8px"><span style="height: 40px; padding: 0 16px; border-radius: 20px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">EASA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">UK CAA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">CASA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">UAE GCAA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">FAA</span></div></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 13px; font-weight: 800; color: #526274">Licence this role certifies under</span><div style="display: flex; flex-wrap: wrap; gap: 8px"><sc-for list="{{ lics }}" as="l" hint-placeholder-count="13"><span style="min-width: 54px; height: 40px; padding: 0 10px; box-sizing: border-box; border-radius: 12px; border: {{l.border}}; background: {{l.bg}}; color: {{l.fg}}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800">{{l.label}}</span></sc-for></div></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 13px; font-weight: 800; color: #526274">Also accept licences from</span><div style="display: flex; flex-wrap: wrap; gap: 8px"><span style="height: 40px; padding: 0 16px; border-radius: 20px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">✓ UK CAA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">CASA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">UAE GCAA</span><span style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">FAA</span></div></div>
+</sc-if>
+<sc-if value="{{ certNo }}" hint-placeholder-val="{{ false }}">
+<span style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid #DDE5EC; font-size: 15px; font-weight: 800"><span style="width: 22px; height: 22px; border-radius: 6px; border: 2px solid #B8C4CF"></span>Only technicians without a licence</span>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px"><h1 style="margin: 0; font-size: 26px; font-weight: 800">Required type ratings</h1><p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence. Limited to airplanes, as set before.</p></div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: #E6F1F8"><span style="font-size: 15px; font-weight: 800">Airbus A320 family — CFM56</span><span style="font-size: 13.5px; font-weight: 800; color: #B42318">Remove</span></span>
+<span style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: #E6F1F8"><span style="font-size: 15px; font-weight: 800">Airbus A320 family — V2500</span><span style="font-size: 13.5px; font-weight: 800; color: #B42318">Remove</span></span>
+</div>
+<span style="display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 24px; background: #EEF3F7; color: #526274; font-size: 15px">Add aircraft + engine rating</span>
+<span style="display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; border-radius: 16px; border: 1px solid #DDE5EC; font-size: 14.5px; font-weight: 800">The technician needs ALL of these aircraft, not just one of them<span style="position: relative; flex: none; width: 50px; height: 30px; border-radius: 15px; background: #C9D3DD"><span style="position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF"></span></span></span>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Note (optional)<input type="text" placeholder="e.g. Also considering V2500 or recent A320 experience" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+</sc-if>
+
+<sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px"><h1 style="margin: 0; font-size: 26px; font-weight: 800">Offer details</h1><p style="margin: 0; font-size: 14.5px; color: #526274">Describe the work clearly enough for match scoring.</p></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Title<input type="text" value="B1 Mechanic · A320 family" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Description<textarea rows="3" placeholder="Describe the role, responsibilities and context..." style="box-sizing: border-box; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B; resize: none"></textarea></label>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px"><span style="font-size: 14px; font-weight: 800">Contract type</span><div style="display: flex; gap: 6px"><span style="height: 40px; padding: 0 14px; border-radius: 20px; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; font-size: 14px; font-weight: 800">Permanent</span><span style="height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">Long-term</span><span style="height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">Short-term</span></div></div>
+<div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 8px"><span style="font-size: 14px; font-weight: 800">Minimum years of experience</span><span style="display: flex; align-items: center; gap: 12px"><span style="width: 40px; height: 40px; border-radius: 20px; background: #EEF3F7; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">−</span><span style="font-size: 17px; font-weight: 800">3</span><span style="width: 40px; height: 40px; border-radius: 20px; background: #EEF3F7; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">+</span></span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px"><span style="display: flex; align-items: center; justify-content: space-between; gap: 12px"><span style="font-size: 14px; font-weight: 800">Remuneration <span style="font-weight: 600; color: #66768A">(optional, gross)</span></span><button type="button" role="switch" aria-checked="{{salaryChecked}}" aria-label="Add remuneration" onClick="{{ toggleSalary }}" style="position: relative; flex: none; width: 52px; height: 32px; padding: 0; border: 0; border-radius: 16px; background: {{salaryTrack}}; cursor: pointer"><span style="position: absolute; top: 4px; left: {{salaryKnob}}; width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(14, 26, 43, 0.25)"></span></button></span><sc-if value="{{ hasSalary }}" hint-placeholder-val="{{ true }}"><span style="display: flex; gap: 8px"><span style="flex: 1 1 auto; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px">3200</span><span style="flex: none; width: 70px; height: 46px; padding: 0 12px; box-sizing: border-box; border-radius: 12px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px">EUR</span><span style="flex: none; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px">per month</span></span></sc-if></div>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px"><span style="font-size: 14px; font-weight: 800">Location</span><span style="display: flex; gap: 8px"><span style="flex: 1 1 0; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px">Spain</span><span style="flex: 1 1 0; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px">Barcelona</span></span><span style="font-size: 12.5px; color: #66768A">The country is what candidates are matched on.</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800">Review your offer</h1>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{ blocks }}" as="b" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid #E1E8EE">
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #66768A">{{b.title}}</span><span style="font-size: 14.5px; font-weight: 700; line-height: 1.4">{{b.text}}</span></div>
+<button type="button" onClick="{{ b.edit }}" style="flex: none; align-self: flex-start; height: 36px; padding: 0 6px; border: 0; background: transparent; color: {{primary}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">Edit</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ s6 }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 0; text-align: center">
+<span style="width: 84px; height: 84px; border-radius: 42px; background: #D3F1E3; color: #157F4F; display: flex; align-items: center; justify-content: center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800">{{doneTitle}}</h1>
+<p style="margin: 0; font-size: 15.5px; color: #526274">{{doneText}}</p>
+<div style="display: flex; gap: 10px; margin-top: 8px"><a href="W-D-Offer.dc.html" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 1px solid #D5DEE6; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 800">View offer</a><a href="W-D-Search.dc.html" style="height: 48px; padding: 0 22px; border-radius: 24px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; text-decoration: none; font-size: 15px; font-weight: 800">Find technicians</a></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; justify-content: space-between; gap: 10px; padding-top: 14px; border-top: 1px solid #E6ECF1">
+<button type="button" onClick="{{ back }}" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{backLabel}}</button>
+<sc-if value="{{ notReview }}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{ next }}" style="height: 48px; padding: 0 26px; border-radius: 24px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Continue</button>
+</sc-if>
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{ saveDraft }}" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Save draft</button>
+<button type="button" onClick="{{ publish }}" style="height: 48px; padding: 0 26px; border-radius: 24px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Publish</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const step = s.step || 1;
+    const type = s.type || 'mechanic';
+    const cert = s.cert || 'yes';
+    const labels = ['Who', 'Licence', 'Type ratings', 'Details', 'Review'];
+    const steps = labels.map((l, i) => {
+      const n = i + 1; const on = n === step; const done = n < step || step === 6;
+      return {
+        n: done ? '✓' : String(n), label: l, cur: on ? 'step' : undefined,
+        bg: on ? '#E6F1F8' : 'transparent', fg: on ? '#0B5E8C' : '#0E1A2B',
+        dotBg: on ? p : done ? '#D3F1E3' : '#EEF3F7', dotFg: on ? '#FFFFFF' : done ? '#157F4F' : '#526274',
+        go: () => this.setState({ step: n })
+      };
+    });
+    const tdefs = [['mechanic', 'B1', 'Mechanic', '#D6ECF8', '#0B5E8C'], ['avionic', 'B2', 'Avionics Technician', '#D5F2E4', '#0B6B45'], ['sheet', 'SM', 'Sheet Metal Worker', '#F1E9DC', '#5B4528'], ['painter', 'PT', 'Aircraft Painter', '#F1E9DC', '#5B4528'], ['composite', 'CP', 'Composite Technician', '#F1E9DC', '#5B4528'], ['engine', 'ENG', 'Engine Technician', '#E3E8EE', '#33465A']];
+    const types = tdefs.map((d) => { const on = d[0] === type; return { code: d[1], label: d[2], tileBg: d[3], tileFg: d[4], checked: on ? 'true' : 'false', border: on ? '2px solid ' + p : '1px solid #DDE5EC', bg: on ? '#F2F8FC' : '#FFFFFF', pick: () => this.setState({ type: d[0] }) }; });
+    const dark = (on) => ({ bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6' });
+    const certOpts = [['yes', 'Yes, licence required'], ['no', 'No licence needed']].map((c) => Object.assign({ label: c[1], pressed: c[0] === cert ? 'true' : 'false', pick: () => this.setState({ cert: c[0] }) }, dark(c[0] === cert)));
+    const lics = ['A1', 'A2', 'A3', 'A4', 'B1.1', 'B1.2', 'B1.3', 'B1.4', 'B2', 'B2L', 'B3', 'L', 'C'].map((c) => { const on = c === 'B1.1'; return { label: c, bg: on ? '#E6F1F8' : '#FFFFFF', fg: on ? '#0B5E8C' : '#0E1A2B', border: on ? '2px solid ' + p : '1px solid #D5DEE6' }; });
+    const blocks = [['Who', 'Mechanic · Airplanes', 1], ['Licence', 'Licence required · EASA B1.1 · also UK CAA', 2], ['Type ratings · any one', 'A320 family — CFM56, A320 family — V2500', 3], ['Details', 'Permanent · 3+ years · €3,200/month · Barcelona, Spain', 4]]
+      .map((b) => ({ title: b[0], text: b[1], edit: () => this.setState({ step: b[2] }) }));
+    return {
+      primary: p, steps: steps, types: types, certOpts: certOpts, lics: lics, blocks: blocks,
+      s1: step === 1, s2: step === 2, s3: step === 3, s4: step === 4, s5: step === 5, s6: step === 6,
+      certYes: cert === 'yes', certNo: cert === 'no',
+      certHelper: cert === 'yes' ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.' : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.',
+      hasSalary: s.salary === undefined ? true : s.salary,
+      salaryChecked: (s.salary === undefined || s.salary) ? 'true' : 'false', salaryTrack: (s.salary === undefined || s.salary) ? p : '#C9D3DD', salaryKnob: (s.salary === undefined || s.salary) ? '24px' : '4px',
+      toggleSalary: () => this.setState({ salary: !(s.salary === undefined ? true : s.salary) }),
+      showNav: step <= 5, isReview: step === 5, notReview: step < 5,
+      backLabel: step === 1 ? 'Cancel' : 'Back',
+      doneTitle: s.draft ? 'Saved as draft' : 'Your offer is live',
+      doneText: s.draft ? 'You can publish it later from Your offers.' : 'Technicians can find it and apply. We will let you know when someone does.',
+      back: () => this.setState({ step: Math.max(1, step - 1) }),
+      next: () => this.setState({ step: step + 1 }),
+      saveDraft: () => this.setState({ step: 6, draft: true }),
+      publish: () => this.setState({ step: 6, draft: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

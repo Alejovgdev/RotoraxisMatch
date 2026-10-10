@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Company details · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="min-height: 820px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="you" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+<div style="max-width: 1160px; margin: 0 auto; padding: 32px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<nav aria-label="Account" style="flex: 1 1 220px; max-width: 100%; display: flex; flex-direction: column; gap: 2px">
+<a href="W-D-You.dc.html" aria-current="page" style="height: 46px; padding: 0 14px; border-radius: 12px; background: #EEF3F7; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 800">Company profile</a>
+<a href="W-D-Team.dc.html" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">Team access</a>
+<a href="#" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">Settings</a>
+<a href="#" style="height: 46px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; text-decoration: none; color: #3D4A57; font-size: 15px; font-weight: 700">Help</a>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 26px; border-radius: 22px; border: 1px solid #E1E8EE; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800">Company details</h1>
+<div style="display: flex; align-items: center; gap: 12px"><dc-import name="WAvatar" who="airbus1" size="52" hint-size="52px,52px"></dc-import><button type="button" style="height: 42px; padding: 0 16px; border-radius: 21px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">Change logo</button></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Company name<input type="text" value="Airbus1" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 14px; font-weight: 800">Company type</span><span style="height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px; font-weight: 700">MRO</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 14px; font-weight: 800">Country</span><span style="height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 15px; font-weight: 700">Belgium</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">City<input type="text" value="Liège" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+<div style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 14px; font-weight: 800">Contact email</span><span style="height: 48px; padding: 0 14px; border-radius: 14px; background: #F3F6F9; display: flex; align-items: center; font-size: 15px; color: #526274">josecuentaparaia1@gmail.com</span><span style="font-size: 12.5px; color: #66768A">This email cannot be changed from the company profile.</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Phone <span style="font-weight: 600; color: #66768A; margin-top: -6px">Optional</span><input type="tel" placeholder="+32 4 00 00 00 00" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"></label>
+<label style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Website<input type="url" value="https://avsmartech.com" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15px; color: #0E1A2B"><span style="font-size: 12.5px; font-weight: 600; color: #66768A">Optional. Shown to technicians on your offers — it is public, not gated by acceptance.</span></label>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid #E6ECF1">
+<a href="W-D-You.dc.html" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 1px solid #D5DEE6; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 800">Cancel</a>
+<a href="W-D-You.dc.html" style="height: 48px; padding: 0 26px; border-radius: 24px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; text-decoration: none; font-size: 15px; font-weight: 800">Save</a>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { primary: this.props.primary ?? '#0B6A9E' };
+  }
+}
+</script>
+</body>
+</html>

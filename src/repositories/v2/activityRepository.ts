@@ -1,6 +1,13 @@
 import { supabase } from '../../lib/supabase';
 import { ActivityItem, ActivityType } from '../../types/activity';
 
+/**
+ * Las respuestas a una candidatura que avisan al técnico: aceptada o rechazada.
+ * Sin leer, son el punto rojo de su lista de candidaturas y, desde la fase 8,
+ * el número de Applications (círculo de la Home y barra de escritorio).
+ */
+export const APPLICATION_RESPONSE_EVENTS: ActivityType[] = ['application_accepted', 'application_rejected'];
+
 // Activity events are created by database triggers (migration 005).
 // Clients only READ events and write activity_reads (mark-as-read).
 
@@ -47,6 +54,16 @@ export const activityRepository = {
         .filter((e) => !readIds.has(e.id))
         .map((e) => e.entity_id as string),
     );
+  },
+
+  /**
+   * Las candidaturas del técnico con una respuesta (aceptada o rechazada) que
+   * aún no ha visto. Es el mismo dato que el punto rojo de su lista: aplicar
+   * no lo cambia (ese aviso es para la empresa), una respuesta lo sube y
+   * abrirla (markRead) lo baja.
+   */
+  async getUnseenApplicationResponseIds(technicianId: string): Promise<Set<string>> {
+    return this.getUnreadEntityIds('technician', technicianId, APPLICATION_RESPONSE_EVENTS);
   },
 
   async getUnreadCount(

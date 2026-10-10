@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 1260px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 16px 0 4px">
+<a href="W-Applications.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+<span style="font-size: 15px; font-weight: 800">Technician profile</span>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 10px 20px 0">
+
+<div style="display: flex; align-items: center; gap: 16px">
+<dc-import name="WAvatar" who="t1193" size="76" hint-size="76px,76px"></dc-import>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 800">Lucía Moreno</h1>
+<span style="font-size: 13.5px; color: #526274">Avionics Technician · Valencia, Spain</span>
+<span style="display: flex; gap: 6px">
+<span style="height: 24px; padding: 0 9px; border-radius: 12px; background: #D3F1E3; color: #0B5B3A; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Verified</span>
+<span style="height: 24px; padding: 0 9px; border-radius: 12px; background: #E6F1F8; color: #0B5E8C; font-size: 12px; font-weight: 800; display: flex; align-items: center">Identity unlocked</span>
+</span>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 16px; background: #F3F6F9">
+<h2 style="margin: 0; font-size: 15px; font-weight: 800">Contact details</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px"><span style="font-size: 14px; color: #526274">Email</span><span style="font-size: 14px; font-weight: 700">lucia.moreno@example.com</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><span style="font-size: 14px; color: #526274">Phone</span><span style="font-size: 14px; font-weight: 700">+34 611 000 000</span></div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<div style="padding: 10px 12px; border-radius: 14px; border: 1px solid #E1E8EE; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Availability</span><span style="font-size: 14.5px; font-weight: 800; color: #157F4F">Available immediately</span></div>
+<div style="padding: 10px 12px; border-radius: 14px; border: 1px solid #E1E8EE; display: flex; flex-direction: column"><span style="font-size: 12px; font-weight: 700; color: #526274">Contract preferences</span><span style="font-size: 14.5px; font-weight: 800">Permanent · Long-term</span></div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Licences</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><span style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 13.5px; font-weight: 800">EASA B2</span></div>
+</section>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Type ratings</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14px; font-weight: 700">ATR 42/72 — PW100</span><span style="font-size: 13px; color: #526274">B2 · Current</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0"><span style="font-size: 14px; font-weight: 700">Dash 8 Q400 — PW150</span><span style="font-size: 13px; color: #526274">B2 · Current</span></div>
+</section>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Aircraft experience</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0"><span style="font-size: 14px; font-weight: 700">ATR 42/72</span><span style="font-size: 13px; color: #526274">6 years</span></div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Engine experience</h2>
+<span style="font-size: 14px; color: #66768A">No engines listed.</span>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Verified documents</h2>
+<span style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid #E1E8EE; font-size: 14px; font-weight: 700"><span style="flex: none; width: 36px; height: 36px; border-radius: 10px; background: #FDECEC; color: #B42318; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">PDF</span><span style="flex: 1 1 auto">EASA licence B2.pdf</span><span style="height: 24px; padding: 0 8px; border-radius: 12px; background: #D3F1E3; color: #0B5B3A; font-size: 11.5px; font-weight: 800; display: flex; align-items: center">Verified</span></span>
+<span style="font-size: 12.5px; color: #66768A">Only documents verified by the platform are visible here.</span>
+</section>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="W-Chat.dc.html" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-size: 16px; font-weight: 800">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+Open chat
+</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { primary: this.props.primary ?? '#0B6A9E' };
+  }
+}
+</script>
+</body>
+</html>

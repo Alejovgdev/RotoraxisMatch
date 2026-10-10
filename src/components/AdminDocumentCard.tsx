@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Text, TextInput } from './ui/Text';
 import { Calendar, CheckCircle, Clock, Download, FileCheck, FileText, UserRound, XCircle } from 'lucide-react-native';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../lib/documentStorage';
 import type { LucideProps } from 'lucide-react-native';
@@ -304,11 +303,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardPending: {
-    borderColor: '#FDE68A',
+    borderColor: '#F3DDA4',
     borderLeftWidth: 3,
   },
   cardRejected: {
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
   },
   header: {
     flexDirection: 'row',
@@ -353,10 +352,10 @@ const styles = StyleSheet.create({
     color: adminUi.textSoft,
   },
   rejectionNote: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FDECEC',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -376,10 +375,10 @@ const styles = StyleSheet.create({
     color: adminUi.textSoft,
   },
   rejectForm: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FDECEC',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -394,7 +393,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 13,
@@ -413,8 +412,8 @@ const styles = StyleSheet.create({
   },
   confirmRejectBtn: {
     flex: 1,
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
+    borderColor: '#F3C2C2',
+    backgroundColor: '#FDECEC',
   },
   actions: {
     flexDirection: 'row',
@@ -429,7 +428,7 @@ const styles = StyleSheet.create({
     flexBasis: 112,
     minHeight: 38,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     alignItems: 'center',
@@ -447,6 +446,6 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

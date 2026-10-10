@@ -1,56 +1,45 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Linking, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
-import {
-  BadgeCheck,
-  BriefcaseBusiness,
-  Clock,
-  Download,
-  FileCheck,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Phone,
-  Plane,
-  ShieldCheck,
-  UserRound,
-  Wrench,
-} from 'lucide-react-native';
-import { colors, spacing } from '../../../src/theme';
+import { MessageCircle } from 'lucide-react-native';
+import { colors } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import { ExternalLink } from '../../../src/components/ExternalLink';
+import { Text } from '../../../src/components/ui';
+import { CompanyScreen } from '../../../src/components/company/CompanyUI';
 import {
-  CompanyBadge,
-  CompanyCard,
-  CompanyChip,
-  CompanyPageHeader,
-  CompanyScreen,
-  EmptyPanel,
-  IconBox,
-  InitialAvatar,
-  companyStyles,
-  companyUi,
-} from '../../../src/components/company/CompanyUI';
+  AsideCard,
+  BackLink,
+  EmptyBlock,
+  PageBar,
+  PageBody,
+  PersonHero,
+  PillButton,
+  Section,
+  StatGrid,
+  StatTile,
+  StatusPill,
+  StickyBar,
+  TwoColumns,
+  VerificationPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
+import { TechnicianQualifications } from '../../../src/components/company/TechnicianQualifications';
+import { TechnicianDocumentList } from '../../../src/components/company/TechnicianDocuments';
+import { CompanyTechnicianHistory } from '../../../src/components/company/CompanyTechnicianHistory';
+import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
+import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
+import { offerRepository } from '../../../src/repositories/v2/offerRepository';
+import { companyTechnicianRelations } from '../../../src/utils/companyTechnicianRelations';
+import { OfferInboxRecord } from '../../../src/types/offerRequest';
+import { Offer } from '../../../src/types/offer';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { getDocumentSignedUrl, openDocumentPreWindow, openDocumentUrl } from '../../../src/lib/documentStorage';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { getEngineLabel } from '../../../src/constants/engines';
-import { credentialLabel } from '../../../src/constants/licenses';
-import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
 import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
 import { CONTRACT_TYPES } from '../../../src/constants/contractTypes';
 import { isUnlocked, UnlockedTechnicianView } from '../../../src/types/privacy';
@@ -58,29 +47,16 @@ import { ChatRoom } from '../../../src/types/chat';
 import { Document } from '../../../src/types/document';
 import { notify } from '../../../src/utils/platformAlert';
 import { formatLocation } from '../../../src/utils/formatLocation';
+import { isProfileOpenedFromChat } from '../../../src/utils/companyNavigation';
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  license: 'License',
-  medical: 'Medical',
-  id: 'ID',
-  training: 'Training',
-  resume: 'Resume',
-  other: 'Other',
-};
+// Perfil completo de un técnico (rediseño, fase 3; maquetas C-Tech y
+// W-D-Tech). Sólo se abre tras un contacto aceptado, como antes (respuesta 18):
+// si la vista llega sin identidad, la pantalla dice que no está disponible.
 
 function availabilityLabel(status?: string): string {
   if (status === 'open_to_offers') return 'Open to offers';
   if (status === 'unavailable') return 'Unavailable';
   return 'Not specified';
-}
-
-function formatDate(value?: string): string {
-  if (!value) return 'Not specified';
-  return new Date(value).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
 }
 
 function socialLabel(key: string): string {
@@ -99,11 +75,12 @@ function compactUrlLabel(url: string): string {
 }
 
 export default function CompanyTechnicianProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  // Abierto desde un chat: sin "Open chat", para no ir de uno a otro sin fin.
+  const openedFromChat = isProfileOpenedFromChat(from);
   const router = useRouter();
   const goBack = useGoBack();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 760;
+  const wide = useIsWide();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
   const { ratingIndex } = useAircraftTypeRatingsCatalog();
@@ -111,6 +88,8 @@ export default function CompanyTechnicianProfileScreen() {
 
   const [profile, setProfile] = useState<UnlockedTechnicianView | null>(null);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const [relations, setRelations] = useState<OfferInboxRecord[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'locked' | 'missing' | 'error'>('loading');
   const [refreshing, setRefreshing] = useState(false);
   const [viewingDocumentId, setViewingDocumentId] = useState<string | null>(null);
@@ -120,9 +99,12 @@ export default function CompanyTechnicianProfileScreen() {
     if (!companyId || !id) return;
 
     try {
-      const [view, companyRooms] = await Promise.all([
+      const [view, companyRooms, applications, requests, companyOffers] = await Promise.all([
         technicianRepositoryV2.getViewForCompany(id, companyId),
         chatRepository.getRoomsForCompany(companyId),
+        offerApplicationRepository.getForCompany(companyId),
+        offerRequestRepository.getForCompany(companyId),
+        offerRepository.getForCompany(companyId),
       ]);
       if (!signal.active) return;
 
@@ -141,6 +123,8 @@ export default function CompanyTechnicianProfileScreen() {
       }
 
       setProfile(view);
+      setRelations(companyTechnicianRelations(companyId, id, applications, requests));
+      setOffers(companyOffers);
       setRooms(companyRooms.filter((room) => room.technicianId === id));
       setState('ready');
     } catch {
@@ -191,7 +175,7 @@ export default function CompanyTechnicianProfileScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadingScreen color={companyUi.accent} role="company" />
+        <LoadingScreen color={colors.primary} role="company" />
       </>
     );
   }
@@ -215,485 +199,275 @@ export default function CompanyTechnicianProfileScreen() {
     return (
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[companyStyles.content, isWide && companyStyles.contentWide, styles.stateContent]}>
-          <CompanyPageHeader
-            eyebrow="Technician profile"
+        {!wide ? <PageBar title="Technician profile" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          {wide ? <BackLink onPress={goBack} /> : null}
+          <EmptyBlock
             title={copy.title}
-            subtitle={copy.subtitle}
-            onBack={goBack}
+            text={copy.subtitle}
+            action={state === 'error' ? (
+              <PillButton
+                label="Try again"
+                variant="outline"
+                size="md"
+                onPress={() => {
+                  const signal = { active: true };
+                  loadSignal.current = signal;
+                  setState('loading');
+                  load(signal);
+                }}
+              />
+            ) : undefined}
           />
-          <EmptyPanel title={copy.title} subtitle={copy.subtitle} />
-          {state === 'error' ? (
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => {
-                const signal = { active: true };
-                loadSignal.current = signal;
-                setState('loading');
-                load(signal);
-              }}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryButtonText}>Try again</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        </PageBody>
       </CompanyScreen>
     );
   }
 
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+  const socials = Object.entries(profile.socialLinks ?? {}).filter(([, url]) => Boolean(url)) as [string, string][];
+  const openRoom = (room: ChatRoom) => router.push(`/company/chats/${room.id}` as any);
+
+  const hero = (
+    <PersonHero
+      name={fullName}
+      photoPath={profile.photoPath}
+      anonymous={false}
+      wide={wide}
+      subtitle={[technicianTypeLabels(profile.technicianTypes, 'Technician'), formatLocation(profile.city, profile.country) || 'Location not specified'].join(' · ')}
+      chips={(
+        <>
+          <VerificationPill status={profile.verificationStatus} large={wide} />
+          <StatusPill label="Identity unlocked" tone="info" large={wide} />
+        </>
+      )}
+    />
+  );
+
+  const contact = (
+    <View style={styles.contactList}>
+      <ContactRow label="Email" value={profile.email} wide={wide} onPress={() => Linking.openURL(`mailto:${profile.email}`)} />
+      {profile.phone
+        ? <ContactRow label="Phone" value={profile.phone} wide={wide} onPress={() => Linking.openURL(`tel:${profile.phone}`)} />
+        : <ContactRow label="Phone" value="Not provided" wide={wide} />}
+      {socials.map(([key, url]) => (
+        <View key={key} style={wide ? styles.contactStack : styles.contactRow}>
+          <Text style={styles.contactLabel}>{socialLabel(key)}</Text>
+          <ExternalLink
+            url={url}
+            color={colors.primary}
+            displayText={compactUrlLabel(url)}
+            style={styles.externalLink}
+            containerStyle={styles.externalLinkPressable}
+          />
+        </View>
+      ))}
+    </View>
+  );
+
+  const availabilityValue = availabilityLabel(profile.availability.status);
+  const availabilityTiles = [
+    { label: 'Availability', value: availabilityValue, color: profile.availability.status === 'open_to_offers' ? colors.success : undefined },
+    { label: 'Available immediately', value: profile.availability.immediately ? 'Yes' : 'No', color: profile.availability.immediately ? colors.success : undefined },
+    { label: 'Contract preferences', value: contractLabels.length > 0 ? contractLabels.join(' · ') : 'Not specified' },
+    { label: 'Experience', value: profile.yearsExperience === undefined ? 'Not specified' : `${profile.yearsExperience} years` },
+  ];
+
+  const documents = (
+    <Section title="Verified documents" wide={wide}>
+      <TechnicianDocumentList
+        documents={profile.documents}
+        viewingId={viewingDocumentId}
+        onView={handleViewDocument}
+        emptyText="No verified documents available."
+      />
+      <Text style={styles.docNote}>Only documents verified by the platform are visible here.</Text>
+    </Section>
+  );
+
+  // Una conversación: botón "Open chat". Varias (una candidatura y una oferta
+  // directa aceptadas): la lista de siempre, una por relación.
+  const conversations = !openedFromChat && rooms.length > 1 ? (
+    <Section title="Conversations" wide={wide}>
+      {rooms.map((room, index) => (
+        <PillButton
+          key={room.id}
+          label={`${room.offerApplicationId ? 'Application chat' : 'Direct offer chat'} · ${index + 1}`}
+          icon={MessageCircle}
+          variant={wide ? 'primary' : 'outline'}
+          size="md"
+          onPress={() => openRoom(room)}
+          accessibilityLabel={`Open ${room.offerApplicationId ? 'application' : 'direct offer'} chat`}
+        />
+      ))}
+    </Section>
+  ) : null;
+  const singleChat = !openedFromChat && rooms.length === 1
+    ? <PillButton label="Open chat" icon={MessageCircle} onPress={() => openRoom(rooms[0])} />
+    : null;
+
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />;
+  const history = <CompanyTechnicianHistory relations={relations} offers={offers} />;
+
+  if (wide) {
+    return (
+      <CompanyScreen>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PageBody wide refreshControl={refresh}>
+          <BackLink onPress={goBack} />
+          <TwoColumns
+            main={(
+              <>
+                {hero}
+                <TechnicianQualifications tech={profile} ratingIndex={ratingIndex} engineIndex={engineIndex} variant="sections" wide />
+                {documents}
+                {history}
+              </>
+            )}
+            aside={(
+              <AsideCard>
+                <Text style={styles.asideTitle}>Contact details</Text>
+                {contact}
+                <View style={styles.divider} />
+                {availabilityTiles.map((tile) => (
+                  <View key={tile.label} style={styles.contactStack}>
+                    <Text style={styles.contactLabel}>{tile.label}</Text>
+                    <Text style={[styles.asideValue, tile.color ? { color: tile.color } : null]}>{tile.value}</Text>
+                  </View>
+                ))}
+                {singleChat}
+                {conversations}
+              </AsideCard>
+            )}
+          />
+        </PageBody>
+      </CompanyScreen>
+    );
+  }
 
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[companyStyles.content, isWide && companyStyles.contentWide]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <CompanyPageHeader
-          eyebrow="Technician profile"
-          title="Unlocked contact"
-          subtitle="Full profile available to your company after an accepted connection."
-          onBack={goBack}
-          right={isWide ? <CompanyBadge label="Identity unlocked" tone="success" /> : undefined}
-        />
-
-        <CompanyCard style={styles.heroCard}>
-          <View style={[styles.heroMain, isWide && styles.heroMainWide]}>
-            <InitialAvatar label={fullName} size={64} color={companyUi.accent} />
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroName}>{fullName}</Text>
-              <Text style={styles.heroRole}>{technicianTypeLabels(profile.technicianTypes, 'Technician')}</Text>
-              <View style={styles.heroMeta}>
-                <View style={styles.inlineMeta}>
-                  <MapPin color={companyUi.textMuted} size={15} strokeWidth={2} />
-                  <Text style={styles.inlineMetaText}>{formatLocation(profile.city, profile.country) || 'Location not specified'}</Text>
-                </View>
-                <View style={styles.inlineMeta}>
-                  <BriefcaseBusiness color={companyUi.textMuted} size={15} strokeWidth={2} />
-                  <Text style={styles.inlineMetaText}>
-                    {profile.yearsExperience === undefined ? 'Experience not specified' : `${profile.yearsExperience} years experience`}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-          <View style={styles.badgeRow}>
-            {!isWide ? <CompanyBadge label="Identity unlocked" tone="success" small /> : null}
-            <CompanyBadge label={availabilityLabel(profile.availability.status)} tone="cyan" small />
-            <CompanyBadge
-              label={profile.verificationStatus === 'verified' ? 'Verified profile' : profile.verificationStatus}
-              tone={profile.verificationStatus === 'verified' ? 'success' : 'warning'}
-              small
-            />
-          </View>
-        </CompanyCard>
-
-        <View style={[styles.columns, isWide && styles.columnsWide]}>
-          <View style={styles.column}>
-            <ProfileSection
-              icon={UserRound}
-              title="Contact details"
-              subtitle="Private details unlocked for your company."
-            >
-              <ContactRow
-                icon={Mail}
-                label="Email"
-                value={profile.email}
-                onPress={() => Linking.openURL(`mailto:${profile.email}`)}
-              />
-              {profile.phone ? (
-                <ContactRow
-                  icon={Phone}
-                  label="Phone"
-                  value={profile.phone}
-                  onPress={() => Linking.openURL(`tel:${profile.phone}`)}
-                />
-              ) : (
-                <DetailRow label="Phone" value="Not provided" />
-              )}
-              {Object.entries(profile.socialLinks ?? {}).filter(([, url]) => Boolean(url)).map(([key, url]) => (
-                <View key={key} style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>{socialLabel(key)}</Text>
-                  <View style={styles.detailValueWrap}>
-                    <ExternalLink
-                      url={url!}
-                      color={companyUi.accent}
-                      displayText={compactUrlLabel(url!)}
-                      style={styles.externalLink}
-                      containerStyle={styles.externalLinkPressable}
-                    />
-                  </View>
-                </View>
-              ))}
-            </ProfileSection>
-
-            <ProfileSection
-              icon={Clock}
-              title="Availability"
-              subtitle="Current work preferences declared by the technician."
-            >
-              <DetailRow label="Status" value={availabilityLabel(profile.availability.status)} />
-              <DetailRow label="Available immediately" value={profile.availability.immediately ? 'Yes' : 'No'} />
-              <View style={styles.chipSection}>
-                <Text style={styles.detailLabel}>Contract preferences</Text>
-                <View style={styles.chipRow}>
-                  {contractLabels.length > 0
-                    ? contractLabels.map((label) => <CompanyChip key={label} label={label} />)
-                    : <Text style={styles.emptyText}>Not specified</Text>}
-                </View>
-              </View>
-            </ProfileSection>
-
-            {rooms.length > 0 ? (
-              <ProfileSection
-                icon={MessageCircle}
-                title="Conversations"
-                subtitle="Chats created by accepted connections with this technician."
-              >
-                {rooms.map((room, index) => (
-                  <TouchableOpacity
-                    key={room.id}
-                    style={styles.chatButton}
-                    onPress={() => router.push(`/company/chats/${room.id}` as any)}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${room.offerApplicationId ? 'application' : 'direct offer'} chat`}
-                  >
-                    <MessageCircle color={colors.white} size={17} strokeWidth={2.2} />
-                    <View style={styles.chatButtonCopy}>
-                      <Text style={styles.chatButtonTitle}>
-                        {room.offerApplicationId ? 'Application chat' : 'Direct offer chat'}
-                      </Text>
-                      <Text style={styles.chatButtonSub}>
-                        Conversation {rooms.length > 1 ? index + 1 : 'with this technician'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ProfileSection>
-            ) : null}
-          </View>
-
-          <View style={styles.column}>
-            <ProfileSection
-              icon={BadgeCheck}
-              title="Licenses"
-              subtitle="Licence categories declared on the technician profile."
-            >
-              <View style={styles.chipRow}>
-                {profile.licenses.length > 0
-                  ? profile.licenses.map((license) => (
-                      <CompanyChip
-                        key={`${license.authority}-${license.licenseCode}`}
-                        label={credentialLabel(license.authority, license.licenseCode)}
-                      />
-                    ))
-                  : <Text style={styles.emptyText}>No licenses listed.</Text>}
-              </View>
-            </ProfileSection>
-
-            <ProfileSection
-              icon={ShieldCheck}
-              title="Type ratings"
-              subtitle="Aircraft ratings linked to a licence category."
-            >
-              {profile.habilitations.length > 0 ? profile.habilitations.map((habilitation) => (
-                <QualificationRow
-                  key={habilitation.id}
-                  icon={Plane}
-                  title={habilitation.aircraftTypeRatingId
-                    ? getAircraftTypeRatingLabel(habilitation.aircraftTypeRatingId, ratingIndex)
-                    : 'Rating not specified'}
-                  meta={[
-                    habilitation.licenseCode,
-                    habilitation.experienceYears === undefined ? null : `${habilitation.experienceYears} yrs`,
-                    habilitation.expiresAt ? `Expires ${formatDate(habilitation.expiresAt)}` : null,
-                  ].filter(Boolean).join(' · ')}
-                  badge={habilitation.isCurrent === false ? 'Not current' : 'Current'}
-                  badgeTone={habilitation.isCurrent === false ? 'warning' : 'success'}
-                />
-              )) : <Text style={styles.emptyText}>No type ratings listed.</Text>}
-            </ProfileSection>
-
-            <ProfileSection
-              icon={Wrench}
-              title="Aircraft experience"
-              subtitle="Aircraft the technician has worked on, with or without a licence."
-            >
-              {profile.aircraftExperience.length > 0 ? profile.aircraftExperience.map((experience) => (
-                <QualificationRow
-                  key={experience.id}
-                  icon={Plane}
-                  title={getAircraftTypeRatingLabel(experience.aircraftTypeRatingId, ratingIndex)}
-                  meta={experience.years === undefined ? 'Experience duration not specified' : `${experience.years} years declared`}
-                />
-              )) : <Text style={styles.emptyText}>No aircraft experience listed.</Text>}
-            </ProfileSection>
-
-            {/* Paso 5b: los motores declarados. Hacen a un técnico elegible y
-                bien puntuado en una oferta de motor; la empresa los ve igual
-                que la experiencia en aeronaves. */}
-            <ProfileSection
-              icon={Wrench}
-              title="Engine experience"
-              subtitle="Engines the technician has declared working on."
-            >
-              {profile.engines.length > 0 ? profile.engines.map((engine) => (
-                <QualificationRow
-                  key={engine.id}
-                  icon={Wrench}
-                  title={getEngineLabel(engine.engineId, engineIndex)}
-                  meta={engine.years === undefined ? 'Experience duration not specified' : `${engine.years} years declared`}
-                />
-              )) : <Text style={styles.emptyText}>No engines listed.</Text>}
-            </ProfileSection>
-          </View>
+      <PageBar title="Technician profile" onBack={goBack} />
+      <PageBody wide={false} refreshControl={refresh}>
+        {hero}
+        <View style={styles.contactCard}>
+          <Text style={styles.contactCardTitle}>Contact details</Text>
+          {contact}
         </View>
-
-        <ProfileSection
-          icon={FileCheck}
-          title="Verified documents"
-          subtitle="Only documents verified by the platform are visible here."
-        >
-          {profile.documents.length > 0 ? profile.documents.map((doc) => (
-            <View key={doc.id} style={styles.documentRow}>
-              <View style={styles.documentCopy}>
-                <Text style={styles.documentName}>{doc.fileName}</Text>
-                <Text style={styles.documentMeta}>
-                  {DOC_TYPE_LABELS[doc.type] ?? doc.type}
-                  {doc.expiresAt ? ` · Expires ${formatDate(doc.expiresAt)}` : ''}
-                </Text>
-              </View>
-              <CompanyBadge label="Verified" tone="success" small />
-              <TouchableOpacity
-                style={styles.documentButton}
-                onPress={() => handleViewDocument(doc)}
-                disabled={viewingDocumentId !== null}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${doc.fileName}`}
-              >
-                {viewingDocumentId === doc.id
-                  ? <ActivityIndicator color={companyUi.accent} size="small" />
-                  : <Download color={companyUi.accent} size={17} strokeWidth={2.2} />}
-              </TouchableOpacity>
-            </View>
-          )) : <Text style={styles.emptyText}>No verified documents available.</Text>}
-        </ProfileSection>
-      </ScrollView>
+        <StatGrid>
+          {availabilityTiles.map((tile) => (
+            <StatTile key={tile.label} label={tile.label} value={tile.value} valueColor={tile.color} />
+          ))}
+        </StatGrid>
+        <TechnicianQualifications tech={profile} ratingIndex={ratingIndex} engineIndex={engineIndex} variant="sections" />
+        {documents}
+        {history}
+        {conversations}
+      </PageBody>
+      {singleChat ? <StickyBar>{singleChat}</StickyBar> : null}
     </CompanyScreen>
   );
 }
 
-function ProfileSection({
-  icon,
-  title,
-  subtitle,
-  children,
-}: {
-  icon: React.ComponentType<any>;
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <CompanyCard style={styles.sectionCard}>
-      <View style={styles.sectionHeader}>
-        <IconBox icon={icon} color={companyUi.accent} backgroundColor={companyUi.accentSoft} />
-        <View style={styles.sectionHeaderCopy}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionSub}>{subtitle}</Text>
-        </View>
-      </View>
-      <View style={styles.sectionBody}>{children}</View>
-    </CompanyCard>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-}
-
 function ContactRow({
-  icon: Icon,
   label,
   value,
+  wide,
   onPress,
 }: {
-  icon: React.ComponentType<any>;
   label: string;
   value: string;
-  onPress: () => void;
+  wide: boolean;
+  onPress?: () => void;
 }) {
+  const body = (
+    <>
+      <Text style={styles.contactLabel}>{label}</Text>
+      <Text style={[wide ? styles.asideValue : styles.contactValue, onPress ? styles.contactLink : !onPress && styles.contactMuted]} numberOfLines={1}>
+        {value}
+      </Text>
+    </>
+  );
+  if (!onPress) return <View style={wide ? styles.contactStack : styles.contactRow}>{body}</View>;
   return (
-    <TouchableOpacity
-      style={styles.contactRow}
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.75}
+      style={wide ? styles.contactStack : styles.contactRow}
       accessibilityRole="link"
       accessibilityLabel={`${label}: ${value}`}
     >
-      <Icon color={companyUi.accent} size={17} strokeWidth={2.2} />
-      <View style={styles.contactCopy}>
-        <Text style={styles.contactLabel}>{label}</Text>
-        <Text style={styles.contactValue}>{value}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function QualificationRow({
-  icon: Icon,
-  title,
-  meta,
-  badge,
-  badgeTone = 'muted',
-}: {
-  icon: React.ComponentType<any>;
-  title: string;
-  meta: string;
-  badge?: string;
-  badgeTone?: 'success' | 'warning' | 'muted';
-}) {
-  return (
-    <View style={styles.qualificationRow}>
-      <View style={styles.qualificationIcon}>
-        <Icon color={companyUi.textSoft} size={17} strokeWidth={2} />
-      </View>
-      <View style={styles.qualificationCopy}>
-        <Text style={styles.qualificationTitle}>{title}</Text>
-        <Text style={styles.qualificationMeta}>{meta}</Text>
-      </View>
-      {badge ? <CompanyBadge label={badge} tone={badgeTone} small /> : null}
-    </View>
+      {body}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  stateContent: { flex: 1, justifyContent: 'center' },
-  retryButton: {
-    minHeight: 48,
-    marginTop: spacing.md,
-    borderRadius: 14,
-    backgroundColor: companyUi.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
+  contactCard: {
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceSoft,
+    gap: 8,
   },
-  retryButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  heroCard: { gap: spacing.md, marginBottom: spacing.md },
-  heroMain: { gap: spacing.md },
-  heroMainWide: { flexDirection: 'row', alignItems: 'center' },
-  heroCopy: { flex: 1, minWidth: 0 },
-  heroName: { fontSize: 24, lineHeight: 30, fontWeight: '800', color: companyUi.text },
-  heroRole: { marginTop: 3, fontSize: 14, lineHeight: 20, fontWeight: '700', color: companyUi.accent },
-  heroMeta: { marginTop: spacing.sm, gap: spacing.xs },
-  inlineMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  inlineMetaText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500', color: companyUi.textSoft },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  columns: { gap: spacing.md },
-  columnsWide: { flexDirection: 'row', alignItems: 'flex-start' },
-  column: { flex: 1, gap: spacing.md, minWidth: 0 },
-  sectionCard: { gap: spacing.md, marginBottom: spacing.md },
-  sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  sectionHeaderCopy: { flex: 1, minWidth: 0 },
-  sectionTitle: { fontSize: 16, lineHeight: 21, fontWeight: '800', color: companyUi.text },
-  sectionSub: { marginTop: 2, fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
-  sectionBody: { gap: spacing.sm },
-  detailRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
-    paddingTop: spacing.sm,
+  contactCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
   },
-  detailLabel: { flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '700', color: companyUi.textMuted },
-  detailValue: { flex: 2, fontSize: 13, lineHeight: 18, fontWeight: '600', color: companyUi.text, textAlign: 'right' },
-  detailValueWrap: { flex: 2, minWidth: 0, alignItems: 'flex-end' },
-  externalLink: { textAlign: 'right' },
-  externalLinkPressable: { alignSelf: 'stretch', minHeight: 44, justifyContent: 'center' },
+  contactList: {
+    gap: 8,
+  },
   contactRow: {
-    minHeight: 52,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: companyUi.borderSoft,
-    backgroundColor: companyUi.surfaceSoft,
-    paddingHorizontal: spacing.sm,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 12,
+    minHeight: 28,
   },
-  contactCopy: { flex: 1, minWidth: 0 },
-  contactLabel: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: companyUi.textMuted },
-  contactValue: { marginTop: 2, fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.accent },
-  chipSection: { gap: spacing.xs, borderTopWidth: 1, borderTopColor: companyUi.borderSoft, paddingTop: spacing.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  emptyText: { fontSize: 13, lineHeight: 19, fontWeight: '500', color: companyUi.textSoft },
-  qualificationRow: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
-    paddingTop: spacing.sm,
+  contactStack: {
+    gap: 2,
   },
-  qualificationIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: companyUi.surfaceSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  contactLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  qualificationCopy: { flex: 1, minWidth: 0 },
-  qualificationTitle: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.text },
-  qualificationMeta: { marginTop: 2, fontSize: 11, lineHeight: 16, fontWeight: '500', color: companyUi.textMuted },
-  chatButton: {
-    minHeight: 54,
-    borderRadius: 15,
-    backgroundColor: companyUi.accent,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  contactValue: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'right',
   },
-  chatButtonCopy: { flex: 1, minWidth: 0 },
-  chatButtonTitle: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.white },
-  chatButtonSub: { marginTop: 1, fontSize: 11, lineHeight: 15, fontWeight: '500', color: '#E0F2FE' },
-  documentRow: {
-    minHeight: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
-    paddingTop: spacing.sm,
+  contactLink: {
+    color: colors.primary,
   },
-  documentCopy: { flex: 1, minWidth: 0 },
-  documentName: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.text },
-  documentMeta: { marginTop: 2, fontSize: 11, lineHeight: 16, fontWeight: '500', color: companyUi.textMuted },
-  documentButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: companyUi.accent,
-    backgroundColor: companyUi.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  contactMuted: {
+    color: colors.textMuted,
+  },
+  externalLink: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  externalLinkPressable: {
+    flexShrink: 1,
+  },
+  asideTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  asideValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+  },
+  docNote: {
+    fontSize: 12.5,
+    color: colors.textMuted,
   },
 });

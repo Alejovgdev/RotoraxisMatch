@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { spacing } from '../../theme';
-import { CompanyCard, CompanyChip, companyUi } from './CompanyUI';
+import { View, StyleSheet } from 'react-native';
+import { Chip, Text } from '../ui';
+import { colors } from '../../theme';
 import { AuthorityCode, AuthorityLicenseCode, LicenseCode } from '../../types/catalog';
 import { AUTHORITIES, authorityLabel } from '../../constants/licenses';
 import {
@@ -13,6 +13,7 @@ import {
   selectableLicenses,
   showsAcceptedAuthorities,
 } from '../../utils/offerFormRules';
+import { WizardChipRow, WizardError, WizardLabel, WizardNote } from './OfferWizardParts';
 
 interface Props {
   // El formulario entero y no campo a campo: qué autoridades y licencias hay
@@ -38,6 +39,9 @@ interface Props {
 // depende de quién los emite (CASA sin B2L/B3/L, GCAA sin B2L, FAA sólo A, P y
 // A&P). Nada viene elegido de fábrica: el EASA por defecto que rellenaba el
 // repositorio se retiró con este selector.
+//
+// Rediseño, fase 4: va en el paso 2 del asistente (maqueta W-Post2), debajo de
+// la pregunta de la licencia. Mismos campos y mismas reglas; cambia el aspecto.
 export function RequiredLicensesSection({
   form,
   onChangeAuthority,
@@ -53,48 +57,49 @@ export function RequiredLicensesSection({
   const authority = form.licenseAuthority;
 
   return (
-    <CompanyCard style={styles.card}>
-      <Text style={styles.title}>Licence</Text>
-      <Text style={styles.subtitle}>
+    <View style={styles.wrap}>
+      <WizardNote>
         {form.offerKind === 'engine'
           ? 'Optional, one per offer, and only a licence that certifies engine work: a Part-66 B1 or an FAA P or A&P.'
-          : 'One per offer. Every aircraft you add below is required under this licence — two licences would be two different jobs.'}
-      </Text>
+          : 'One per offer. Every aircraft you add in the next step is required under this licence — two licences would be two different jobs.'}
+      </WizardNote>
 
-      <Text style={styles.fieldLabel}>Issuing authority</Text>
-      <View style={styles.chipRow}>
-        {authorities.map((code) => (
-          <CompanyChip key={code} label={authorityLabel(code)} selected={authority === code} onPress={() => onChangeAuthority(code)} />
-        ))}
+      <View style={styles.section}>
+        <WizardLabel caps>Issuing authority</WizardLabel>
+        <WizardChipRow>
+          {authorities.map((code) => (
+            <Chip key={code} label={authorityLabel(code)} selected={authority === code} onPress={() => onChangeAuthority(code)} />
+          ))}
+        </WizardChipRow>
+        <WizardError>{authorityError}</WizardError>
       </View>
-      {authorityError ? <Text style={styles.error}>{authorityError}</Text> : null}
 
       {authority ? (
-        <>
-          <Text style={styles.fieldLabel}>{authorityLabel(authority)} licence</Text>
-          <View style={styles.chipRow}>
+        <View style={styles.section}>
+          <WizardLabel caps>{`${authorityLabel(authority)} licence this role certifies under`}</WizardLabel>
+          <WizardChipRow>
             {licenses.map((code) => (
-              <CompanyChip key={code} label={code} selected={form.licenseCode === code} onPress={() => onChangeLicense(code)} />
+              <Chip key={code} variant="option" label={code} selected={form.licenseCode === code} onPress={() => onChangeLicense(code)} />
             ))}
-          </View>
+          </WizardChipRow>
           {licenseError ? (
-            <Text style={styles.error}>{licenseError}</Text>
+            <WizardError>{licenseError}</WizardError>
           ) : !form.licenseCode ? (
-            <Text style={styles.inlineHint}>Pick the licence this role certifies under.</Text>
+            <WizardNote tone="hint">Pick the licence this role certifies under.</WizardNote>
           ) : null}
           {/* Punto 2 de los ajustes: una oferta de motor no lleva aeronaves
-              (dos triggers de la 076 lo impiden), asi que esta nota solo aplica
+              (dos triggers de la 076 lo impiden), así que esta nota sólo aplica
               a las ofertas de aeronave con autoridad FAA. */}
           {authority === 'FAA' && form.offerKind !== 'engine' ? (
-            <Text style={styles.note}>
-              FAA certificates carry no aircraft type ratings. Any aircraft you add below count if the technician holds
-              a type rating on them, from any authority, or has declared experience on them, signed off or not: they
-              raise the score, and nobody is excluded for lacking them.
-            </Text>
+            <WizardNote>
+              FAA certificates carry no aircraft type ratings. Any aircraft you add in the next step count if the
+              technician holds a type rating on them, from any authority, or has declared experience on them, signed off
+              or not: they raise the score, and nobody is excluded for lacking them.
+            </WizardNote>
           ) : null}
-        </>
+        </View>
       ) : (
-        <Text style={styles.inlineHint}>Pick the authority first — the licences it issues appear here.</Text>
+        <WizardNote tone="hint">Pick the authority first — the licences it issues appear here.</WizardNote>
       )}
 
       {/* Sesión 2: sustituye a la casilla "Considerar otras autoridades". Las
@@ -103,56 +108,55 @@ export function RequiredLicensesSection({
           FAA, las Part-66 que emiten la categoría elegida, y debajo la
           categoría, una sola. */}
       {showsAcceptedAuthorities(form) && authority && form.licenseCode ? (
-        <>
-          <Text style={styles.fieldLabel}>Also accept licences from:</Text>
-          <View style={styles.chipRow}>
-            {acceptableAuthorities(form).map((code) => (
-              <CompanyChip
-                key={code}
-                label={authorityLabel(code)}
-                selected={form.acceptedAuthorities.includes(code)}
-                onPress={() => onToggleAcceptedAuthority(code)}
-              />
-            ))}
-          </View>
+        <View style={styles.section}>
+          <WizardLabel caps>Also accept licences from</WizardLabel>
+          <WizardChipRow>
+            {acceptableAuthorities(form).map((code) => {
+              const on = form.acceptedAuthorities.includes(code);
+              return (
+                <Chip
+                  key={code}
+                  label={on ? `✓ ${authorityLabel(code)}` : authorityLabel(code)}
+                  selected={on}
+                  onPress={() => onToggleAcceptedAuthority(code)}
+                />
+              );
+            })}
+          </WizardChipRow>
           {authority === 'FAA' ? (
-            <>
-              <Text style={styles.fieldLabel}>Licence category:</Text>
-              <View style={styles.chipRow}>
+            <View style={styles.categoryBox}>
+              <Text style={styles.categoryTitle}>Licence category for the Part-66 authorities</Text>
+              <WizardChipRow>
                 {acceptableLicenseCodes(form).map((code) => (
-                  <CompanyChip
+                  <Chip
                     key={code}
+                    variant="option"
                     label={code}
                     selected={form.acceptedLicenseCode === code}
                     onPress={() => onSelectAcceptedLicenseCode(code)}
                   />
                 ))}
-              </View>
-            </>
+              </WizardChipRow>
+            </View>
           ) : null}
-          {acceptedError ? <Text style={styles.error}>{acceptedError}</Text> : null}
-          <Text style={styles.note}>
+          <WizardError>{acceptedError}</WizardError>
+          <WizardNote>
             {[acceptedAuthoritiesNote(form), 'This is a search preference, not legal recognition.'].filter(Boolean).join(' ')}
-          </Text>
-        </>
+          </WizardNote>
+        </View>
       ) : null}
-    </CompanyCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm, marginBottom: spacing.md },
-  title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
-  subtitle: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
-  fieldLabel: { marginTop: spacing.xs, fontSize: 12, lineHeight: 16, fontWeight: '700', color: companyUi.textSoft },
-  inlineHint: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
-    fontStyle: 'italic',
-    color: companyUi.amber,
+  wrap: { gap: 20 },
+  section: { gap: 8 },
+  categoryBox: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSoft,
   },
-  note: { fontSize: 11, lineHeight: 15, fontWeight: '500', color: companyUi.textMuted },
-  error: { fontSize: 11, lineHeight: 16, fontWeight: '600', color: companyUi.red },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  categoryTitle: { fontSize: 13.5, fontWeight: '800', color: colors.text },
 });

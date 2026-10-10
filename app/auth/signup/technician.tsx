@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -10,6 +8,8 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Text, TextInput } from '../../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
@@ -41,6 +41,8 @@ function buildDate(y: string, m: string, d: string): string | null {
 }
 
 export default function TechnicianSignupScreen() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   const { options: techTypes, loading: typesLoading } = useTechnicianTypes();
@@ -210,7 +212,7 @@ export default function TechnicianSignupScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={desktopScrollbar}
         >
           <TouchableOpacity onPress={goBack} style={styles.back}>
             <Text style={styles.backText}>← Back</Text>
@@ -233,7 +235,7 @@ export default function TechnicianSignupScreen() {
                     value={firstName}
                     onChangeText={setFirstName}
                     placeholder="John"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.placeholder}
                     autoCapitalize="words"
                     returnKeyType="next"
                   />
@@ -246,7 +248,7 @@ export default function TechnicianSignupScreen() {
                     value={lastName}
                     onChangeText={setLastName}
                     placeholder="Smith"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.placeholder}
                     autoCapitalize="words"
                     returnKeyType="next"
                   />
@@ -263,7 +265,7 @@ export default function TechnicianSignupScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 placeholder="you@example.com"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 autoComplete="email"
                 returnKeyType="next"
               />
@@ -277,7 +279,7 @@ export default function TechnicianSignupScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 placeholder="Min 8 characters"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 returnKeyType="next"
               />
             </FormField>
@@ -289,7 +291,7 @@ export default function TechnicianSignupScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 placeholder="Repeat password"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 returnKeyType="next"
               />
             </FormField>
@@ -304,7 +306,7 @@ export default function TechnicianSignupScreen() {
                     value={birthDay}
                     onChangeText={setBirthDay}
                     placeholder="DD"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.placeholder}
                     keyboardType="number-pad"
                     maxLength={2}
                     returnKeyType="next"
@@ -318,7 +320,7 @@ export default function TechnicianSignupScreen() {
                     value={birthMonth}
                     onChangeText={setBirthMonth}
                     placeholder="MM"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.placeholder}
                     keyboardType="number-pad"
                     maxLength={2}
                     returnKeyType="next"
@@ -332,7 +334,7 @@ export default function TechnicianSignupScreen() {
                     value={birthYear}
                     onChangeText={setBirthYear}
                     placeholder="YYYY"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.placeholder}
                     keyboardType="number-pad"
                     maxLength={4}
                     returnKeyType="next"
@@ -350,13 +352,13 @@ export default function TechnicianSignupScreen() {
                 onChange={setTechnicianTypes}
                 loading={typesLoading}
                 palette={{
-                  text: colors.white,
-                  muted: colors.cyanLight,
-                  border: colors.cyanLight + '55',
+                  text: colors.text,
+                  muted: colors.textMuted,
+                  border: colors.border,
                   surface: 'transparent',
                   accent: colors.cyan,
                   accentText: colors.cyan,
-                  accentSurface: colors.cyan + '33',
+                  accentSurface: colors.primarySoft,
                 }}
               />
             </FormField>
@@ -370,7 +372,7 @@ export default function TechnicianSignupScreen() {
                 value={yearsExperience}
                 onChangeText={(v) => setYearsExperience(v.replace(/[^0-9]/g, ''))}
                 placeholder="e.g. 8 — enter 0 if you have none yet"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 keyboardType="number-pad"
                 maxLength={2}
                 returnKeyType="next"
@@ -454,7 +456,7 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
     padding: spacing.lg,
@@ -463,21 +465,21 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
-  backText: { color: colors.cyanLight, fontSize: 14, fontWeight: '500' },
+  backText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   header: { marginBottom: spacing.lg },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
     marginBottom: spacing.sm,
   },
-  subtitle: { fontSize: 13, color: colors.cyanLight, lineHeight: 19 },
+  subtitle: { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
   form: {
-    backgroundColor: colors.navyLight,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.borderLight,
     gap: spacing.md,
     marginBottom: spacing.md,
   },
@@ -486,7 +488,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: -8,
   },
   dateRow: { flexDirection: 'row', gap: spacing.sm },
@@ -497,15 +499,15 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.cyanLight,
+    color: colors.text,
     marginBottom: 2,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    color: colors.white,
+    borderColor: colors.border,
+    color: colors.text,
     fontSize: 15,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
@@ -521,8 +523,8 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -530,10 +532,10 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: {
     borderColor: colors.cyan,
-    backgroundColor: colors.cyan + '33',
+    backgroundColor: colors.primarySoft,
   },
   checkmark: { fontSize: 13, color: colors.cyan, fontWeight: '700', lineHeight: 16 },
-  consentText: { flex: 1, fontSize: 13, color: colors.cyanLight, lineHeight: 20 },
+  consentText: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
   consentLink: { color: colors.cyan, fontWeight: '600', textDecorationLine: 'underline' as const },
   errorText: {
     color: colors.error,

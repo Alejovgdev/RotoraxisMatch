@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   Modal,
   FlatList,
-  TextInput,
   StyleSheet,
   SafeAreaView,
   Platform,
   Image,
 } from 'react-native';
+import { Text, TextInput } from './ui/Text';
+import { focusRingWithin } from './ui/webFocusRing';
 import { ChevronDown, Search, X } from 'lucide-react-native';
 import { spacing } from '../theme';
 import { companyUi } from './company/CompanyUI';
@@ -242,7 +242,7 @@ function SearchField({
   placeholder: string;
 }) {
   return (
-    <View style={styles.searchRow}>
+    <View style={styles.searchRow} {...focusRingWithin}>
       <Search color={Platform.OS === 'web' ? companyUi.textSoft : companyUi.textMuted} size={15} strokeWidth={2} />
       <TextInput
         style={styles.searchInput}
@@ -285,13 +285,13 @@ function CountryMark({ code }: { code: string }) {
   return <Text style={styles.listItemFlag}>{countryFlag(code)}</Text>;
 }
 
-const sheetBg = '#0f1923';
-const sheetSurface = '#1a2535';
-const sheetBorder = '#2a3a50';
-const sheetText = '#e8edf2';
-const sheetTextSoft = '#8a9ab5';
-const sheetTextMuted = '#4a5a72';
-const sheetAccent = '#3b82f6';
+const sheetBg = '#FFFFFF';
+const sheetSurface = '#F3F6F9';
+const sheetBorder = '#E6ECF1';
+const sheetText = '#0E1A2B';
+const sheetTextSoft = '#526274';
+const sheetTextMuted = '#66768A';
+const sheetAccent = '#0B6A9E';
 
 const styles = StyleSheet.create({
   field: {
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderWidth: 1,
     borderColor: companyUi.border,
-    borderRadius: 14,
+    borderRadius: 999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     flexDirection: 'row',
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Platform.OS === 'web' ? companyUi.surfaceSoft : 'transparent',

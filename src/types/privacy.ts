@@ -102,6 +102,7 @@ export interface PublicLicense {
 // What a company sees AFTER offer acceptance.
 // Full identity + documents unlocked.
 export interface UnlockedTechnicianView extends SafeTechnicianPreview {
+  photoPath?: string | null;
   firstName: string;
   lastName: string;
   email: string;

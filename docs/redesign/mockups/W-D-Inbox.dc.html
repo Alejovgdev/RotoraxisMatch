@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="min-height: 780px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div>
+<dc-import name="WTopBar" active="inbox" role="{{role}}" primary="{{primary}}" hint-size="100%,132px"></dc-import>
+</div>
+
+<div style="display: flex; flex-wrap: wrap">
+<section aria-label="Conversations" style="flex: 1 1 340px; min-width: 0; box-sizing: border-box; padding: 20px 16px; border-right: 1px solid #E6ECF1; display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0 0 8px; padding: 0 8px; font-size: 24px; font-weight: 800">Inbox</h1>
+<a href="#" aria-current="page" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: #EEF3F7; text-decoration: none; color: #0E1A2B">
+<span style="flex: none"><dc-import name="WAvatar" who="t1193" size="50" hint-size="50px,50px"></dc-import></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="display: flex; justify-content: space-between; gap: 8px"><span style="font-size: 15px; font-weight: 800">Lucía Moreno</span><span style="flex: none; font-size: 12.5px; font-weight: 800; color: {{primary}}">10:24</span></span>
+<span style="font-size: 13px; color: #526274">B2 Avionics · ATR 72</span>
+<span style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{lastPreview}}</span>
+</span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; text-decoration: none; color: #0E1A2B">
+<span style="flex: none"><dc-import name="WAvatar" who="t6630" size="50" hint-size="50px,50px"></dc-import></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="display: flex; justify-content: space-between; gap: 8px"><span style="font-size: 15px; font-weight: 800">Daniel Ortega</span><span style="flex: none; font-size: 12.5px; color: #66768A">Yesterday</span></span>
+<span style="font-size: 13px; color: #526274">B2 Avionics · ATR 72 · Direct offer</span>
+<span style="font-size: 13.5px; color: #526274; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">You: Thanks! I'll call you on Monday.</span>
+</span>
+</a>
+</section>
+
+<section aria-label="Conversation with Lucía Moreno" style="flex: 999 1 520px; min-width: 0; height: 648px; display: flex; flex-direction: column">
+<div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 16px 28px; border-bottom: 1px solid #E6ECF1">
+<span style="flex: none"><dc-import name="WAvatar" who="t1193" size="44" hint-size="44px,44px"></dc-import></span>
+<span style="flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column">
+<span style="font-size: 17px; font-weight: 800">Lucía Moreno</span>
+<span style="font-size: 13.5px; color: #526274">EASA B2 · Spain · about B2 Avionics · ATR 72</span>
+</span>
+<a href="W-D-Tech.dc.html" style="flex: none; height: 44px; padding: 0 18px; border-radius: 22px; border: 1px solid #D5DEE6; display: flex; align-items: center; text-decoration: none; color: #0E1A2B; font-size: 14.5px; font-weight: 800">View profile</a>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 24px 28px">
+<span style="align-self: center; padding: 6px 12px; border-radius: 12px; background: #F3F6F9; font-size: 12.5px; font-weight: 700; color: #526274">You accepted the application · Monday</span>
+<sc-for list="{{ msgs }}" as="m" hint-placeholder-count="3">
+<div style="align-self: {{m.align}}; max-width: 62%; display: flex; flex-direction: column; gap: 3px">
+<span style="padding: 11px 16px; border-radius: {{m.radius}}; background: {{m.bg}}; color: {{m.fg}}; font-size: 15px; line-height: 1.45">{{m.text}}</span>
+<span style="font-size: 12px; color: #66768A; text-align: {{m.timeAlign}}">{{m.time}}</span>
+</div>
+</sc-for>
+</div>
+
+<sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
+<div style="flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 28px 20px; border-top: 1px solid #E6ECF1">
+<input type="text" aria-label="Message" placeholder="Write a message" value="{{draft}}" onChange="{{ onDraft }}" onKeyDown="{{ onKey }}" style="flex: 1 1 auto; min-width: 0; height: 48px; box-sizing: border-box; padding: 0 20px; border: 0; border-radius: 24px; background: #EEF3F7; font-family: inherit; font-size: 15px; color: #0E1A2B; outline: none">
+<button type="button" onClick="{{ send }}" style="flex: none; height: 48px; padding: 0 20px 0 16px; border: 0; border-radius: 24px; background: {{sendBg}}; color: #FFFFFF; display: flex; align-items: center; gap: 8px; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>
+Send
+</button>
+</div>
+</sc-if>
+<sc-if value="{{ isViewer }}" hint-placeholder-val="{{ false }}">
+<div style="flex: none; padding: 18px 28px 22px; border-top: 1px solid #E6ECF1; background: #F7F9FB; text-align: center; font-size: 14px; font-weight: 700; color: #526274">Viewer role cannot send messages.</div>
+</sc-if>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const base = [
+      { who: 'them', text: "Hi! Thanks for accepting. I've worked on the ATR 72-600 for 6 years.", time: 'Mon 09:12' },
+      { who: 'me', text: 'Great to hear. Could you start in March?', time: 'Mon 09:40' },
+      { who: 'them', text: 'Yes, March works for me.', time: '10:24' }
+    ];
+    const all = base.concat(s.extra || []);
+    const msgs = all.map((m) => {
+      const me = m.who === 'me';
+      return {
+        text: m.text, time: m.time,
+        align: me ? 'flex-end' : 'flex-start',
+        bg: me ? p : '#EEF3F7', fg: me ? '#FFFFFF' : '#0E1A2B',
+        radius: me ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+        timeAlign: me ? 'right' : 'left'
+      };
+    });
+    const last = all[all.length - 1];
+    const draft = s.draft || '';
+    const send = () => {
+      const st = this.state || {};
+      const t = (st.draft || '').trim();
+      if (!t) return;
+      this.setState({ draft: '', extra: (st.extra || []).concat([{ who: 'me', text: t, time: 'Now' }]) });
+    };
+    return {
+      primary: p, msgs: msgs, draft: draft, role: this.props.role ?? 'admin',
+      canWrite: (this.props.role ?? 'admin') !== 'viewer', isViewer: (this.props.role ?? 'admin') === 'viewer',
+      lastPreview: (last.who === 'me' ? 'You: ' : '') + last.text,
+      sendBg: draft.trim() ? p : '#A9B6C3',
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      onKey: (e) => { if (e.key === 'Enter') send(); },
+      send: send
+    };
+  }
+}
+</script>
+</body>
+</html>

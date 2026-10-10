@@ -1,177 +1,19 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, CheckCircle, Clock, RotateCcw, Send } from 'lucide-react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '../ui/Text';
+import { Avatar } from '../ui/Avatar';
+import { CheckCircle, Clock, Send } from 'lucide-react-native';
 import type { SafeTechnicianView } from '../../types';
-import type { MapFilters, MapFilterValue } from '../../types/filters';
 import type { MapOfferMatchOption } from '../../types/mapOffers';
 import type { TechnicianMapMarkerGroup } from '../../utils/technicianMapMarkers';
-import { LICENSE_CATEGORIES } from '../../constants/licenses';
 import { colors, spacing } from '../../theme';
-import { CollapsibleAircraftFilter } from '../CollapsibleAircraftFilter';
 import { MapBottomSheet } from '../map/MapBottomSheet';
 import { techUi } from '../technician/TechnicianUI';
-import { TECHNICIAN_MAP_AVAILABILITY } from './TechnicianMapControls';
 import { formatLocation } from '../../utils/formatLocation';
 
-type MultiFilterKey =
-  | 'licenseCategories'
-  | 'aircraftFamilyKeys'
-  | 'availabilityStatuses';
-
-const LEGACY_FILTER_KEYS: Partial<Record<MultiFilterKey, keyof MapFilters>> = {
-  licenseCategories: 'licenseCategory',
-  availabilityStatuses: 'availabilityStatus',
-};
-
-function selectedFilterValues(filters: MapFilters, key: MultiFilterKey): string[] {
-  const value = filters[key];
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') return [value];
-  const legacyKey = LEGACY_FILTER_KEYS[key];
-  const legacyValue = legacyKey ? filters[legacyKey] : undefined;
-  return typeof legacyValue === 'string' ? [legacyValue] : [];
-}
-
-export function activeTechnicianMapFilterCount(filters: MapFilters): number {
-  return (
-    selectedFilterValues(filters, 'licenseCategories').length +
-    selectedFilterValues(filters, 'aircraftFamilyKeys').length +
-    selectedFilterValues(filters, 'availabilityStatuses').length
-  );
-}
-
-export function TechnicianMapFilterSheet({
-  visible,
-  filters,
-  onFilterChange,
-  onClose,
-}: {
-  visible: boolean;
-  filters: MapFilters;
-  onFilterChange: (key: keyof MapFilters, value: MapFilterValue) => void;
-  onClose: () => void;
-}) {
-  const selectedLicenses = selectedFilterValues(filters, 'licenseCategories');
-  const selectedAircraft = selectedFilterValues(filters, 'aircraftFamilyKeys');
-  const selectedAvailability = selectedFilterValues(filters, 'availabilityStatuses');
-  const filterCount = activeTechnicianMapFilterCount(filters);
-
-  function setMultiFilter(key: MultiFilterKey, values: string[]) {
-    onFilterChange(key, values.length > 0 ? values : undefined);
-  }
-
-  function toggle(key: MultiFilterKey, value: string) {
-    const selected = selectedFilterValues(filters, key);
-    const next = selected.includes(value)
-      ? selected.filter((item) => item !== value)
-      : [...selected, value];
-    setMultiFilter(key, next);
-  }
-
-  function clearAll() {
-    onFilterChange('licenseCategories', undefined);
-    onFilterChange('aircraftFamilyKeys', undefined);
-    onFilterChange('availabilityStatuses', undefined);
-    onFilterChange('licenseCategory', undefined);
-    onFilterChange('availabilityStatus', undefined);
-  }
-
-  return (
-    <MapBottomSheet
-      closeLabel="Close filters"
-      contentContainerStyle={styles.filterContent}
-      footer={(
-        <>
-          <TouchableOpacity
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            disabled={filterCount === 0}
-            onPress={clearAll}
-            style={[styles.resetButton, filterCount === 0 && styles.buttonDisabled]}
-          >
-            <RotateCcw color={techUi.textSoft} size={17} strokeWidth={2.2} />
-            <Text style={styles.resetButtonText}>Reset</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            onPress={onClose}
-            style={styles.primaryFooterButton}
-          >
-            <Text style={styles.primaryFooterButtonText}>Show technicians</Text>
-          </TouchableOpacity>
-        </>
-      )}
-      onClose={onClose}
-      subtitle="Match any option within a section and every active section."
-      title="Filter technicians"
-      visible={visible}
-    >
-      <FilterSection title="License category">
-        {LICENSE_CATEGORIES.map((option) => (
-          <TechnicianFilterOption
-            key={option.code}
-            label={option.code}
-            selected={selectedLicenses.includes(option.code)}
-            onPress={() => toggle('licenseCategories', option.code)}
-          />
-        ))}
-      </FilterSection>
-
-      <FilterSection title="Availability">
-        {TECHNICIAN_MAP_AVAILABILITY.map((option) => (
-          <TechnicianFilterOption
-            key={option.value}
-            label={option.label}
-            selected={selectedAvailability.includes(option.value)}
-            onPress={() => toggle('availabilityStatuses', option.value)}
-          />
-        ))}
-      </FilterSection>
-
-      <View style={styles.aircraftSection}>
-        <CollapsibleAircraftFilter
-          selectedKeys={selectedAircraft}
-          onChange={(next) => setMultiFilter('aircraftFamilyKeys', next)}
-        />
-      </View>
-    </MapBottomSheet>
-  );
-}
-
-function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.filterSection}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.filterOptions}>{children}</View>
-    </View>
-  );
-}
-
-function TechnicianFilterOption({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected }}
-      activeOpacity={0.75}
-      onPress={onPress}
-      style={[styles.filterOption, selected && styles.filterOptionSelected]}
-    >
-      <Text style={styles.filterOptionText}>{label}</Text>
-      <View style={[styles.selectionBox, selected && styles.selectionBoxSelected]}>
-        {selected ? <Check color={colors.white} size={15} strokeWidth={3} /> : null}
-      </View>
-    </TouchableOpacity>
-  );
-}
+// El panel de filtros del mapa ya no vive aquí: búsqueda y mapa comparten
+// TechnicianFiltersSheet (src/components/company/TechnicianFiltersPanel.tsx,
+// rediseño fase 3B). Aquí quedan la hoja del técnico y la de sus ofertas, sin cambios.
 
 export function TechnicianMapDetailSheet({
   group,
@@ -207,6 +49,7 @@ export function TechnicianMapDetailSheet({
         const availability = technician.availability.status ?? 'unavailable';
         return (
           <View key={technician.id} style={styles.technicianCard}>
+            <Avatar kind="person" size={44} photoPath={technician.fullName ? technician.photoPath : null} anonymous={!technician.fullName} name={technician.fullName} />
             <Text style={styles.technicianName}>{technician.fullName ?? technician.anonymousCode}</Text>
             <Text style={styles.technicianMeta}>
               {formatLocation(technician.city, technician.country)}
@@ -402,62 +245,6 @@ export function TechnicianOfferSelectionSheet({
 }
 
 const styles = StyleSheet.create({
-  filterContent: { gap: spacing.lg },
-  filterSection: { gap: spacing.sm },
-  sectionTitle: { fontSize: 12, lineHeight: 16, fontWeight: '800', color: techUi.textSoft },
-  filterOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  filterOption: {
-    minHeight: 44,
-    minWidth: 132,
-    flexGrow: 1,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: techUi.borderSoft,
-    backgroundColor: techUi.surfaceSoft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  filterOptionSelected: { borderColor: techUi.accent, backgroundColor: techUi.accentSoft },
-  filterOptionText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '700', color: techUi.text },
-  selectionBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: techUi.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectionBoxSelected: { borderColor: techUi.accent, backgroundColor: techUi.accent },
-  aircraftSection: { paddingBottom: spacing.sm },
-  resetButton: {
-    minWidth: 92,
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: techUi.border,
-    backgroundColor: techUi.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  resetButtonText: { color: techUi.textSoft, fontSize: 13, fontWeight: '800' },
-  primaryFooterButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: techUi.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryFooterButtonText: { color: colors.white, fontSize: 13, fontWeight: '800' },
-  buttonDisabled: { opacity: 0.42 },
   detailContent: { gap: spacing.sm },
   technicianCard: {
     padding: 14,
@@ -514,7 +301,7 @@ const styles = StyleSheet.create({
   scoreLabel: { fontSize: 9, lineHeight: 11, fontWeight: '800', color: techUi.textMuted, textTransform: 'uppercase' },
   offerBottomRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   matchLabel: { flex: 1, fontSize: 12, lineHeight: 16, fontWeight: '700', color: techUi.textSoft },
-  sendButton: { minHeight: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: techUi.navy, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  sendButton: { minHeight: 44, paddingHorizontal: 12, borderRadius: 999, backgroundColor: techUi.navy, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   sendButtonDisabled: { backgroundColor: techUi.textMuted },
   sendButtonText: { color: colors.white, fontSize: 12, fontWeight: '800' },
 });

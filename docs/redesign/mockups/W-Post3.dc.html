@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Step 3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="width: 390px; height: 960px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="WPostHeader" step="3" total="4" back="W-Post2.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 0">
+
+<sc-if value="{{ isAircraft }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Required type ratings</h1>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: #526274">Search and add the aircraft this role works on. They are matched against type ratings held under the offer's B1.1 licence. Limited to airplanes, as set before.</p>
+</div>
+
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{ added }}" as="a" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: #E6F1F8">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 14.5px; font-weight: 800">{{a.name}}</span><span style="font-size: 12.5px; font-weight: 700; color: #2E4C66">Type rating</span></span>
+<button type="button" onClick="{{ a.remove }}" style="flex: none; height: 40px; padding: 0 12px; border: 0; border-radius: 20px; background: #FFFFFF; color: #B42318; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">Remove</button>
+</div>
+</sc-for>
+<sc-if value="{{ noneAdded }}" hint-placeholder-val="{{ false }}">
+<span style="padding: 12px 14px; border-radius: 14px; background: #F3F6F9; font-size: 14px; color: #526274">No aircraft yet.</span>
+</sc-if>
+</div>
+
+<label style="display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 24px; background: #EEF3F7; color: #526274">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+<input type="search" aria-label="Add aircraft" placeholder="Add aircraft + engine rating" value="{{q}}" onChange="{{ onQ }}" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font-family: inherit; font-size: 15px; font-weight: 700; color: #0E1A2B; outline: none">
+</label>
+<div style="display: flex; flex-direction: column; margin-top: -8px">
+<sc-for list="{{ results }}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{ r.add }}" style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 4px; border: 0; border-bottom: 1px solid #E6ECF1; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 14.5px; font-weight: 700; text-align: left; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{primary}}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>{{r.name}}
+</button>
+</sc-for>
+</div>
+
+<button type="button" role="switch" aria-checked="{{allChecked}}" onClick="{{ toggleAll }}" style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 14px; border-radius: 16px; border: 1px solid #DDE5EC; background: #FFFFFF; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: 1 1 auto; font-size: 14px; font-weight: 800; line-height: 1.35">The technician needs ALL of these aircraft, not just one of them</span>
+<span style="position: relative; flex: none; width: 50px; height: 30px; border-radius: 15px; background: {{allTrack}}"><span style="position: absolute; top: 3px; left: {{allKnob}}; width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(14, 26, 43, 0.25)"></span></span>
+</button>
+
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Note (optional)
+<input type="text" placeholder="e.g. Also considering V2500 or recent A320 experience" style="height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 14.5px; color: #0E1A2B">
+</label>
+</sc-if>
+
+<sc-if value="{{ isEngine }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Engine</h1>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: #526274">One engine per offer. Candidates are matched on it.</p>
+</div>
+<div role="radiogroup" aria-label="Engine" style="display: flex; flex-direction: column">
+<sc-for list="{{ engines }}" as="e" hint-placeholder-count="5">
+<button type="button" role="radio" aria-checked="{{e.checked}}" onClick="{{ e.pick }}" style="display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 4px; border: 0; border-bottom: 1px solid #E6ECF1; background: #FFFFFF; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: 1 1 auto; display: flex; flex-direction: column"><span style="font-size: 15px; font-weight: 800">{{e.name}}</span><span style="font-size: 12.5px; color: #526274">{{e.maker}}</span></span>
+<span style="flex: none; width: 22px; height: 22px; box-sizing: border-box; border-radius: 11px; border: 2px solid {{e.ring}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{ e.on }}" hint-placeholder-val="{{ false }}"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{primary}}"></span></sc-if></span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="W-Post4.dc.html" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Continue</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["aircraft","engine"],"default":"aircraft"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const kind = this.props.kind ?? 'aircraft';
+    const s = this.state || {};
+    const catalog = [
+      ['a320cfm', 'Airbus A320 family — CFM56'], ['a320iae', 'Airbus A320 family — V2500'],
+      ['a320leap', 'Airbus A320neo family — LEAP-1A'], ['a320pw', 'Airbus A320neo family — PW1100G'],
+      ['b737', 'Boeing 737 NG — CFM56-7B'], ['a330', 'Airbus A330 — Trent 700'], ['atr', 'ATR 42/72 — PW100']
+    ];
+    const added = s.added || ['a320cfm', 'a320iae'];
+    const q = s.q === undefined ? 'neo' : s.q;
+    const needle = q.trim().toLowerCase();
+    const results = catalog.filter((c) => added.indexOf(c[0]) === -1 && (!needle || c[1].toLowerCase().indexOf(needle) !== -1)).slice(0, 3)
+      .map((c) => ({ name: c[1], add: () => this.setState({ added: added.concat([c[0]]), q: '' }) }));
+    const all = !!s.all;
+    const eng = s.eng || 'cfm565b';
+    const engines = [['cfm565b', 'CFM56-5B', 'CFM International'], ['cfm567b', 'CFM56-7B', 'CFM International'], ['leap1a', 'LEAP-1A', 'CFM International'], ['pw1100g', 'PW1100G', 'Pratt & Whitney'], ['v2500', 'V2500', 'International Aero Engines']]
+      .map((e) => { const on = e[0] === eng; return { name: e[1], maker: e[2], on: on, checked: on ? 'true' : 'false', ring: on ? p : '#B8C4CF', pick: () => this.setState({ eng: e[0] }) }; });
+    return {
+      primary: p, isAircraft: kind === 'aircraft', isEngine: kind === 'engine',
+      added: added.map((id) => ({ name: catalog.filter((c) => c[0] === id)[0][1], remove: () => this.setState({ added: added.filter((x) => x !== id) }) })),
+      noneAdded: added.length === 0, q: q, results: results, engines: engines,
+      onQ: (e) => this.setState({ q: e.target.value }),
+      allChecked: all ? 'true' : 'false', allTrack: all ? p : '#C9D3DD', allKnob: all ? '23px' : '3px',
+      toggleAll: () => this.setState({ all: !all })
+    };
+  }
+}
+</script>
+</body>
+</html>

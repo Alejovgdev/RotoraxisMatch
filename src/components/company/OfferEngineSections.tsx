@@ -1,8 +1,9 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
-import { spacing } from '../../theme';
-import { CompanyCard, CompanyCheckRow, companyUi } from './CompanyUI';
+import { StyleSheet, View } from 'react-native';
 import { EnginePicker } from '../EnginePicker';
+import { TextInput } from '../ui';
+import { colors } from '../../theme';
+import { WizardCheckCard, WizardError, WizardHeading, WizardLabel, wizardInputStyles } from './OfferWizardParts';
 
 // Las secciones que la Fase 10 (paso 5b) añade al formulario de oferta,
 // compartidas por crear y editar. Las reglas de cuándo se enseñan y qué limpia
@@ -11,44 +12,59 @@ import { EnginePicker } from '../EnginePicker';
 // Sesión 4 (091): aquí vivía OfferKindSection, el selector "Aircraft & licence"
 // / "Engine". Se retira: la clase sale del tipo de técnico, que se elige en
 // "Profile type".
+//
+// Rediseño, fase 4: el motor es el paso 3 del asistente en una oferta de motor
+// (maqueta W-Post3), y "sólo sin licencia" la casilla de W-Post2.
 
 export function OfferEngineSection({
   value,
   onChange,
+  notes,
+  onChangeNotes,
   error,
+  large = false,
+  fillAvailableSpace = false,
 }: {
   value?: string;
   onChange: (engineId: string) => void;
+  notes?: string;
+  onChangeNotes: (notes: string) => void;
   error?: string;
+  large?: boolean;
+  fillAvailableSpace?: boolean;
 }) {
   return (
-    <CompanyCard style={styles.card}>
-      <Text style={styles.title}>Engine</Text>
-      <Text style={styles.subtitle}>
-        One engine per offer.
-      </Text>
-      <EnginePicker value={value} onSelect={(engine) => onChange(engine.id)} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </CompanyCard>
+    <View style={[styles.wrap, fillAvailableSpace && styles.fill]}>
+      <WizardHeading title="Engine" helper="One engine per offer." large={large} />
+      <EnginePicker value={value} onSelect={(engine) => onChange(engine.id)} fillAvailableSpace={fillAvailableSpace} />
+      <WizardError>{error}</WizardError>
+      <View style={wizardInputStyles.field}>
+        <WizardLabel>Note (optional)</WizardLabel>
+        <TextInput
+          accessibilityLabel="Engine note (optional)"
+          style={wizardInputStyles.input}
+          placeholder="e.g. Recent overhaul experience on this engine preferred"
+          placeholderTextColor={colors.placeholder}
+          value={notes ?? ''}
+          onChangeText={onChangeNotes}
+        />
+      </View>
+    </View>
   );
 }
 
 export function OnlyUnlicensedSection({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
   return (
-    <CompanyCard style={styles.card}>
-      <CompanyCheckRow
-        label="Only technicians without a licence"
-        helper="Technicians who declare any licence — valid or expired — will not see this offer and will not appear in its candidate list."
-        checked={checked}
-        onChange={onChange}
-      />
-    </CompanyCard>
+    <WizardCheckCard
+      label="Only technicians without a licence"
+      helper="Technicians who declare any licence — valid or expired — will not see this offer and will not appear in its candidate list."
+      checked={checked}
+      onChange={onChange}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm, marginBottom: spacing.md },
-  title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
-  subtitle: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
-  error: { fontSize: 11, lineHeight: 16, fontWeight: '600', color: companyUi.red },
+  wrap: { gap: 16 },
+  fill: { flexGrow: 1 },
 });

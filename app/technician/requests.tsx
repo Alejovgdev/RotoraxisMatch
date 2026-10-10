@@ -1,7 +1,9 @@
 ﻿// Legacy route kept for backward navigation only.
 // TODO: Remove this screen once all deep links to /technician/requests are gone.
 import React from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
+import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import { Button } from '../../src/components/Button';
@@ -14,6 +16,8 @@ import {
 } from '../../src/components/technician/TechnicianUI';
 
 export default function TechnicianRequestsLegacy() {
+  // Escritorio: barra de desplazamiento visible (fase 8).
+  const desktopScrollbar = useDesktopScrollbar();
   const router = useRouter();
   const goBack = useGoBack();
   return (
@@ -21,7 +25,7 @@ export default function TechnicianRequestsLegacy() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={desktopScrollbar}
       >
         <TechnicianPageHeader
           eyebrow="Requests"

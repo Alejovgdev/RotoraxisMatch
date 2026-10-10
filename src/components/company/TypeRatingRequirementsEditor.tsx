@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { spacing } from '../../theme';
-import { CompanyCard, companyUi } from './CompanyUI';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text, TextInput } from '../ui';
+import { colors } from '../../theme';
 import { AircraftTypeRatingPicker } from '../AircraftTypeRatingPicker';
 import { useAircraftTypeRatingsCatalog } from '../../state/useAircraftTypeRatingsCatalog';
 import { catalogRepository } from '../../repositories/v2/catalogRepository';
@@ -10,6 +10,8 @@ import { getOfferProductTypeLabel } from '../../constants/offerProductTypes';
 import { AuthorityLicenseCode } from '../../types/catalog';
 import { OfferProductType } from '../../types/offer';
 import { AircraftRequirementsCopy } from '../../utils/offerFormRules';
+import { PillButton } from './CompanyPage';
+import { WizardHeading, WizardLabel, WizardSwitchCard, wizardInputStyles } from './OfferWizardParts';
 
 // Fase 6 tanda D: una fila es UNA AERONAVE. Perdió `licenseCode` (la licencia
 // es de la oferta, una sola) y `requirementLevel` (la exigencia es de la
@@ -38,6 +40,36 @@ interface Props {
   // BAJO la lista (paso 6 del formulario), no como un paso propio.
   requiresAll: boolean;
   onChangeRequiresAll: (next: boolean) => void;
+  /** Escritorio: el título del paso a 26 px (maqueta W-D-Post). */
+  large?: boolean;
+}
+
+/**
+ * Las etiquetas de unas aeronaves: el catálogo activo y, para las que no estén
+ * en él (una oferta vieja puede pedir una fila desactivada), una consulta por
+ * id. Lo usan el editor y la revisión del asistente.
+ */
+export function useAircraftRatingLabelIndex(ids: readonly string[]): AircraftRatingIndex {
+  const { ratingIndex: activeRatingIndex } = useAircraftTypeRatingsCatalog();
+  const [resolvedIndex, setResolvedIndex] = useState<AircraftRatingIndex>(new Map());
+  const key = ids.join('|');
+
+  useEffect(() => {
+    const wanted = key ? key.split('|') : [];
+    if (wanted.length === 0) {
+      setResolvedIndex(new Map());
+      return;
+    }
+    let cancelled = false;
+    catalogRepository.getAircraftTypeRatingsByIds(wanted).then((ratings) => {
+      if (!cancelled) setResolvedIndex(buildAircraftRatingIndex(ratings));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  return useMemo(() => new Map([...activeRatingIndex, ...resolvedIndex]), [activeRatingIndex, resolvedIndex]);
 }
 
 // Fase 3b screen 1 — the PRIMARY requirements block on the offer form
@@ -47,12 +79,12 @@ interface Props {
 // one aircraft with a small tag saying what it is matched against ("Type
 // rating" or "Experience", from aircraftRequirementsCopy) and a Remove
 // action. Whether ONE aircraft is enough or ALL are needed is a single
-// offer-level checkbox under the list (requiresAllAircraft), not a per-row
+// offer-level switch under the list (requiresAllAircraft), not a per-row
 // level: Fase 6 tanda D removed the per-row Mandatory/Preferred badge.
 //
 // Resolves rating labels for every referenced id itself (including
-// inactive ones an existing offer might reference) — new.tsx/edit.tsx no
-// longer need to manage a ratingIndex/ratingsById for this purpose at all.
+// inactive ones an existing offer might reference), through
+// useAircraftRatingLabelIndex.
 //
 // Migración 047 — el filtro se toma del producto de la OFERTA, no de la
 // licencia de cada fila como hasta ahora. La versión anterior derivaba el
@@ -61,6 +93,10 @@ interface Props {
 // undefined): con B2 seleccionada no se filtraba NADA. Por ese agujero
 // entraron ofertas tituladas "Helicópteros" con requisitos B1.1/B1.2. Ahora
 // el producto lo declara la empresa una sola vez y acota las dos listas.
+//
+// Rediseño, fase 4: es el paso 3 del asistente (maqueta W-Post3). Mismo
+// recorrido que antes —elegir, nota opcional y "Add aircraft"—; cambia el
+// aspecto.
 export function TypeRatingRequirementsEditor({
   value,
   onChange,
@@ -70,27 +106,10 @@ export function TypeRatingRequirementsEditor({
   copy,
   requiresAll,
   onChangeRequiresAll,
+  large = false,
 }: Props) {
   const rowLicense = asExperience ? undefined : licenseCode;
-  const { ratingIndex: activeRatingIndex } = useAircraftTypeRatingsCatalog();
-  const [resolvedIndex, setResolvedIndex] = useState<AircraftRatingIndex>(new Map());
-
-  useEffect(() => {
-    const ids = value.map((h) => h.aircraftTypeRatingId);
-    if (ids.length === 0) {
-      setResolvedIndex(new Map());
-      return;
-    }
-    let cancelled = false;
-    catalogRepository.getAircraftTypeRatingsByIds(ids).then((ratings) => {
-      if (!cancelled) setResolvedIndex(buildAircraftRatingIndex(ratings));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [value]);
-
-  const labelIndex = useMemo(() => new Map([...activeRatingIndex, ...resolvedIndex]), [activeRatingIndex, resolvedIndex]);
+  const labelIndex = useAircraftRatingLabelIndex(value.map((h) => h.aircraftTypeRatingId));
 
   const [newRatingId, setNewRatingId] = useState<string | null>(null);
   const [newNotes, setNewNotes] = useState('');
@@ -120,137 +139,108 @@ export function TypeRatingRequirementsEditor({
   }
 
   return (
-    <CompanyCard style={styles.card}>
-      <Text style={styles.title}>{copy.title}</Text>
-      <Text style={styles.subtitle}>{copy.subtitle}</Text>
+    <View style={styles.wrap}>
+      <WizardHeading title={copy.title} helper={copy.subtitle} large={large} />
 
-      {value.map((h, index) => (
-        <View key={h.aircraftTypeRatingId} style={styles.row}>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowText}>
-              {rowLicense ? `${rowLicense} + ` : ''}
-              {getAircraftTypeRatingLabel(h.aircraftTypeRatingId, labelIndex)}
-            </Text>
-            {h.notes ? <Text style={styles.rowNotes}>{h.notes}</Text> : null}
-          </View>
-          <View style={styles.rowTag}>
-            <Text style={styles.rowTagText}>{copy.rowTag}</Text>
-          </View>
-          <TouchableOpacity onPress={() => removeRow(index)} accessibilityRole="button">
-            <Text style={styles.removeText}>Remove</Text>
-          </TouchableOpacity>
-        </View>
-      ))}
-      {value.length === 0 ? <Text style={styles.emptyText}>No aircraft yet.</Text> : null}
+      <View style={styles.rows}>
+        {value.map((h, index) => {
+          const label = `${rowLicense ? `${rowLicense} + ` : ''}${getAircraftTypeRatingLabel(h.aircraftTypeRatingId, labelIndex)}`;
+          return (
+            <View key={h.aircraftTypeRatingId} style={styles.row}>
+              <View style={styles.rowInfo}>
+                <Text style={styles.rowText}>{label}</Text>
+                <Text style={styles.rowTag}>{copy.rowTag}</Text>
+                {h.notes ? <Text style={styles.rowNotes}>{h.notes}</Text> : null}
+              </View>
+              <Pressable
+                onPress={() => removeRow(index)}
+                style={({ pressed, hovered }: any) => [styles.remove, (pressed || hovered) && styles.removePressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${label}`}
+              >
+                <Text style={styles.removeText}>Remove</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+        {value.length === 0 ? <Text style={styles.emptyText}>No aircraft yet.</Text> : null}
+      </View>
 
-      {/* Paso 6 del formulario: una casilla pequeña BAJO la lista, no un paso
+      {/* Paso 6 del formulario: un interruptor BAJO la lista, no un paso
           propio. Sólo tiene sentido con dos o más aeronaves — con una sola,
           "basta con una" y "hacen falta todas" dicen lo mismo, y preguntarlo
           sería pedirle a la empresa que decida algo que no cambia nada. */}
       {value.length > 1 ? (
-        <TouchableOpacity
-          style={styles.requiresAllRow}
-          onPress={() => onChangeRequiresAll(!requiresAll)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: requiresAll }}
-        >
-          <View style={[styles.checkbox, requiresAll && styles.checkboxOn]}>
-            {requiresAll ? <Text style={styles.checkboxMark}>✓</Text> : null}
-          </View>
-          <Text style={styles.requiresAllText}>
-            The technician needs ALL of these aircraft, not just one of them
-          </Text>
-        </TouchableOpacity>
+        <WizardSwitchCard
+          label="The technician needs ALL of these aircraft, not just one of them"
+          value={requiresAll}
+          onChange={onChangeRequiresAll}
+        />
       ) : null}
 
       <View style={styles.addBlock}>
-        <Text style={styles.fieldLabel}>{copy.pickerLabel}</Text>
+        <WizardLabel>{copy.pickerLabel}</WizardLabel>
         <AircraftTypeRatingPicker
           value={newRatingId}
           onSelect={(r) => setNewRatingId(r.id)}
           lockedProductType={{ productType, reason: 'this offer is for ' + getOfferProductTypeLabel(productType).toLowerCase() }}
         />
 
-        <Text style={styles.fieldLabel}>Note (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Also considering V2500 or recent A320 experience"
-          placeholderTextColor={companyUi.textMuted}
-          value={newNotes}
-          onChangeText={setNewNotes}
-        />
+        <View style={wizardInputStyles.field}>
+          <WizardLabel>Note (optional)</WizardLabel>
+          <TextInput
+            style={wizardInputStyles.input}
+            placeholder="e.g. Also considering V2500 or recent A320 experience"
+            placeholderTextColor={colors.placeholder}
+            value={newNotes}
+            onChangeText={setNewNotes}
+          />
+        </View>
 
-        <TouchableOpacity
-          style={[styles.addButton, !newRatingId && styles.addButtonDisabled]}
-          onPress={addRow}
-          disabled={!newRatingId}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.addButtonText}>Add aircraft</Text>
-        </TouchableOpacity>
+        <View style={styles.addButton}>
+          <PillButton label="Add aircraft" variant="accent" size="md" onPress={addRow} disabled={!newRatingId} />
+        </View>
       </View>
-    </CompanyCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm, marginBottom: spacing.md },
-  title: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: companyUi.text },
-  subtitle: { fontSize: 12, lineHeight: 17, fontWeight: '500', color: companyUi.textSoft },
+  wrap: { gap: 16 },
+  rows: { gap: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: companyUi.borderSoft,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
   },
-  rowInfo: { flex: 1, minWidth: 0, gap: 2 },
-  rowText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: companyUi.text },
-  rowNotes: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: companyUi.textSoft },
-  rowTag: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderColor: companyUi.border,
-    backgroundColor: companyUi.surfaceSoft,
-  },
-  rowTagText: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: companyUi.textSoft },
-  requiresAllRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: companyUi.border,
+  rowInfo: { flex: 1, minWidth: 0, gap: 1 },
+  rowText: { fontSize: 14.5, fontWeight: '800', color: colors.text },
+  rowTag: { fontSize: 12.5, fontWeight: '700', color: '#2E4C66' },
+  rowNotes: { fontSize: 12.5, color: colors.textSecondary },
+  remove: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
+    flexShrink: 0,
   },
-  checkboxOn: { borderColor: companyUi.accent, backgroundColor: companyUi.accentSoft },
-  checkboxMark: { fontSize: 12, lineHeight: 14, fontWeight: '700', color: companyUi.accent },
-  requiresAllText: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: '600', color: companyUi.textSoft },
-  removeText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: companyUi.red },
-  emptyText: { fontSize: 13, lineHeight: 18, fontWeight: '500', color: companyUi.textMuted },
-  addBlock: { gap: spacing.xs, marginTop: spacing.xs },
-  fieldLabel: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: companyUi.textSoft, marginTop: spacing.xs },
-  input: {
-    minHeight: 46,
-    borderWidth: 1,
-    borderColor: companyUi.border,
+  removePressed: { backgroundColor: colors.errorSoft },
+  removeText: { fontSize: 13.5, fontWeight: '800', color: colors.error },
+  emptyText: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 14,
-    paddingHorizontal: spacing.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceSoft,
     fontSize: 14,
-    color: companyUi.text,
-    backgroundColor: companyUi.surfaceSoft,
+    color: colors.textSecondary,
   },
-  addButton: {
-    marginTop: spacing.xs,
-    borderRadius: 14,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    backgroundColor: companyUi.accentSoft,
-  },
-  addButtonDisabled: { opacity: 0.5 },
-  addButtonText: { fontSize: 13, fontWeight: '700', color: companyUi.accent },
+  addBlock: { gap: 10 },
+  addButton: { alignItems: 'flex-start' },
 });

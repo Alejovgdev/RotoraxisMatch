@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Direct offers · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="min-height: 780px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="direct" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+<div style="max-width: 1160px; margin: 0 auto; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px"><h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px">Direct offers</h1><span style="font-size: 14.5px; color: #526274">Offers you sent directly to technicians</span></div>
+<a href="W-D-Search.dc.html" style="height: 44px; padding: 0 18px; border-radius: 22px; border: 1.5px solid {{primary}}; color: {{primary}}; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 14.5px; font-weight: 800">Find more technicians</a>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 42px; padding: 0 16px; border-radius: 21px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}<span style="opacity: 0.7">{{c.count}}</span></button>
+</sc-for>
+</div>
+<div style="border-radius: 20px; border: 1px solid #E1E8EE; overflow: hidden">
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+<a href="{{r.href}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 20px; border-bottom: {{r.line}}; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; opacity: {{r.fade}}"><dc-import name="WAvatar" who="{{r.face}}" size="48" hint-size="48px,48px"></dc-import></span>
+<span style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 15.5px; font-weight: 800">{{r.name}}</span><span style="font-size: 13.5px; color: #526274">{{r.offer}}</span></span>
+<span style="flex: 0 1 280px; font-size: 13.5px; color: {{r.noteColor}}; font-weight: {{r.noteWeight}}">{{r.note}}</span>
+<span style="flex: none; height: 28px; padding: 0 11px; border-radius: 14px; background: {{r.chipBg}}; color: {{r.chipFg}}; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">{{r.status}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filter = (this.state && this.state.filter) || 'all';
+    const st = { pending: ['Awaiting response', '#DCE7FB', '#1E4FB8'], accepted: ['Accepted', '#D3F1E3', '#0B5B3A'], declined: ['Declined', '#E9EDF1', '#4A5A6C'], withdrawn: ['Withdrawn', '#E9EDF1', '#4A5A6C'], expired: ['Expired', '#E9EDF1', '#4A5A6C'] };
+    const all = [
+      ['anon', 'Technician T4C81E9A20', 'B1 Mechanic · A320 family', 'Sent today', 'pending', 'W-D-DirectDetail.dc.html'],
+      ['t4410', 'Pablo Serrano', 'B1 Mechanic · A320 family', 'Identity revealed · Contact details available', 'accepted', 'W-D-Tech.dc.html'],
+      ['anon', 'Technician T9B07D3E11', 'B1 Mechanic · B737 NG', 'Sent 1 week ago', 'declined', '#'],
+      ['anon', 'Technician T6F20B8A15', 'Engine Technician · CFM56-5B', 'Sent 2 weeks ago', 'withdrawn', '#'],
+      ['anon', 'Technician T1C44D9E02', 'B2 Avionics · ATR 72', 'Sent 1 month ago', 'expired', '#']
+    ];
+    const filtered = all.filter((r) => filter === 'all' || r[4] === filter);
+    const rows = filtered.map((r, i) => ({
+      face: r[0], name: r[1], offer: r[2], note: r[3], href: r[5],
+      noteColor: r[4] === 'accepted' ? '#157F4F' : '#66768A', noteWeight: r[4] === 'accepted' ? 800 : 400,
+      status: st[r[4]][0], chipBg: st[r[4]][1], chipFg: st[r[4]][2],
+      fade: ['declined', 'withdrawn', 'expired'].indexOf(r[4]) !== -1 ? '0.6' : '1',
+      line: i === filtered.length - 1 ? '0' : '1px solid #E6ECF1'
+    }));
+    const count = (k) => all.filter((r) => k === 'all' || r[4] === k).length;
+    const chips = [['all', 'All'], ['pending', 'Pending'], ['accepted', 'Accepted'], ['declined', 'Declined']].map((c) => {
+      const on = c[0] === filter;
+      return { label: c[1], count: count(c[0]), pressed: on ? 'true' : 'false', bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6', pick: () => this.setState({ filter: c[0] }) };
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', chips: chips, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

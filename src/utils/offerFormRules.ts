@@ -36,6 +36,7 @@ import { offerAircraftAreExperience, offerKindForTechnicianType } from './offerS
 export interface OfferRequirementsForm {
   offerKind: OfferKind;
   requiredEngineId?: string;
+  requiredEngineNotes?: string;
   productType: OfferProductType;
   technicianType: TechnicianTypeCode;
   requiresCertification: boolean;
@@ -227,7 +228,9 @@ export interface AircraftRequirementsCopy {
  */
 export function aircraftRequirementsCopy(form: OfferRequirementsForm): AircraftRequirementsCopy {
   const intro = 'Search and add the aircraft this role works on.';
-  const scope = `Limited to ${getOfferProductTypeLabel(form.productType).toLowerCase()}, as set above.`;
+  // Rediseño, fase 4: el texto sólo lo pinta el paso 3 del asistente, y aviones
+  // o helicópteros se eligen en el paso 1 (antes estaba más arriba en la página).
+  const scope = `Limited to ${getOfferProductTypeLabel(form.productType).toLowerCase()}, as chosen in step 1.`;
   if (!form.requiresCertification) {
     return {
       title: 'Aircraft experience',
@@ -308,7 +311,7 @@ export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, n
   }
   // Una oferta de aeronave no nombra motor (077). Desde ahí, las reglas de
   // siempre del cambio de oficio.
-  const aircraft: T = { ...form, offerKind, technicianType: next, requiredEngineId: undefined };
+  const aircraft: T = { ...form, offerKind, technicianType: next, requiredEngineId: undefined, requiredEngineNotes: undefined };
   if (!isLicensedTechnicianType(next)) {
     return withApplicableAuthorities({ ...aircraft, requiresCertification: false, licenseAuthority: undefined, licenseCode: undefined });
   }
@@ -322,6 +325,11 @@ export function selectTechnicianType<T extends OfferRequirementsForm>(form: T, n
     ...(authorityStays ? {} : { licenseAuthority: undefined }),
     ...(licenseStays ? {} : { licenseCode: undefined, ...CLEARED_AIRCRAFT }),
   });
+}
+
+/** The note belongs to the selected engine; selecting the same engine keeps it. */
+export function selectEngine<T extends OfferRequirementsForm>(form: T, engineId: string): T {
+  return engineId === form.requiredEngineId ? form : { ...form, requiredEngineId: engineId, requiredEngineNotes: undefined };
 }
 
 export function selectAuthority<T extends OfferRequirementsForm>(form: T, authority: AuthorityCode): T {

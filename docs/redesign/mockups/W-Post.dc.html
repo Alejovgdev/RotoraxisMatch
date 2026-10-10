@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Step 1</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="WPostHeader" step="1" total="{{total}}" back="W-Home.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 22px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Who are you hiring?</h1>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">{{typeHelper}}</p>
+</div>
+
+<div role="radiogroup" aria-label="Profile type" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{ types }}" as="t" hint-placeholder-count="6">
+<button type="button" role="radio" aria-checked="{{t.checked}}" onClick="{{ t.pick }}" style="position: relative; height: 96px; box-sizing: border-box; padding: 12px; border-radius: 16px; border: {{t.border}}; background: {{t.bg}}; color: #0E1A2B; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; font-family: inherit; text-align: left; cursor: pointer">
+<span style="width: 38px; height: 38px; border-radius: 11px; background: {{t.tileBg}}; color: {{t.tileFg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 13px">{{t.code}}</span>
+<sc-if value="{{ t.on }}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 11px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</sc-if>
+<span style="font-size: 14.5px; font-weight: 800; line-height: 1.2">{{t.label}}</span>
+</button>
+</sc-for>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Airplanes or helicopters?</h2>
+<div role="radiogroup" aria-label="Airplanes or helicopters" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: #EEF3F7">
+<sc-for list="{{ products }}" as="c" hint-placeholder-count="2">
+<button type="button" role="radio" aria-checked="{{c.checked}}" onClick="{{ c.pick }}" style="height: 46px; border-radius: 12px; border: 0; background: {{c.bg}}; box-shadow: {{c.shadow}}; color: {{c.fg}}; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</section>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="{{nextHref}}" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Continue</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const type = s.type || 'mechanic';
+    const product = s.product || 'airplanes';
+    const defs = [
+      ['mechanic', 'B1', 'Mechanic', '#D6ECF8', '#0B5E8C'],
+      ['avionic', 'B2', 'Avionics Technician', '#D5F2E4', '#0B6B45'],
+      ['sheet', 'SM', 'Sheet Metal Worker', '#F1E9DC', '#5B4528'],
+      ['painter', 'PT', 'Aircraft Painter', '#F1E9DC', '#5B4528'],
+      ['composite', 'CP', 'Composite Technician', '#F1E9DC', '#5B4528'],
+      ['engine', 'ENG', 'Engine Technician', '#E3E8EE', '#33465A']
+    ];
+    const licensed = type === 'mechanic' || type === 'avionic';
+    const engine = type === 'engine';
+    const types = defs.map((d) => {
+      const on = d[0] === type;
+      return {
+        code: d[1], label: d[2], tileBg: d[3], tileFg: d[4], on: on, checked: on ? 'true' : 'false',
+        border: on ? '2px solid ' + p : '1px solid #DDE5EC', bg: on ? '#F2F8FC' : '#FFFFFF',
+        pick: () => this.setState({ type: d[0] })
+      };
+    });
+    const products = [['airplanes', 'Airplanes'], ['helicopters', 'Helicopters']].map((c) => {
+      const on = c[0] === product;
+      return {
+        label: c[1], checked: on ? 'true' : 'false',
+        bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#0E1A2B' : '#526274', shadow: on ? '0 1px 3px rgba(14, 26, 43, 0.14)' : 'none',
+        pick: () => this.setState({ product: c[0] })
+      };
+    });
+    return {
+      primary: p, types: types, products: products,
+      total: licensed || engine ? 4 : 3,
+      typeHelper: engine ? 'An engine offer: candidates are matched on one engine. A licence is optional.'
+        : licensed ? 'Next you choose whether the work needs a licence.'
+        : 'No licence for this trade. You will add the aircraft next.',
+      nextHref: licensed || engine ? 'W-Post2.dc.html' : 'W-Post3.dc.html'
+    };
+  }
+}
+</script>
+</body>
+</html>

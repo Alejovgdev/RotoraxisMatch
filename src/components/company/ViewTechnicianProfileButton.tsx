@@ -2,10 +2,10 @@ import React from 'react';
 import {
   StyleProp,
   StyleSheet,
-  Text,
   TouchableOpacity,
   ViewStyle,
 } from 'react-native';
+import { Text } from '../ui/Text';
 import { useRouter } from 'expo-router';
 import { UserRound } from 'lucide-react-native';
 import { colors, spacing } from '../../theme';
@@ -51,7 +51,7 @@ export function ViewTechnicianProfileButton({
 const styles = StyleSheet.create({
   button: {
     minHeight: 44,
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: companyUi.accent,
     backgroundColor: companyUi.surface,

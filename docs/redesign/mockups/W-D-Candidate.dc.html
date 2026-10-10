@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Application · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="position: relative; min-height: 960px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="applications" role="{{role}}" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+
+<div style="max-width: 1160px; margin: 0 auto; padding: 22px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #526274"><a href="W-D-Applications.dc.html" style="font-weight: 700; text-decoration: none; color: {{primary}}">Applications</a><span aria-hidden="true">›</span><span style="font-weight: 700; color: #0E1A2B">{{name}}</span></nav>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; align-items: center; gap: 18px">
+<dc-import name="WAvatar" who="{{face}}" size="88" hint-size="88px,88px"></dc-import>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800">{{name}}</h1>
+<span style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; background: {{statusBg}}; color: {{statusFg}}; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">{{statusLabel}}</span>
+<span style="height: 26px; padding: 0 10px; border-radius: 13px; background: #D3F1E3; color: #0B5B3A; font-size: 12.5px; font-weight: 800; display: flex; align-items: center">Verified</span>
+</span>
+</div>
+</div>
+
+<sc-if value="{{ isAccepted }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 16px 18px; border-radius: 16px; background: #E5F4EC">
+<span style="flex: 1 1 100%; font-size: 15px; font-weight: 800; color: #0B5B3A">Identity unlocked</span>
+<span style="flex: 1 1 100%; font-size: 14px; color: #2D5A45">Admin-verified documents are available. Chat is open for direct coordination.</span>
+<span style="font-size: 14.5px; font-weight: 700">marco.ruiz@example.com</span><span style="font-size: 14.5px; font-weight: 700">+34 600 000 000</span>
+</div>
+</sc-if>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Cover note</h2>
+<p style="margin: 0; padding: 14px 16px; border-radius: 14px; background: #F3F6F9; font-size: 15px; line-height: 1.5; color: #33465A">Eight years on the A320 family, mostly line maintenance. Available to relocate to Barcelona from next month.</p>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 28px">
+<section style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Licences</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><span style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">EASA B1.1</span><span style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #D5DEE6; display: flex; align-items: center; font-size: 14px; font-weight: 800">EASA B1.3</span></div>
+</section>
+<section style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 17px; font-weight: 800">Experience</h2>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; font-weight: 700">A320 family — CFM56</span><span style="font-size: 13.5px; color: #526274">Type rating · B1.1</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; font-weight: 700">H145 / BK117 D2 — Arriel 2</span><span style="font-size: 13.5px; color: #526274">Type rating · B1.3</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 10px 0"><span style="font-size: 14.5px; font-weight: 700">A320neo family — PW1100G</span><span style="font-size: 13.5px; color: #526274">Aircraft · 3 years</span></div>
+</section>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Documents</h2>
+<sc-if value="{{ notAccepted }}" hint-placeholder-val="{{ true }}"><span style="padding: 14px 16px; border-radius: 14px; background: #F3F6F9; font-size: 14.5px; color: #526274">Visible after you accept.</span></sc-if>
+<sc-if value="{{ isAccepted }}" hint-placeholder-val="{{ false }}"><span style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid #E1E8EE; font-size: 14.5px; font-weight: 700"><span style="width: 36px; height: 36px; border-radius: 10px; background: #FDECEC; color: #B42318; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">PDF</span><span style="flex: 1 1 auto">EASA licence B1.pdf</span><span style="height: 24px; padding: 0 8px; border-radius: 12px; background: #D3F1E3; color: #0B5B3A; font-size: 11.5px; font-weight: 800; display: flex; align-items: center">Verified</span></span></sc-if>
+</section>
+</div>
+
+<aside style="flex: 1 1 320px; min-width: 0; box-sizing: border-box; border: 1px solid #E1E8EE; border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 40px; line-height: 1; color: #157F4F">92%</span><span style="font-size: 15px; font-weight: 800">Excellent match</span></div>
+<sc-for list="{{ breakdown }}" as="b" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="flex: none; width: 92px; font-size: 13.5px; color: #33465A">{{b.label}}</span>
+<span style="flex: 1 1 auto; height: 8px; border-radius: 4px; background: #E6ECF1; overflow: hidden"><span style="display: block; height: 100%; width: {{b.pct}}; border-radius: 4px; background: {{b.color}}"></span></span>
+<span style="flex: none; width: 44px; text-align: right; font-size: 13px; font-weight: 800; color: {{b.color}}">{{b.pts}}</span>
+</div>
+</sc-for>
+<a href="W-D-Offer.dc.html" style="display: flex; flex-direction: column; padding: 12px 14px; border-radius: 14px; background: #F3F6F9; text-decoration: none; color: #0E1A2B"><span style="font-size: 12.5px; font-weight: 700; color: #526274">Applied 2h ago to</span><span style="font-size: 15px; font-weight: 800">B1 Mechanic · A320 family</span></a>
+<sc-if value="{{ canDecide }}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{ askAccept }}" style="height: 50px; border-radius: 25px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Accept application</button>
+<button type="button" onClick="{{ reject }}" style="height: 50px; border-radius: 25px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 16px; font-weight: 800; cursor: pointer">Reject</button>
+</sc-if>
+<sc-if value="{{ viewerBlocked }}" hint-placeholder-val="{{ false }}">
+<button type="button" disabled="{{ true }}" style="height: 50px; border-radius: 25px; border: 0; background: #C9D3DD; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 800">Accept application</button>
+<span style="font-size: 13px; color: #526274">Viewer role cannot accept or reject applications.</span>
+</sc-if>
+<sc-if value="{{ isAccepted }}" hint-placeholder-val="{{ false }}">
+<a href="W-D-Inbox.dc.html" style="height: 50px; border-radius: 25px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Open chat</a>
+<a href="W-D-Tech.dc.html" style="height: 50px; border-radius: 25px; border: 1px solid #D5DEE6; color: #0E1A2B; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">View full profile</a>
+</sc-if>
+<sc-if value="{{ isRejected }}" hint-placeholder-val="{{ false }}"><span style="padding: 14px; border-radius: 14px; background: #F3F6F9; color: #4A5A6C; text-align: center; font-size: 14.5px; font-weight: 800">You rejected this application</span></sc-if>
+</aside>
+</div>
+</div>
+
+<sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Close" onClick="{{ closeConfirm }}" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 0; border: 0; background: rgba(14, 26, 43, 0.45); cursor: pointer"></button>
+<div role="alertdialog" aria-label="Accept application?" style="position: absolute; left: 50%; top: 240px; transform: translateX(-50%); width: 440px; max-width: calc(100% - 40px); box-sizing: border-box; border-radius: 22px; background: #FFFFFF; padding: 24px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(14, 26, 43, 0.3)">
+<h2 style="margin: 0; font-size: 20px; font-weight: 800">Accept application?</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.45; color: #526274">The technician's identity and verified documents become visible to your company, and a chat opens.</p>
+<div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px">
+<button type="button" onClick="{{ closeConfirm }}" style="height: 48px; padding: 0 20px; border-radius: 24px; border: 1px solid #D5DEE6; background: #FFFFFF; color: #0E1A2B; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Cancel</button>
+<button type="button" onClick="{{ accept }}" style="height: 48px; padding: 0 22px; border-radius: 24px; border: 0; background: {{primary}}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer">Accept</button>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const status = s.status || 'pending';
+    const role = this.props.role ?? 'admin';
+    const viewer = role === 'viewer';
+    const accepted = status === 'accepted';
+    const st = { pending: ['Pending review', '#FDE7B5', '#7A3F06'], accepted: ['Accepted', '#D3F1E3', '#0B5B3A'], rejected: ['Rejected', '#E9EDF1', '#4A5A6C'] };
+    const b = (label, pts, max) => ({ label: label, pts: pts + '/' + max, pct: Math.round(pts / max * 100) + '%', color: pts === max ? '#1F9D62' : pts > 0 ? '#0B6A9E' : '#A9B6C3' });
+    return {
+      primary: this.props.primary ?? '#0B6A9E', role: role,
+      face: accepted ? 't2847' : 'anon', name: accepted ? 'Marco Ruiz' : 'Technician T7A2C91B04',
+      statusLabel: st[status][0], statusBg: st[status][1], statusFg: st[status][2],
+      isAccepted: accepted, notAccepted: !accepted, isRejected: status === 'rejected',
+      canDecide: status === 'pending' && !viewer, viewerBlocked: status === 'pending' && viewer,
+      isConfirm: !!s.confirm,
+      breakdown: [b('Verified', 15, 15), b('Type rating', 45, 45), b('Licence', 20, 20), b('Contract fit', 12, 15), b('Location', 0, 5)],
+      askAccept: () => this.setState({ confirm: true }),
+      closeConfirm: () => this.setState({ confirm: false }),
+      accept: () => this.setState({ confirm: false, status: 'accepted' }),
+      reject: () => this.setState({ status: 'rejected' })
+    };
+  }
+}
+</script>
+</body>
+</html>

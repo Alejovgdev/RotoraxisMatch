@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Direct offers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 16px 0 4px">
+<a href="W-Home.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+<h1 style="margin: 0; font-size: 20px; font-weight: 800">Direct offers</h1>
+</div>
+<p style="margin: 0; padding: 0 20px 0 48px; font-size: 14px; color: #526274">Offers you sent directly to technicians</p>
+
+<div style="flex: none; display: flex; gap: 8px; padding: 12px 20px 8px; overflow: hidden">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="flex: none; height: 44px; padding: 0 15px; border-radius: 22px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}<span style="opacity: 0.7">{{c.count}}</span></button>
+</sc-for>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 20px">
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+<a href="{{r.href}}" style="display: flex; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; opacity: {{r.fade}}"><dc-import name="WAvatar" who="{{r.face}}" size="52" hint-size="52px,52px"></dc-import></span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+<span style="font-size: 13px; color: #526274; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.offer}}</span>
+<span style="font-size: 12.5px; color: {{r.noteColor}}; font-weight: {{r.noteWeight}}">{{r.note}}</span>
+</span>
+<span style="flex: none; height: 28px; padding: 0 10px; border-radius: 14px; background: {{r.chipBg}}; color: {{r.chipFg}}; font-size: 12px; font-weight: 800; display: flex; align-items: center">{{r.status}}</span>
+</a>
+</sc-for>
+<a href="W-Search.dc.html" style="margin-top: 18px; height: 50px; border-radius: 25px; border: 1.5px solid {{primary}}; color: {{primary}}; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-size: 15px; font-weight: 800">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+Find more technicians
+</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filter = (this.state && this.state.filter) || 'all';
+    const st = {
+      pending: ['Awaiting response', '#DCE7FB', '#1E4FB8'],
+      accepted: ['Accepted', '#D3F1E3', '#0B5B3A'],
+      declined: ['Declined', '#E9EDF1', '#4A5A6C'],
+      withdrawn: ['Withdrawn', '#E9EDF1', '#4A5A6C'],
+      expired: ['Expired', '#E9EDF1', '#4A5A6C']
+    };
+    const all = [
+      ['anon', 'Technician T4C81E9A20', 'B1 Mechanic · A320 family', 'Sent today', 'pending', 'C-DirectDetail.dc.html'],
+      ['t4410', 'Pablo Serrano', 'B1 Mechanic · A320 family', 'Identity revealed · Contact details available', 'accepted', 'C-Tech.dc.html'],
+      ['anon', 'Technician T9B07D3E11', 'B1 Mechanic · B737 NG', 'Sent 1 week ago', 'declined', '#'],
+      ['anon', 'Technician T6F20B8A15', 'Engine Technician · CFM56-5B', 'Sent 2 weeks ago', 'withdrawn', '#'],
+      ['anon', 'Technician T1C44D9E02', 'B2 Avionics · ATR 72', 'Sent 1 month ago', 'expired', '#']
+    ];
+    const rows = all.filter((r) => filter === 'all' || r[4] === filter).map((r) => ({
+      face: r[0], name: r[1], offer: r[2], note: r[3], href: r[5],
+      noteColor: r[4] === 'accepted' ? '#157F4F' : '#66768A', noteWeight: r[4] === 'accepted' ? 800 : 400,
+      status: st[r[4]][0], chipBg: st[r[4]][1], chipFg: st[r[4]][2],
+      fade: ['declined', 'withdrawn', 'expired'].indexOf(r[4]) !== -1 ? '0.6' : '1'
+    }));
+    const count = (k) => all.filter((r) => k === 'all' || r[4] === k).length;
+    const chips = [['all', 'All'], ['pending', 'Pending'], ['accepted', 'Accepted'], ['declined', 'Declined']].map((c) => {
+      const on = c[0] === filter;
+      return {
+        label: c[1], count: count(c[0]), pressed: on ? 'true' : 'false',
+        bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6',
+        pick: () => this.setState({ filter: c[0] })
+      };
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', chips: chips, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

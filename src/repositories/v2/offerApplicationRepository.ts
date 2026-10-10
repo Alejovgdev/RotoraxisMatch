@@ -91,6 +91,37 @@ export const offerApplicationRepository = {
     return ((data ?? []) as any[]).map(mapOfferApplicationRow);
   },
 
+  /**
+   * Candidaturas pendientes de la empresa, sólo el número (la misma consulta
+   * `head` que hacía la Home antes del rediseño). La usan las barras de
+   * navegación, que la repiten al cambiar de pantalla: traer las filas sería
+   * pagar la lista entera por un contador.
+   */
+  async countPendingForCompany(companyId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('offer_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'pending');
+    throwIfError(error);
+    return count ?? 0;
+  },
+
+  /**
+   * Candidaturas pendientes del técnico, sólo el número: la misma consulta
+   * `head` que hacía la Home del técnico antes del rediseño. La usan sus barras
+   * de navegación y el círculo Applications de la Home (fase 5A).
+   */
+  async countPendingForTechnician(technicianId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('offer_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('technician_id', technicianId)
+      .eq('status', 'pending');
+    throwIfError(error);
+    return count ?? 0;
+  },
+
   async create(data: {
     technicianId: string;
     offerId: string;

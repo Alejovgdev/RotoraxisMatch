@@ -3,11 +3,10 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text, TextInput } from '../../src/components/ui/Text';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import { FileCheck, Search } from 'lucide-react-native';

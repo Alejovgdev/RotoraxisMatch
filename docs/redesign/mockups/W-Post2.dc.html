@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post offer · Step 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 960px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: none">
+<dc-import name="WPostHeader" step="2" total="4" back="W-Post.dc.html" primary="{{primary}}" hint-size="390px,76px"></dc-import>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Does this job need certified work?</h1>
+<div role="radiogroup" aria-label="Certified work" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: #EEF3F7">
+<sc-for list="{{ certOpts }}" as="c" hint-placeholder-count="2">
+<button type="button" role="radio" aria-checked="{{c.checked}}" onClick="{{ c.pick }}" style="height: 46px; border-radius: 12px; border: 0; background: {{c.bg}}; box-shadow: {{c.shadow}}; color: {{c.fg}}; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: #526274">{{certHelper}}</p>
+</div>
+
+<sc-if value="{{ certYes }}" hint-placeholder-val="{{ true }}">
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; color: #66768A">Issuing authority</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ auths }}" as="a" hint-placeholder-count="5">
+<button type="button" aria-pressed="{{a.pressed}}" onClick="{{ a.pick }}" style="height: 44px; padding: 0 15px; border-radius: 22px; border: {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{a.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; color: #66768A">Licence this role certifies under</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ lics }}" as="l" hint-placeholder-count="13">
+<button type="button" aria-pressed="{{l.pressed}}" onClick="{{ l.pick }}" style="min-width: 58px; height: 44px; padding: 0 12px; border-radius: 14px; border: {{l.border}}; background: {{l.bg}}; color: {{l.fg}}; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer">{{l.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; color: #66768A">Also accept licences from</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ accepts }}" as="a" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{a.pressed}}" onClick="{{ a.toggle }}" style="height: 44px; padding: 0 14px; border-radius: 22px; border: {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">
+<sc-if value="{{ a.on }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+{{a.label}}
+</button>
+</sc-for>
+</div>
+<sc-if value="{{ needsFaaCategory }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #F3F6F9">
+<span style="font-size: 13.5px; font-weight: 800">Licence category for the Part-66 authorities</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{ faaCats }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 40px; padding: 0 12px; border-radius: 12px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer">{{c.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{ certNo }}" hint-placeholder-val="{{ false }}">
+<button type="button" role="checkbox" aria-checked="{{onlyChecked}}" onClick="{{ toggleOnly }}" style="display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid #DDE5EC; background: #FFFFFF; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: none; width: 24px; height: 24px; box-sizing: border-box; border-radius: 7px; border: {{onlyBoxBorder}}; background: {{onlyBoxBg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 800">Only technicians without a licence</span><span style="font-size: 13px; color: #526274">Licensed technicians will not be matched to this offer.</span></span>
+</button>
+</sc-if>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="W-Post3.dc.html" style="height: 52px; border-radius: 26px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Continue</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const cert = s.cert || 'yes';
+    const auth = s.auth || 'EASA';
+    const part66 = ['A1', 'A2', 'A3', 'A4', 'B1.1', 'B1.2', 'B1.3', 'B1.4', 'B2', 'B2L', 'B3', 'L', 'C'];
+    const faa = ['A', 'P', 'A&P'];
+    const lic = s.lic || (auth === 'FAA' ? 'A&P' : 'B1.1');
+    const accepted = s.accepted || { 'UK CAA': true };
+    const faaCat = s.faaCat || 'B1.1';
+    const dark = (on) => ({ bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6' });
+    const seg = (on) => ({ bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#0E1A2B' : '#526274', shadow: on ? '0 1px 3px rgba(14, 26, 43, 0.14)' : 'none' });
+    const certOpts = [['yes', 'Yes, licence required'], ['no', 'No licence needed']].map((c) => Object.assign({ label: c[1], checked: c[0] === cert ? 'true' : 'false', pick: () => this.setState({ cert: c[0] }) }, seg(c[0] === cert)));
+    const allAuths = ['EASA', 'UK CAA', 'CASA', 'UAE GCAA', 'FAA'];
+    const auths = allAuths.map((a) => Object.assign({ label: a, pressed: a === auth ? 'true' : 'false', pick: () => this.setState({ auth: a, lic: a === 'FAA' ? 'A&P' : 'B1.1', accepted: {} }) }, dark(a === auth)));
+    const lics = (auth === 'FAA' ? faa : part66).map((c) => {
+      const on = c === lic;
+      return { label: c, pressed: on ? 'true' : 'false', bg: on ? '#E6F1F8' : '#FFFFFF', fg: on ? '#0B5E8C' : '#0E1A2B', border: on ? '2px solid ' + p : '1px solid #D5DEE6', pick: () => this.setState({ lic: c }) };
+    });
+    const others = allAuths.filter((a) => a !== auth && !(a === 'FAA' && lic === 'C'));
+    const accepts = others.map((a) => {
+      const on = !!accepted[a];
+      return Object.assign({ label: a, on: on, pressed: on ? 'true' : 'false', toggle: () => { const n = Object.assign({}, accepted); n[a] = !n[a]; this.setState({ accepted: n }); } }, dark(on));
+    });
+    const anyPart66Accepted = auth === 'FAA' && Object.keys(accepted).some((k) => accepted[k] && k !== 'FAA');
+    const faaCats = ['B1.1', 'B1.2', 'B1.3', 'B1.4'].map((c) => {
+      const on = c === faaCat;
+      return { label: c, pressed: on ? 'true' : 'false', bg: on ? '#E6F1F8' : '#FFFFFF', fg: on ? '#0B5E8C' : '#0E1A2B', border: on ? '2px solid ' + p : '1px solid #D5DEE6', pick: () => this.setState({ faaCat: c }) };
+    });
+    const only = !!s.only;
+    return {
+      primary: p, certOpts: certOpts, auths: auths, lics: lics, accepts: accepts, faaCats: faaCats,
+      certYes: cert === 'yes', certNo: cert === 'no', needsFaaCategory: anyPart66Accepted,
+      certHelper: cert === 'yes'
+        ? 'Yes — the technician must hold a valid licence to sign off the work. You can require a licence and type ratings below.'
+        : 'No — you are hiring for hands-on work, not for signing it off. No licence or type rating can be required.',
+      onlyChecked: only ? 'true' : 'false', onlyBoxBg: only ? p : '#FFFFFF', onlyBoxBorder: only ? '2px solid ' + p : '2px solid #B8C4CF',
+      toggleOnly: () => this.setState({ only: !only })
+    };
+  }
+}
+</script>
+</body>
+</html>

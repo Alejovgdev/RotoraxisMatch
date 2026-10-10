@@ -1,60 +1,69 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  useWindowDimensions,
-  RefreshControl,
-  Modal,
-} from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
-import { colors, spacing } from '../../../src/theme';
+import { colors } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { InlineScore } from '../../../src/components/InlineScore';
-import { MatchExplanation } from '../../../src/components/MatchExplanation';
-import { Button } from '../../../src/components/Button';
 import { ExternalLink } from '../../../src/components/ExternalLink';
+import { Avatar, Text, useConfirmDialog } from '../../../src/components/ui';
+import { TechnicianScreen } from '../../../src/components/technician/TechnicianUI';
+import { OfferAboutRole, OfferChecklistSection, OfferTags } from '../../../src/components/technician/OfferDetailParts';
+import { ScoreHeadline } from '../../../src/components/company/MatchBreakdownBars';
 import {
-  EmptyPanel,
-  InitialAvatar,
-  TechnicianBadge,
-  TechnicianCard,
-  TechnicianChip,
-  TechnicianPageHeader,
-  TechnicianScreen,
-  techStyles,
-  techUi,
-} from '../../../src/components/technician/TechnicianUI';
+  AsideCard,
+  Breadcrumb,
+  ButtonRow,
+  EmptyBlock,
+  KeyValueRow,
+  NoticeBox,
+  PageBar,
+  PageBody,
+  PillButton,
+  QuoteBox,
+  Section,
+  StatusPill,
+  StickyBar,
+  TwoColumns,
+  VerificationPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
 import { offerRequestRepository } from '../../../src/repositories/v2/offerRequestRepository';
+import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { isOfferOpenForTechnicians, offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { companyRepositoryV2 } from '../../../src/repositories/v2/companyRepositoryV2';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { chatRepository } from '../../../src/repositories/v2/chatRepository';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { getMatchDisplayLabel, ineligibilityReasonText, matchPair, PairMatch } from '../../../src/utils/matchingV2';
-import { visibleBreakdownRows } from '../../../src/utils/matchBreakdownRows';
 import { useTechnicianSession } from '../../../src/state/SessionContext';
+import { useTechnicianNav } from '../../../src/state/TechnicianNavContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { ONLY_UNLICENSED_TEXT, offerCertificationText, offerEngineText, offerLicenseDetailText } from '../../../src/utils/offerRequirementsText';
-import { getAircraftTypeRatingLabel } from '../../../src/constants/aircraftTypeRatings';
-import { technicianTypeLabel } from '../../../src/constants/technicianTypes';
-import { OfferRequest } from '../../../src/types/offerRequest';
+import { OfferApplication, OfferRequest } from '../../../src/types/offerRequest';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { CompanyProfileView } from '../../../src/types/company';
 import { MatchScore } from '../../../src/types/matching';
 import { ChatRoom } from '../../../src/types/chat';
 import { formatLocation } from '../../../src/utils/formatLocation';
+import { offerPlaceLine } from '../../../src/utils/technicianOffers';
+import {
+  canRespondToDirectOffer,
+  isDirectOfferBlockedByClosedOffer,
+  technicianDirectOfferStatusLook,
+} from '../../../src/utils/technicianRelations';
+import { companyCanSeeIdentity, declinedNote, directOfferConfirm } from '../../../src/utils/technicianPrivacy';
+import { isOpenedFromChat } from '../../../src/utils/technicianNavigation';
 
-const CONTRACT_LABELS: Record<string, string> = {
-  permanent: 'Permanent',
-  long_term: 'Long-term',
-  short_term: 'Short-term',
-};
+// Detalle de una oferta directa recibida (rediseño, fase 5B; el patrón de
+// C-DirectDetail con lo que el técnico veía antes).
+//   - Carga, estados y acciones de antes: "Decline" / "Accept" con las
+//     confirmaciones de siempre (aceptar revela la identidad: se confirma
+//     siempre, respuesta 15); al aceptar, el chat y "Open chat" como antes.
+//   - La oferta se enseña igual que en su página (fase 5A): la checklist con
+//     sus avisos en lugar de las barras, y "About the role".
+//   - Si esta empresa ya ve la identidad por otro contacto aceptado, los
+//     avisos lo dicen (src/utils/technicianPrivacy.ts, la regla de la base).
+//   - Abierta desde un chat (?from=chat) no ofrece "Open chat": sería un bucle.
 
 const COMPANY_TYPE_LABELS: Record<string, string> = {
   MRO: 'MRO',
@@ -64,12 +73,7 @@ const COMPANY_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-function scoreColor(total: number): string {
-  if (total >= 80) return colors.success;
-  if (total >= 60) return colors.blue;
-  if (total >= 40) return colors.warning;
-  return colors.textMuted;
-}
+const ACCEPTED_TEXT = 'The company can now see your full identity and admin-verified documents. A chat room is available for direct communication.';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -79,30 +83,16 @@ function formatDate(iso: string): string {
   });
 }
 
-function statusTone(status: string): 'success' | 'warning' | 'error' | 'muted' {
-  if (status === 'accepted') return 'success';
-  if (status === 'pending') return 'warning';
-  if (status === 'rejected') return 'error';
-  return 'muted';
-}
-
-function statusLabel(status: string): string {
-  if (status === 'pending') return 'Pending';
-  if (status === 'accepted') return 'Accepted';
-  if (status === 'rejected') return 'Declined';
-  if (status === 'expired') return 'Expired';
-  if (status === 'withdrawn') return 'Withdrawn';
-  return status;
-}
-
 export default function DirectOfferDetailScreen() {
   const technicianSession = useTechnicianSession();
   const technicianId = technicianSession?.technicianId;
   const router = useRouter();
   const goBack = useGoBack();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const wide = useIsWide();
+  const { refreshCounts } = useTechnicianNav();
+  const { confirm, dialog } = useConfirmDialog();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const fromChat = isOpenedFromChat(from);
 
   const [request, setRequest] = useState<OfferRequest | null>(null);
   const [company, setCompany] = useState<CompanyProfileView | null>(null);
@@ -111,10 +101,12 @@ export default function DirectOfferDetailScreen() {
   const [match, setMatch] = useState<PairMatch | null>(null);
   const score: MatchScore | null = match?.eligible ? match.score : null;
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
+  // Todas las relaciones del técnico: deciden si la empresa ya ve su identidad.
+  const [allRequests, setAllRequests] = useState<OfferRequest[]>([]);
+  const [allApplications, setAllApplications] = useState<OfferApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actioning, setActioning] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'accept' | 'reject' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // El catálogo de ratings aquí sólo pinta las etiquetas de las aeronaves que
@@ -136,15 +128,19 @@ export default function DirectOfferDetailScreen() {
     if (!signal.active) return;
     setRequest(req);
 
-    const [co, off, techWithRelations] = await Promise.all([
+    const [co, off, techWithRelations, reqs, apps] = await Promise.all([
       companyRepositoryV2.getById(req.companyId),
       req.offerId ? offerRepository.getWithRequirements(req.offerId) : Promise.resolve(null),
       technicianRepositoryV2.getWithRelations(technicianId),
+      offerRequestRepository.getForTechnician(technicianId),
+      offerApplicationRepository.getForTechnician(technicianId),
     ]);
 
     if (!signal.active) return;
     setCompany(co);
     setOffer(off);
+    setAllRequests(reqs);
+    setAllApplications(apps);
 
     // Compute score when offer is active, or when the direct offer is accepted (historical context).
     const offerActive = isOfferOpenForTechnicians(off);
@@ -187,34 +183,27 @@ export default function DirectOfferDetailScreen() {
     }, [load]),
   );
 
-  // Real per-offer rows, labels and denominators — never hardcoded (see
-  // src/utils/matchBreakdownRows.ts).
-  const breakdownRows = useMemo(() => visibleBreakdownRows(offer), [offer]);
-
   async function handleRefresh() {
     setRefreshing(true);
     await load(loadSignal.current);
     setRefreshing(false);
   }
 
-  function handleAccept() {
+  // La misma regla con la que la base enseña la identidad a la empresa.
+  const identityVisible = Boolean(request && technicianId) && companyCanSeeIdentity({
+    companyId: request?.companyId ?? '',
+    technicianId: technicianId ?? '',
+    offerRequests: allRequests,
+    offerApplications: allApplications,
+  });
+
+  async function respond(action: 'accept' | 'reject') {
     if (!id) return;
     setActionError(null);
-    setConfirmAction('accept');
-  }
-
-  function handleReject() {
-    if (!id) return;
-    setActionError(null);
-    setConfirmAction('reject');
-  }
-
-  async function doConfirmAction() {
-    if (!id || !confirmAction) return;
-    const action = confirmAction;
-    setConfirmAction(null);
+    // Las confirmaciones de siempre (respuesta 15).
+    const confirmed = await confirm(directOfferConfirm(action, identityVisible));
+    if (!confirmed) return;
     setActioning(true);
-    setActionError(null);
     try {
       const result = await offerRequestRepository.updateStatus(
         id,
@@ -225,6 +214,7 @@ export default function DirectOfferDetailScreen() {
         return;
       }
       await load(loadSignal.current);
+      refreshCounts();
     } catch (e: any) {
       setActionError(e?.message ?? 'An error occurred. Please try again.');
     } finally {
@@ -247,323 +237,224 @@ export default function DirectOfferDetailScreen() {
     return (
       <TechnicianScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.notFound}>
-          <EmptyPanel title="Offer not found" subtitle="This direct offer is no longer available." />
-        </View>
+        {!wide ? <PageBar title="Direct offer" onBack={goBack} /> : null}
+        <PageBody wide={wide}>
+          <EmptyBlock title="Offer not found" text="This direct offer is no longer available." />
+        </PageBody>
       </TechnicianScreen>
     );
   }
 
-  const accent = score ? scoreColor(score.total) : colors.technician;
-  const isPending = request.status === 'pending';
+  const status = technicianDirectOfferStatusLook(request.status);
   const isAccepted = request.status === 'accepted';
-  // Only relevant for pending: shows "Offer closed" banner and disables Accept.
-  // Accepted/rejected/historical records are not affected by the linked offer's status.
-  const linkedOfferUnavailable = isPending && Boolean(request.offerId && !isOfferOpenForTechnicians(offer));
+  const offerOpen = isOfferOpenForTechnicians(offer);
+  // Pendiente con la oferta cerrada: aviso "Offer closed" y sin botones.
+  // Aceptadas, rechazadas o históricas no dependen del estado de la oferta.
+  const linkedOfferUnavailable = isDirectOfferBlockedByClosedOffer(request, offerOpen);
+  const canRespond = canRespondToDirectOffer(request, offerOpen);
   // Show offer details when active, or when accepted (historical context after offer closes).
-  const visibleOffer = offer && (isOfferOpenForTechnicians(offer) || isAccepted) ? offer : null;
+  const visibleOffer = offer && (offerOpen || isAccepted) ? offer : null;
+  const title = visibleOffer?.title ?? 'Direct offer';
+  const companyType = company.companyType ? COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType : 'Company';
+
+  const hero = (
+    <View style={styles.hero}>
+      <Avatar kind="company" size={wide ? 88 : 64} name={company.name} logoPath={company.logoPath} />
+      <View style={styles.heroCopy}>
+        <Text style={[styles.title, wide && styles.titleWide]} accessibilityRole="header">{title}</Text>
+        <Text style={styles.subtitle}>{`${company.name} · received ${formatDate(request.createdAt)}`}</Text>
+        <View style={styles.pills}>
+          <StatusPill label={status.label} tone={status.tone} large />
+        </View>
+      </View>
+    </View>
+  );
+
+  const headline = visibleOffer ? (
+    score ? (
+      <ScoreHeadline
+        total={score.total}
+        label={getMatchDisplayLabel(visibleOffer, score)}
+        notEligible={score.blockers.length > 0}
+        wide={wide}
+      />
+    ) : match && !match.eligible ? (
+      <ScoreHeadline total={0} label="" notEligible reason={ineligibilityReasonText(match.reason)} wide={wide} />
+    ) : null
+  ) : null;
+
+  const offerBlock = visibleOffer ? (
+    <>
+      <Section title="The offer" wide={wide}>
+        <Text style={styles.place}>{offerPlaceLine(visibleOffer)}</Text>
+        <OfferTags offer={visibleOffer} />
+      </Section>
+      <OfferChecklistSection offer={visibleOffer} score={score} wide={wide} ratingIndex={ratingIndex} engineIndex={engineIndex} />
+      <OfferAboutRole offer={visibleOffer} wide={wide} />
+    </>
+  ) : null;
+
+  const message = request.message ? (
+    <Section title="Message from company" wide={wide}>
+      <QuoteBox text={request.message} />
+    </Section>
+  ) : null;
+
+  const companyBlock = (
+    <Section title="Company" wide={wide}>
+      <View style={styles.companyCard}>
+        <Avatar kind="company" size={46} name={company.name} logoPath={company.logoPath} />
+        <View style={styles.companyCopy}>
+          <Text style={styles.companyName}>{company.name}</Text>
+          <Text style={styles.companyMeta}>{companyType}</Text>
+          <Text style={styles.companyMeta}>{formatLocation(company.city, company.country)}</Text>
+          {company.website ? <ExternalLink url={company.website} color={colors.primary} /> : null}
+        </View>
+        <VerificationPill status={company.verificationStatus} />
+      </View>
+    </Section>
+  );
+
+  const dates = (
+    <View>
+      <KeyValueRow label="Received" value={formatDate(request.createdAt)} last={request.updatedAt === request.createdAt} />
+      {request.updatedAt !== request.createdAt ? (
+        <KeyValueRow label="Updated" value={formatDate(request.updatedAt)} last />
+      ) : null}
+    </View>
+  );
+
+  // Los avisos de estado de antes, con el de identidad corregido.
+  const statusNote = linkedOfferUnavailable ? (
+    <NoticeBox title="Offer closed">This offer is no longer active and cannot be accepted.</NoticeBox>
+  ) : isAccepted ? (
+    <NoticeBox tone="success" title="Offer accepted">{ACCEPTED_TEXT}</NoticeBox>
+  ) : request.status === 'rejected' ? (
+    <NoticeBox title="Offer declined">{declinedNote(identityVisible)}</NoticeBox>
+  ) : request.status === 'expired' || request.status === 'withdrawn' ? (
+    <NoticeBox>
+      {request.status === 'expired'
+        ? 'This offer has expired and is no longer active.'
+        : 'This offer was withdrawn by the company.'}
+    </NoticeBox>
+  ) : null;
+
+  const errorNote = actionError ? <NoticeBox tone="error">{actionError}</NoticeBox> : null;
+
+  // Botonera: en móvil fija abajo, en escritorio en la columna lateral.
+  let actions: React.ReactNode = null;
+  if (canRespond) {
+    const decline = <PillButton label="Decline" variant="outline" onPress={() => respond('reject')} disabled={actioning} grow={wide ? undefined : 1} />;
+    const accept = <PillButton label="Accept" onPress={() => respond('accept')} loading={actioning} grow={wide ? undefined : 1.5} />;
+    actions = wide ? <>{accept}{decline}</> : <ButtonRow>{decline}{accept}</ButtonRow>;
+  } else if (isAccepted && chatRoom && !fromChat) {
+    actions = <PillButton label="Open chat" onPress={() => router.push(`/technician/chats/${chatRoom.id}` as never)} />;
+  }
+
+  const refresh = <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />;
+
+  if (wide) {
+    return (
+      <TechnicianScreen>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PageBody wide refreshControl={refresh}>
+          <Breadcrumb parent="Direct offers" onParent={() => router.navigate('/technician/direct-offers' as never)} current={title} />
+          <TwoColumns
+            main={(
+              <>
+                {hero}
+                {message}
+                {offerBlock}
+                {companyBlock}
+              </>
+            )}
+            aside={(
+              <AsideCard>
+                {headline}
+                {dates}
+                {statusNote}
+                {errorNote}
+                {actions}
+              </AsideCard>
+            )}
+          />
+        </PageBody>
+        {dialog}
+      </TechnicianScreen>
+    );
+  }
 
   return (
     <TechnicianScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[techStyles.content, isWide && techStyles.contentWide]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <TechnicianPageHeader
-          eyebrow="Direct offer"
-          title={visibleOffer?.title ?? 'Direct offer'}
-          subtitle={`${company.name} - received ${formatDate(request.createdAt)}`}
-          onBack={goBack}
-          right={<TechnicianBadge label={statusLabel(request.status)} tone={statusTone(request.status)} />}
-        />
-
-        <TechnicianCard style={styles.section}>
-          <View style={styles.companyRow}>
-            <InitialAvatar label={company.name} size={46} />
-            <View style={styles.companyInfo}>
-              <Text style={styles.companyName}>{company.name}</Text>
-              <Text style={styles.companyType}>
-                {company.companyType ? COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType : 'Company'}
-              </Text>
-              <Text style={styles.companyLocation}>{formatLocation(company.city, company.country)}</Text>
-              {company.website ? (
-                <ExternalLink url={company.website} color={techUi.accent} />
-              ) : null}
-            </View>
-            <TechnicianBadge
-              label={company.verificationStatus}
-              tone={company.verificationStatus === 'verified' ? 'success' : 'warning'}
-              small
-            />
-          </View>
-        </TechnicianCard>
-
-        {visibleOffer && (
-          <TechnicianCard style={styles.section}>
-            {score && (
-              <InlineScore
-                score={score.total}
-                quality={getMatchDisplayLabel(visibleOffer, score)}
-                context="match with your profile"
-                notEligible={score.blockers.length > 0}
-              />
-            )}
-            {match && !match.eligible && (
-              <InlineScore score={0} quality="" context="" notEligible notEligibleReason={ineligibilityReasonText(match.reason)} />
-            )}
-            <Text style={styles.offerTitle}>{visibleOffer.title}</Text>
-            <Text style={styles.offerLocation}>
-              {formatLocation(visibleOffer.locationCity, visibleOffer.locationCountry)}
-              {visibleOffer.locationBaseAirport ? ` - ${visibleOffer.locationBaseAirport}` : ''}
-            </Text>
-            <Text style={styles.offerDescription}>{visibleOffer.description}</Text>
-
-            <View style={styles.badgeRow}>
-              <TechnicianBadge label={CONTRACT_LABELS[visibleOffer.contractType] ?? visibleOffer.contractType} tone="muted" />
-              <TechnicianBadge label={`${visibleOffer.minYearsExperience} yrs min`} tone="muted" />
-            </View>
-
-            {/* Siempre visible desde la Fase 6 tanda C: el técnico tiene que
-                ver si el puesto exige licencia antes de aceptar. */}
-            {(
-              <View style={styles.reqBlock}>
-                {visibleOffer.offerKind === 'engine' ? (
-                  <ReqRow label="Engine" items={[offerEngineText(visibleOffer, engineIndex) ?? 'Not specified']} />
-                ) : (
-                  <ReqRow label="Profile type" items={[technicianTypeLabel(visibleOffer.technicianType)]} />
-                )}
-                <ReqRow
-                  label="Certified work"
-                  items={[offerCertificationText(visibleOffer)]}
-                />
-                {visibleOffer.licenseCode && <ReqRow label="Licence" items={[offerLicenseDetailText(visibleOffer)!]} />}
-                {visibleOffer.onlyUnlicensed && <ReqRow label="Candidates" items={[ONLY_UNLICENSED_TEXT]} />}
-                {visibleOffer.requiredHabilitations.length > 0 && (
-                  <ReqRow
-                    label={visibleOffer.requiresAllAircraft ? 'Aircraft — ALL of these' : 'Aircraft — any one of these'}
-                    items={visibleOffer.requiredHabilitations.map((h) => getAircraftTypeRatingLabel(h.aircraftTypeRatingId, ratingIndex))}
-                  />
-                )}
-              </View>
-            )}
-
-            {score && (
-              <View style={styles.breakdownBlock}>
-                <Text style={styles.sectionTitle}>Match breakdown</Text>
-                {breakdownRows.map((row) => (
-                  <BreakdownRow key={row.key} label={row.label} value={score.breakdown[row.key]} max={row.max} accent={accent} />
-                ))}
-                <MatchExplanation
-                  score={score}
-                  hideBreakdown
-                  displayLabel={visibleOffer ? getMatchDisplayLabel(visibleOffer, score) : undefined}
-                />
-              </View>
-            )}
-          </TechnicianCard>
-        )}
-
-        {linkedOfferUnavailable && (
-          <TechnicianCard style={styles.inactiveNote}>
-            <Text style={styles.noteTitle}>Offer closed</Text>
-            <Text style={styles.noteSub}>
-              This offer is no longer active and cannot be accepted.
-            </Text>
-          </TechnicianCard>
-        )}
-
-        {request.message && (
-          <TechnicianCard style={styles.section}>
-            <Text style={styles.sectionTitle}>Message from company</Text>
-            <Text style={styles.messageText}>"{request.message}"</Text>
-          </TechnicianCard>
-        )}
-
-        <TechnicianCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Status</Text>
-          <TechnicianBadge label={statusLabel(request.status)} tone={statusTone(request.status)} />
-          <Text style={styles.dateText}>Received {formatDate(request.createdAt)}</Text>
-          {request.updatedAt !== request.createdAt && (
-            <Text style={styles.dateText}>Updated {formatDate(request.updatedAt)}</Text>
-          )}
-        </TechnicianCard>
-
-        {actionError && (
-          <View style={styles.errorNote}>
-            <Text style={styles.errorNoteText}>{actionError}</Text>
-          </View>
-        )}
-
-        {isPending && !linkedOfferUnavailable && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.rejectBtn, actioning && styles.btnDisabled]}
-              onPress={handleReject}
-              disabled={actioning}
-              activeOpacity={0.75}
-            >
-              {actioning ? <ActivityIndicator color={techUi.red} size="small" /> : <Text style={styles.rejectBtnText}>Decline</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.acceptBtn, actioning && styles.btnDisabled]}
-              onPress={handleAccept}
-              disabled={actioning}
-              activeOpacity={0.75}
-            >
-              {actioning ? <ActivityIndicator color={colors.white} size="small" /> : <Text style={styles.acceptBtnText}>Accept offer</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {isAccepted && (
-          <TechnicianCard style={styles.acceptedNote}>
-            <Text style={styles.noteTitle}>Offer accepted</Text>
-            <Text style={styles.noteSub}>
-              The company can now see your full identity and admin-verified documents. A chat room is available for direct communication.
-            </Text>
-            {chatRoom && (
-              <Button label="Open chat" onPress={() => router.push(`/technician/chats/${chatRoom.id}` as any)} fullWidth />
-            )}
-          </TechnicianCard>
-        )}
-
-        {request.status === 'rejected' && (
-          <TechnicianCard style={styles.rejectedNote}>
-            <Text style={styles.noteTitle}>Offer declined</Text>
-            <Text style={styles.noteSub}>Your identity and documents remain private.</Text>
-          </TechnicianCard>
-        )}
-
-        {(request.status === 'expired' || request.status === 'withdrawn') && (
-          <TechnicianCard style={styles.inactiveNote}>
-            <Text style={styles.noteSub}>
-              {request.status === 'expired'
-                ? 'This offer has expired and is no longer active.'
-                : 'This offer was withdrawn by the company.'}
-            </Text>
-          </TechnicianCard>
-        )}
-      </ScrollView>
-
-      <Modal visible={confirmAction !== null} transparent animationType="fade" onRequestClose={() => setConfirmAction(null)}>
-        <View style={modalStyles.overlay}>
-          <TechnicianCard style={modalStyles.card}>
-            <Text style={modalStyles.title}>
-              {confirmAction === 'accept' ? 'Accept direct offer?' : 'Reject direct offer?'}
-            </Text>
-            <Text style={modalStyles.body}>
-              {confirmAction === 'accept'
-                ? 'This will unlock your identity and admin-verified documents for the company and open a chat.'
-                : 'The company will be notified. Your identity and documents will remain locked.'}
-            </Text>
-            <TouchableOpacity
-              style={[modalStyles.confirmBtn, confirmAction === 'reject' && modalStyles.confirmBtnDestructive]}
-              onPress={doConfirmAction}
-              activeOpacity={0.75}
-            >
-              <Text style={modalStyles.confirmBtnText}>
-                {confirmAction === 'accept' ? 'Confirm accept' : 'Confirm reject'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={modalStyles.cancelBtn} onPress={() => setConfirmAction(null)} activeOpacity={0.75}>
-              <Text style={modalStyles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </TechnicianCard>
-        </View>
-      </Modal>
+      <PageBar title="Direct offer" onBack={goBack} />
+      <PageBody wide={false} refreshControl={refresh}>
+        {hero}
+        {statusNote}
+        {headline}
+        {message}
+        {offerBlock}
+        {companyBlock}
+        {dates}
+        {errorNote}
+      </PageBody>
+      {actions ? <StickyBar>{actions}</StickyBar> : null}
+      {dialog}
     </TechnicianScreen>
   );
 }
 
-function ReqRow({ label, items }: { label: string; items: string[] }) {
-  return (
-    <View style={styles.reqRow}>
-      <Text style={styles.reqLabel}>{label}</Text>
-      <View style={styles.reqPills}>
-        {items.map((item, i) => <TechnicianChip key={`${item}-${i}`} label={item} />)}
-      </View>
-    </View>
-  );
-}
-
-function BreakdownRow({ label, value, max, accent }: { label: string; value: number; max: number; accent: string }) {
-  const pct = max > 0 ? value / max : 0;
-  return (
-    <View style={styles.breakdownRow}>
-      <Text style={styles.breakdownLabel}>{label}</Text>
-      <View style={styles.breakdownBarBg}>
-        <View style={[styles.breakdownBarFill, { width: `${pct * 100}%` as any, backgroundColor: value > 0 ? accent : techUi.borderSoft }]} />
-      </View>
-      <Text style={[styles.breakdownScore, { color: value > 0 ? accent : techUi.textMuted }]}>{value}/{max}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  notFound: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
-  section: { marginBottom: spacing.md },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: techUi.text, marginBottom: spacing.sm },
-  companyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  companyInfo: { flex: 1, minWidth: 0 },
-  companyName: { fontSize: 16, fontWeight: '700', color: techUi.text, marginBottom: 2 },
-  companyType: { fontSize: 12, color: techUi.textSoft, marginBottom: 2 },
-  companyLocation: { fontSize: 12, color: techUi.textMuted },
-  offerTitle: { fontSize: 16, fontWeight: '700', color: techUi.text, marginBottom: 4 },
-  offerLocation: { fontSize: 12, color: techUi.textMuted, marginBottom: spacing.sm },
-  offerDescription: { fontSize: 13, color: techUi.textSoft, lineHeight: 20, marginBottom: spacing.md },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  reqBlock: { marginTop: spacing.md },
-  reqRow: { marginBottom: spacing.sm },
-  reqLabel: { fontSize: 12, color: techUi.textSoft, fontWeight: '600', marginBottom: spacing.xs },
-  reqPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  breakdownBlock: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: techUi.borderSoft },
-  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  breakdownLabel: { fontSize: 12, color: techUi.textSoft, width: 90 },
-  breakdownBarBg: { flex: 1, height: 7, backgroundColor: techUi.borderSoft, borderRadius: 4, overflow: 'hidden' },
-  breakdownBarFill: { height: '100%', borderRadius: 4 },
-  breakdownScore: { fontSize: 11, fontWeight: '700', width: 38, textAlign: 'right' },
-  messageText: { fontSize: 13, color: techUi.textSoft, lineHeight: 20 },
-  dateText: { fontSize: 12, color: techUi.textMuted, marginTop: spacing.sm },
-  actionRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  actionBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  acceptBtn: { backgroundColor: techUi.green },
-  rejectBtn: { backgroundColor: techUi.surface, borderWidth: 1, borderColor: techUi.red },
-  btnDisabled: { opacity: 0.6 },
-  acceptBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
-  rejectBtnText: { fontSize: 14, fontWeight: '700', color: techUi.red },
-  acceptedNote: { marginBottom: spacing.md, borderColor: '#BBF7D0' },
-  rejectedNote: { marginBottom: spacing.md, borderColor: '#FECACA' },
-  inactiveNote: { marginBottom: spacing.md },
-  noteTitle: { fontSize: 15, fontWeight: '700', color: techUi.text, marginBottom: 5 },
-  noteSub: { fontSize: 13, lineHeight: 20, color: techUi.textSoft, marginBottom: spacing.sm },
-  errorNote: { backgroundColor: techUi.redSoft, borderRadius: 14, padding: spacing.md, borderWidth: 1, borderColor: '#FECACA', marginBottom: spacing.md },
-  errorNoteText: { fontSize: 13, color: techUi.red, lineHeight: 18 },
-});
-
-const modalStyles = StyleSheet.create({
-  overlay: {
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  heroCopy: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
+    minWidth: 0,
+    gap: 4,
   },
-  card: { width: '100%', maxWidth: 360 },
-  title: { fontSize: 18, fontWeight: '700', color: techUi.text, marginBottom: spacing.sm },
-  body: { fontSize: 13, color: techUi.textSoft, lineHeight: 20, marginBottom: spacing.lg },
-  confirmBtn: {
-    backgroundColor: techUi.green,
-    borderRadius: 14,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+  title: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: colors.text,
   },
-  confirmBtnDestructive: { backgroundColor: techUi.red },
-  confirmBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
-  cancelBtn: { paddingVertical: spacing.sm, alignItems: 'center', marginTop: spacing.xs },
-  cancelBtnText: { fontSize: 14, color: techUi.textMuted, fontWeight: '600' },
+  titleWide: {
+    fontSize: 26,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  place: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  companyCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  companyCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  companyName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  companyMeta: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
 });

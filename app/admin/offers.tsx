@@ -4,11 +4,11 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import {
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     flexBasis: 112,
     minHeight: 38,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     alignItems: 'center',
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   noActionHint: {
     fontSize: 12,

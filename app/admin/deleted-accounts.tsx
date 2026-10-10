@@ -3,11 +3,11 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { Stack } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import {
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   successNote: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#A7DCC3',
     backgroundColor: adminUi.greenSoft,
     padding: spacing.sm,
   },
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   errorCard: {
     gap: spacing.sm,
     marginBottom: spacing.md,
-    borderColor: '#FECACA',
+    borderColor: '#F3C2C2',
   },
   errorTitle: {
     fontSize: 14,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: 36,
     paddingHorizontal: spacing.md,
-    borderRadius: 12,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: adminUi.border,
     alignItems: 'center',

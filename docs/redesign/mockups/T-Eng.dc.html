@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add engine experience</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+input::placeholder{color:#5D6D80}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 20px 0 4px">
+<a href="T-Add.dc.html" aria-label="Back" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+</a>
+<span style="font-size: 15px; font-weight: 800">Add engine experience</span>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 0">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Which engine?</h1>
+<p style="margin: 0; font-size: 14.5px; line-height: 1.45; color: #526274">Engines you have worked on.</p>
+</div>
+
+<label style="display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 18px; border-radius: 25px; background: #EEF3F7; color: #526274">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+<input type="search" aria-label="Search engine" placeholder="CFM56, LEAP, PW1100G, Trent…" value="{{q}}" onChange="{{ onQ }}" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font-family: inherit; font-size: 15.5px; font-weight: 700; color: #0E1A2B; outline: none">
+</label>
+
+<div role="radiogroup" aria-label="Engine" style="display: flex; flex-direction: column">
+<sc-for list="{{ results }}" as="r" hint-placeholder-count="6">
+<button type="button" role="radio" aria-checked="{{r.checked}}" onClick="{{ r.pick }}" style="display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 6px 0; border: 0; border-bottom: 1px solid #E6ECF1; background: #FFFFFF; color: #0E1A2B; font-family: inherit; text-align: left; cursor: pointer">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 800">{{r.name}}</span>
+<span style="font-size: 13px; color: #526274">{{r.maker}}</span>
+</span>
+<sc-if value="{{ r.on }}" hint-placeholder-val="{{ false }}">
+<span style="flex: none; width: 26px; height: 26px; border-radius: 13px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+</sc-if>
+</button>
+</sc-for>
+<sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+<p style="margin: 8px 0 0; font-size: 14.5px; color: #526274">No engine found. <a href="#" style="font-weight: 800; text-decoration: none; color: {{primary}}">Request it</a></p>
+</sc-if>
+</div>
+
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 800">Years on this engine <span style="font-weight: 600; color: #66768A; margin-top: -6px">Optional</span>
+<input type="number" min="0" inputmode="numeric" placeholder="e.g. 5" style="height: 50px; box-sizing: border-box; padding: 0 16px; border-radius: 14px; border: 1px solid #D5DEE6; font-family: inherit; font-size: 15.5px; color: #0E1A2B">
+</label>
+</div>
+
+<div style="flex: none; padding: 12px 20px 22px; border-top: 1px solid #E6ECF1; background: #FFFFFF">
+<a href="{{nextHref}}" aria-disabled="{{nextDisabled}}" style="height: 52px; border-radius: 26px; background: {{nextBg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 16px; font-weight: 800">Add engine</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const q = s.q === undefined ? '' : s.q;
+    const picked = s.picked === undefined ? 'cfm565b' : s.picked;
+    const all = [
+      ['cfm565b', 'CFM56-5B', 'CFM International'],
+      ['cfm567b', 'CFM56-7B', 'CFM International'],
+      ['leap1a', 'LEAP-1A', 'CFM International'],
+      ['leap1b', 'LEAP-1B', 'CFM International'],
+      ['pw1100g', 'PW1100G', 'Pratt & Whitney'],
+      ['v2500', 'V2500', 'International Aero Engines'],
+      ['trent700', 'Trent 700', 'Rolls-Royce'],
+      ['pw100', 'PW100 series', 'Pratt & Whitney Canada'],
+      ['arriel2', 'Arriel 2', 'Safran Helicopter Engines']
+    ];
+    const needle = q.trim().toLowerCase();
+    const results = all
+      .filter((a) => !needle || (a[1] + ' ' + a[2]).toLowerCase().indexOf(needle) !== -1)
+      .slice(0, 6)
+      .map((a) => {
+        const on = a[0] === picked;
+        return { name: a[1], maker: a[2], on: on, checked: on ? 'true' : 'false', pick: () => this.setState({ picked: a[0] }) };
+      });
+    const ok = !!picked;
+    return {
+      primary: p, q: q, results: results, empty: results.length === 0,
+      onQ: (e) => this.setState({ q: e.target.value }),
+      nextHref: ok ? 'T-Done.dc.html' : '#',
+      nextDisabled: ok ? 'false' : 'true',
+      nextBg: ok ? p : '#A9B6C3'
+    };
+  }
+}
+</script>
+</body>
+</html>

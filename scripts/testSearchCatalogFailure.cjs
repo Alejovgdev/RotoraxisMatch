@@ -32,6 +32,7 @@ const modules = {
   '../repositories/v2/catalogRepository': { catalogRepository: { getAircraftTypeRatings: () => loadRatings() } },
   '../constants/aircraftTypeRatings': { buildAircraftRatingIndex: () => new Map() },
   '../utils/privacyV2': { canRevealIdentity: () => false },
+  '../types/privacy': { isUnlocked: view => 'firstName' in view },
   '../utils/v2CompatAdapters': { v2SafePreviewToSafeView: value => value },
 };
 const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'src/state/useTechnicianSearch.ts'), 'utf8'), {
@@ -65,10 +66,10 @@ async function main() {
   let resolveOld;
   loadRatings = () => new Promise(resolve => { resolveOld = resolve; });
   const clearedSearch = render().search();
-  render().clearFilters();
+  render().clearResults();
   resolveOld([]);
   await clearedSearch;
-  assert.equal(render().results.length, 0, 'clearing filters cancels the in-flight search');
+  assert.equal(render().results.length, 0, 'clearing the results (filters reset) cancels the in-flight search');
   assert.equal(render().loading, false);
   console.log('PASS H13 search hook: visible error, empty results, retry, stale failure and cancellation');
 }

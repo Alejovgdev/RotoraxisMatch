@@ -207,6 +207,7 @@ export function v2UnlockedViewToSafeView(view: UnlockedTechnicianView, ratingInd
   return {
     ...v2SafePreviewToSafeView(view, ratingIndex),
     fullName: `${view.firstName} ${view.lastName}`,
+    photoPath: view.photoPath ?? null,
     email: view.email,
     phone: view.phone,
   };
@@ -227,6 +228,7 @@ export function v2TechnicianToV1(tech: TechnicianWithRelations, ratingIndex: Air
     id: tech.id,
     anonymousCode: tech.anonymousCode,
     fullName: `${tech.firstName} ${tech.lastName}`,
+    photoPath: tech.photoPath ?? null,
     email: tech.email,
     phone: tech.phone ?? '',
     country: location.country,
@@ -258,6 +260,7 @@ export function v2CompanyToV1(c: CompanyProfile | CompanyProfileView): Company {
   return {
     id: c.id,
     companyName: c.name,
+    logoPath: c.logoPath ?? null,
     country: location.country,
     city: location.city,
     // Ya no es el '' hardcodeado que inventario la auditoria de campos

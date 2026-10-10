@@ -84,6 +84,7 @@ export function useMapOffers(filters: OfferMapFilters): UseMapOffersReturn {
           id: offer.id,
           title: offer.title,
           companyName: company?.name ?? 'Company',
+          logoPath: company?.logoPath ?? null,
           contractType: offer.contractType,
           salary: offer.salary,
           productType: offer.productType,

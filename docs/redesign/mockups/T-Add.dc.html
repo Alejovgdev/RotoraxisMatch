@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician · Add</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 20px 0 4px">
+<a href="T-Home.dc.html" aria-label="Close" style="flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #0E1A2B">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+</a>
+<h1 style="margin: 0; font-size: 20px; font-weight: 800">Add to your profile</h1>
+</div>
+
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 24px; padding: 16px 20px 0">
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">What you do</h2>
+<span style="font-size: 13.5px; color: #526274">Tap all that apply.</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ types }}" as="t" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{t.pressed}}" disabled="{{t.locked}}" onClick="{{ t.toggle }}" style="height: 44px; padding: 0 14px; border-radius: 22px; border: {{t.border}}; background: {{t.bg}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">
+<sc-if value="{{ t.locked }}" hint-placeholder-val="{{ false }}">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+</sc-if>
+<sc-if value="{{ t.ticked }}" hint-placeholder-val="{{ false }}">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+</sc-if>
+{{t.label}}
+</button>
+</sc-for>
+</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #526274">
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+Mechanic comes from your EASA B1.1 and B1.3
+</span>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 800">Add</h2>
+<sc-for list="{{ options }}" as="o" hint-placeholder-count="5">
+<sc-if value="{{ o.enabled }}" hint-placeholder-val="{{ true }}">
+<a href="{{o.href}}" style="display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 18px; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; width: 46px; height: 46px; border-radius: 14px; background: {{o.bg}}; color: {{o.fg}}; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 13.5px">{{o.code}}</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 16px; font-weight: 800">{{o.title}}</span>
+<span style="font-size: 13px; color: #526274">{{o.hint}}</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+</sc-if>
+<sc-if value="{{ o.disabled }}" hint-placeholder-val="{{ false }}">
+<div aria-disabled="true" style="display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 18px; border: 1px dashed #C9D3DD; background: #F7F9FB; color: #8A97A6">
+<span style="flex: none; width: 46px; height: 46px; border-radius: 14px; background: #EEF1F4; color: #A9B6C3; display: flex; align-items: center; justify-content: center; font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 13.5px">{{o.code}}</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 16px; font-weight: 800">{{o.title}}</span>
+<span style="font-size: 13px; font-weight: 700; color: #6B7785">{{o.blocked}}</span>
+</span>
+</div>
+</sc-if>
+</sc-for>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props.primary ?? '#0B6A9E';
+    const s = this.state || {};
+    const ticked = s.ticked || {};
+    const lockedByLicence = { mechanic: true };
+    const hasLicence = true;
+    const defs = [
+      ['mechanic', 'Mechanic'], ['avionic', 'Avionics Technician'], ['sheet', 'Sheet Metal Worker'],
+      ['painter', 'Aircraft Painter'], ['composite', 'Composite Technician'], ['engine', 'Engine Technician']
+    ];
+    const isOn = (k) => !!lockedByLicence[k] || !!ticked[k];
+    const types = defs.map((d) => {
+      const locked = !!lockedByLicence[d[0]];
+      const on = isOn(d[0]);
+      return {
+        label: d[1], locked: locked, ticked: on && !locked, pressed: on ? 'true' : 'false',
+        bg: locked ? '#E6F1F8' : on ? '#0E1A2B' : '#FFFFFF',
+        fg: locked ? '#0B5E8C' : on ? '#FFFFFF' : '#0E1A2B',
+        border: locked ? '1px solid #BFDDEF' : on ? '1px solid #0E1A2B' : '1px solid #D5DEE6',
+        toggle: () => { if (locked) return; const n = Object.assign({}, ticked); n[d[0]] = !n[d[0]]; this.setState({ ticked: n }); }
+      };
+    });
+    const engineOn = isOn('engine');
+    const opt = (code, title, hint, bg, fg, href, enabled, blocked) => ({ code, title, hint, bg, fg, href, enabled, disabled: !enabled, blocked });
+    return {
+      primary: p, types: types,
+      options: [
+        opt('B1', 'Licence', 'EASA, UK CAA, CASA, UAE GCAA or FAA', '#D6ECF8', '#0B5E8C', 'T-Lic.dc.html', true, ''),
+        opt('A320', 'Type rating', 'Aircraft and engine on one of your licences', '#D5F2E4', '#0B6B45', 'T-Rat.dc.html', hasLicence, 'Add a licence first'),
+        opt('XP', 'Aircraft experience', 'Aircraft you have worked on', '#F1E9DC', '#5B4528', '#', true, ''),
+        opt('ENG', 'Engine experience', 'Engines you have worked on', '#E3E8EE', '#33465A', 'T-Eng.dc.html', engineOn, 'Tick Engine Technician above'),
+        opt('PDF', 'Document', 'Licence or certificate to verify you', '#FDECEC', '#B42318', 'T-Docs.dc.html', true, '')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

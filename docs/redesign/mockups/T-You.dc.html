@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Technician · You</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 1120px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 20px; padding: 16px 20px 0">
+
+<h1 style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.4px">You</h1>
+
+<div style="display: flex; align-items: center; gap: 16px">
+<span style="position: relative; flex: none">
+<dc-import name="WAvatar" who="alejo" size="72" hint-size="72px,72px"></dc-import>
+<button type="button" aria-label="Change photo" style="position: absolute; right: -4px; bottom: -4px; width: 30px; height: 30px; padding: 0; border-radius: 15px; border: 2px solid #FFFFFF; background: #0E1A2B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+</button>
+</span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 22px; font-weight: 800">Alejo VG</span>
+<span style="font-size: 13.5px; color: #526274">ID T3FD8E0D5F · 8 years of experience</span>
+<span style="align-self: flex-start; height: 24px; padding: 0 9px; border-radius: 12px; background: #D3F1E3; color: #0B5B3A; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Verified</span>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: {{availBg}}">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Availability</h2>
+<span style="font-size: 13.5px; color: #33465A">Controls how you appear in offer matching.</span>
+</div>
+<div role="radiogroup" aria-label="Availability" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: #FFFFFF">
+<button type="button" role="radio" aria-checked="{{openChecked}}" onClick="{{ setOpen }}" style="height: 44px; border: 0; border-radius: 12px; background: {{openBg}}; color: {{openFg}}; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer">Open to offers</button>
+<button type="button" role="radio" aria-checked="{{offChecked}}" onClick="{{ setOff }}" style="height: 44px; border: 0; border-radius: 12px; background: {{offBg}}; color: {{offFg}}; font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer">Unavailable</button>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Your profile</h2>
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="7">
+<a href="{{r.href}}" style="display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 0; border-bottom: {{r.line}}; text-decoration: none; color: #0E1A2B">
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15.5px; font-weight: 800">{{r.title}}</span>
+<span style="font-size: 13.5px; color: #526274; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+</sc-for>
+</section>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Account</h2>
+<a href="#" style="display: flex; align-items: center; justify-content: space-between; min-height: 48px; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 700">Settings<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+<a href="#" style="display: flex; align-items: center; justify-content: space-between; min-height: 48px; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 700">Help<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+<button type="button" style="display: flex; align-items: center; min-height: 48px; padding: 0; border: 0; background: transparent; font-family: inherit; color: #B42318; font-size: 15px; font-weight: 800; text-align: left; cursor: pointer">Log out</button>
+</section>
+</div>
+
+<div style="flex: none">
+<dc-import name="TTabBar" active="you" primary="{{primary}}" hint-size="390px,84px"></dc-import>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const open = !!(this.state && this.state.open);
+    const on = (x) => (x ? '#0E1A2B' : 'transparent');
+    const r = (title, sub, href, last) => ({ title, sub, href, line: last ? '0' : '1px solid #E6ECF1' });
+    return {
+      primary: this.props.primary ?? '#0B6A9E',
+      availBg: open ? '#D3F1E3' : '#F3F6F9',
+      openChecked: open ? 'true' : 'false', offChecked: open ? 'false' : 'true',
+      openBg: on(open), openFg: open ? '#FFFFFF' : '#526274',
+      offBg: on(!open), offFg: !open ? '#FFFFFF' : '#526274',
+      setOpen: () => this.setState({ open: true }),
+      setOff: () => this.setState({ open: false }),
+      rows: [
+        r('My work', 'Mechanic · 3 licences · 2 type ratings · 1 aircraft', 'T-Quals.dc.html', false),
+        r('Documents', '1 verified', 'T-Docs.dc.html', false),
+        r('Location', 'Guayaquil, Ecuador', '#', false),
+        r('Contract types', 'Permanent · Long-term · Short-term', '#', false),
+        r('Personal details', 'Name, email, phone, years of experience', '#', false),
+        r('Professional links', 'Private until a company accepts you', '#', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

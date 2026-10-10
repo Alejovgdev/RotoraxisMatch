@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your offers · Desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="min-height: 860px; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif">
+<div><dc-import name="WTopBar" active="offers" primary="{{primary}}" hint-size="100%,132px"></dc-import></div>
+<div style="max-width: 1240px; margin: 0 auto; padding: 28px 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.3px">Your offers</h1>
+<a href="W-D-Post.dc.html" style="height: 46px; padding: 0 20px 0 16px; border-radius: 23px; background: {{primary}}; color: #FFFFFF; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 15px; font-weight: 800"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>New offer</a>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{c.pressed}}" onClick="{{ c.pick }}" style="height: 42px; padding: 0 16px; border-radius: 21px; border: {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; display: flex; align-items: center; gap: 6px; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">{{c.label}}<span style="opacity: 0.7">{{c.count}}</span></button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px">
+<sc-for list="{{ rows }}" as="o" hint-placeholder-count="7">
+<a href="{{o.href}}" style="display: flex; flex-direction: column; border-radius: 18px; border: 1px solid #E1E8EE; overflow: hidden; text-decoration: none; color: #0E1A2B; background: #FFFFFF; opacity: {{o.opacity}}">
+<span style="position: relative; height: 96px; box-sizing: border-box; padding: 14px 16px; background: {{o.bg}}; color: {{o.fg}}; display: flex; align-items: flex-end">
+<span style="position: absolute; top: 12px; left: 12px; height: 24px; padding: 0 9px; border-radius: 12px; background: {{o.chipBg}}; color: {{o.chipFg}}; font-size: 12px; font-weight: 800; display: flex; align-items: center">{{o.status}}</span>
+<sc-if value="{{ o.hasNew }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 12px; right: 12px; height: 24px; padding: 0 9px; border-radius: 12px; background: #FDE7B5; color: #7A3F06; font-size: 12px; font-weight: 800; display: flex; align-items: center">1 new</span></sc-if>
+<span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 32px; line-height: 1">{{o.code}}</span>
+</span>
+<span style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 15.5px; font-weight: 800">{{o.title}}</span>
+<span style="font-size: 13.5px; color: #526274">{{o.meta}}</span>
+<span style="font-size: 13px; color: #66768A">{{o.when}}</span>
+</span>
+</a>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":1440,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filter = (this.state && this.state.filter) || 'all';
+    const tile = { B1: ['#D6ECF8', '#0B5E8C'], B2: ['#D5F2E4', '#0B6B45'], ENG: ['#E3E8EE', '#33465A'], SM: ['#F1E9DC', '#5B4528'] };
+    const st = { published: ['Published', '#D3F1E3', '#0B5B3A'], draft: ['Draft', '#FDE7B5', '#7A3F06'], closed: ['Closed', '#E9EDF1', '#4A5A6C'], expired: ['Expired', '#FDECEC', '#B42318'] };
+    const all = [
+      ['B1', 'B1 Mechanic · A320 family', 'Barcelona, Spain · Permanent', 'published', 'Published 5 days ago', true, 'W-D-Offer.dc.html'],
+      ['B2', 'B2 Avionics · ATR 72', 'Valencia, Spain · Long-term', 'published', 'Published 1 week ago', false, '#'],
+      ['ENG', 'Engine Technician · CFM56-5B', 'Madrid, Spain · Short-term', 'published', 'Published 2 weeks ago', false, '#'],
+      ['B1', 'B1 Mechanic · B737 NG', 'Palma, Spain · Permanent', 'published', 'Published 3 weeks ago', false, '#'],
+      ['SM', 'Sheet Metal Worker · A330', 'Seville, Spain · Long-term', 'draft', 'Created 2 days ago', false, '#'],
+      ['B1', 'B1.3 Technician · H145', 'Bilbao, Spain · Permanent', 'closed', 'Closed 1 month ago', false, '#'],
+      ['B2', 'B2 Avionics · A350', 'Madrid, Spain · Permanent', 'expired', 'Expired 2 months ago', false, '#']
+    ];
+    const match = (r, k) => k === 'all' || r[3] === k || (k === 'closed' && r[3] === 'expired');
+    const rows = all.filter((r) => match(r, filter)).map((r) => ({
+      code: r[0], bg: tile[r[0]][0], fg: tile[r[0]][1], title: r[1], meta: r[2], when: r[4], hasNew: r[5], href: r[6],
+      status: st[r[3]][0], chipBg: st[r[3]][1], chipFg: st[r[3]][2], opacity: r[3] === 'closed' || r[3] === 'expired' ? '0.75' : '1'
+    }));
+    const chips = [['all', 'All'], ['published', 'Published'], ['draft', 'Drafts'], ['closed', 'Closed']].map((c) => {
+      const on = c[0] === filter;
+      return { label: c[1], count: all.filter((r) => match(r, c[0])).length, pressed: on ? 'true' : 'false', bg: on ? '#0E1A2B' : '#FFFFFF', fg: on ? '#FFFFFF' : '#0E1A2B', border: on ? '1px solid #0E1A2B' : '1px solid #D5DEE6', pick: () => this.setState({ filter: c[0] }) };
+    });
+    return { primary: this.props.primary ?? '#0B6A9E', chips: chips, rows: rows };
+  }
+}
+</script>
+</body>
+</html>

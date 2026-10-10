@@ -27,9 +27,36 @@ import { Alert, Platform } from 'react-native';
  * y `confirmAction()`.
  */
 
-/** Mensaje informativo (éxito, error, acción no disponible). */
+export interface WebNotice {
+  title: string;
+  message?: string;
+}
+
+let webNoticeHandler: ((notice: WebNotice) => void) | null = null;
+
+/**
+ * Web: la ventana de avisos de la app (NoticeHost, montada en la raíz) se
+ * registra aquí para enseñar los de `notify()` (fase 8, decisión E). Devuelve
+ * la función que la desregistra.
+ */
+export function setWebNoticeHandler(handler: (notice: WebNotice) => void): () => void {
+  webNoticeHandler = handler;
+  return () => {
+    if (webNoticeHandler === handler) webNoticeHandler = null;
+  };
+}
+
+/**
+ * Mensaje informativo (éxito, error, acción no disponible). En web sale en la
+ * ventana de la app, con el mismo título y texto; sólo si aún no está montada
+ * (no debería pasar), en la del navegador. En nativo, `Alert.alert`.
+ */
 export function notify(title: string, message?: string): void {
   if (Platform.OS === 'web') {
+    if (webNoticeHandler) {
+      webNoticeHandler({ title, message });
+      return;
+    }
     // eslint-disable-next-line no-alert
     window.alert(message ? `${title}\n\n${message}` : title);
     return;

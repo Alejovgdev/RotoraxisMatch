@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from './ui/Text';
 import { colors, spacing } from '../theme';
 import { EngineCatalog } from '../types/catalog';
 import { engineTypeLabel, searchEngines } from '../constants/engines';
@@ -17,6 +18,8 @@ interface Props {
   excludeIds?: readonly string[];
   placeholder?: string;
   maxResults?: number;
+  /** Fill a bounded mobile wizard step; other consumers keep the compact list. */
+  fillAvailableSpace?: boolean;
 }
 
 // Selector de motor del catálogo `engines` (Fase 10, paso 5b). Lo usan el
@@ -25,7 +28,7 @@ interface Props {
 // compartida (useEnginesCatalog), estados explícitos de carga y error con
 // reintento, búsqueda en memoria sobre 174 filas. Sólo ofrece motores activos
 // y no genéricos (searchEngines): una genérica no dice qué modelo es.
-export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, maxResults = 20 }: Props) {
+export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, maxResults = 20, fillAvailableSpace = false }: Props) {
   const { engines, engineIndex, state, error, retry } = useEnginesCatalog();
   const [query, setQuery] = useState('');
 
@@ -36,7 +39,7 @@ export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, ma
   }, [engines, query, excludeIds, maxResults]);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, fillAvailableSpace && styles.fill]}>
       {selected ? (
         <View style={styles.selectedRow}>
           <View style={styles.selectedTextBlock}>
@@ -87,7 +90,7 @@ export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, ma
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <ScrollView style={styles.results} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          <ScrollView style={fillAvailableSpace ? styles.expandedResults : styles.results} nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {results.map((e) => (
               <TouchableOpacity
                 key={e.id}
@@ -115,6 +118,7 @@ export function EnginePicker({ value, onSelect, excludeIds = [], placeholder, ma
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.xs },
+  fill: { flexGrow: 1, flexShrink: 1 },
   selectedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -131,13 +135,13 @@ const styles = StyleSheet.create({
   selectedTitle: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.text },
   selectedSubtitle: { fontSize: 11, lineHeight: 15, fontWeight: '500', color: colors.textMuted },
   inactiveBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: colors.warning + '22' },
-  inactiveBadgeText: { fontSize: 10, fontWeight: '700', color: '#92400E' },
+  inactiveBadgeText: { fontSize: 10, fontWeight: '700', color: '#7A3F06' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   statusText: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
   errorText: { flex: 1, fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.error },
   errorDetail: { fontSize: 11, lineHeight: 15, color: colors.textMuted },
-  retryButton: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: colors.border },
-  retryButtonText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  retryButton: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: colors.border },
+  retryButtonText: { fontSize: 12, fontWeight: '800', color: colors.text },
   input: {
     minHeight: 42,
     borderWidth: 1,
@@ -149,6 +153,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   results: { maxHeight: 220 },
+  // A small intrinsic height keeps short screens/large text scrollable in
+  // the outer wizard. Extra space goes to results, not a gap below the note.
+  expandedResults: { height: 144, minHeight: 144, flexGrow: 1, flexShrink: 1 },
   resultRow: { paddingVertical: 8, paddingHorizontal: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border + '66' },
   resultRowSelected: { backgroundColor: colors.cyan + '14' },
   resultTitle: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.text },

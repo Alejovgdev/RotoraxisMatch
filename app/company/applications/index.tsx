@@ -1,86 +1,76 @@
 import React, { useState, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  useWindowDimensions,
-} from 'react-native';
+import { View, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
-import { ClipboardCheck, Clock, UserRound } from 'lucide-react-native';
-import { colors, spacing } from '../../../src/theme';
 import { LoadingScreen } from '../../../src/components/LoadingScreen';
-import { MatchBadge } from '../../../src/components/MatchBadge';
+import { Avatar, Text } from '../../../src/components/ui';
+import { CompanyScreen } from '../../../src/components/company/CompanyUI';
 import {
-  ActivityDot,
-  CompanyBadge,
-  CompanyCard,
-  CompanyChip,
-  CompanyPageHeader,
-  CompanyScreen,
-  EmptyPanel,
-  IconBox,
-  companyStyles,
-  companyUi,
-} from '../../../src/components/company/CompanyUI';
+  AvatarDot,
+  DesktopTitle,
+  EmptyBlock,
+  FilterChipRow,
+  PageBar,
+  PageBody,
+  PillButton,
+  RowList,
+  StatusPill,
+  useIsWide,
+} from '../../../src/components/company/CompanyPage';
+import { matchScoreColor } from '../../../src/components/company/MatchBreakdownBars';
 import { offerApplicationRepository } from '../../../src/repositories/v2/offerApplicationRepository';
 import { offerRepository } from '../../../src/repositories/v2/offerRepository';
 import { technicianRepositoryV2 } from '../../../src/repositories/v2/technicianRepositoryV2';
 import { activityRepository } from '../../../src/repositories/v2/activityRepository';
 import { matchPairs, PairMatch } from '../../../src/utils/matchingV2';
-import { getSafeTechnicianPreview } from '../../../src/utils/privacyV2';
+import { companyTechnicianName, companyTechnicianPhoto } from '../../../src/utils/companyTechnicianIdentity';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { OfferApplication } from '../../../src/types/offerRequest';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { TechnicianWithRelations } from '../../../src/types/technician';
-import { SafeTechnicianPreview } from '../../../src/types/privacy';
-import { technicianTypeLabels } from '../../../src/constants/technicianTypes';
-import { ViewTechnicianProfileButton } from '../../../src/components/company/ViewTechnicianProfileButton';
-import { formatLocation } from '../../../src/utils/formatLocation';
+import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
+import { technicianProfileLine } from '../../../src/components/company/TechnicianQualifications';
+import { relativeTime } from '../../../src/utils/companyHome';
+import {
+  applicationStatusLook,
+  isFinishedRelation,
+  matchesRelationFilter,
+  relationFilterCounts,
+  type RelationFilter,
+} from '../../../src/utils/companyStatus';
+import { colors } from '../../../src/theme';
 
-type StatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';
+// Candidaturas (rediseño, fase 3; maquetas W-Applications y W-D-Applications).
+// Cambia el aspecto; la carga, el orden y lo que se enseña de cada candidatura
+// son los de antes.
 
 type AppEntry = {
   app: OfferApplication;
   offer: OfferWithRequirements | null;
-  tech: TechnicianWithRelations | null;
-  safePreview: SafeTechnicianPreview | null;
+  safePreview: TechnicianView | null;
   // null = sin puntuar (técnico borrado, oferta desaparecida o catálogos sin
   // cargar). Un par que el filtro saca llega como { eligible: false }: la
   // candidatura existe y se enseña, sin porcentaje.
   match: PairMatch | null;
 };
 
-function scoreColor(total: number): string {
-  if (total >= 80) return companyUi.green;
-  if (total >= 60) return companyUi.blue;
-  if (total >= 40) return companyUi.amber;
-  return companyUi.textMuted;
-}
+const FILTER_LABELS: Record<RelationFilter, string> = {
+  all: 'All',
+  pending: 'Pending',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+};
 
-function statusInfo(status: string): { label: string; tone: 'success' | 'warning' | 'error' | 'muted' } {
-  switch (status) {
-    case 'pending': return { label: 'Needs review', tone: 'warning' };
-    case 'accepted': return { label: 'Accepted', tone: 'success' };
-    case 'rejected': return { label: 'Closed', tone: 'error' };
-    case 'withdrawn': return { label: 'Withdrawn', tone: 'muted' };
-    case 'expired': return { label: 'Expired', tone: 'muted' };
-    default: return { label: status, tone: 'muted' };
-  }
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+function verificationText(status: string): string {
+  if (status === 'verified') return 'Verified';
+  if (status === 'pending') return 'Verification pending';
+  return 'Not verified';
 }
 
 export default function ApplicationsListScreen() {
   const router = useRouter();
   const goBack = useGoBack();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const wide = useIsWide();
   const companySession = useCompanySession();
   const companyId = companySession?.companyId;
 
@@ -88,7 +78,7 @@ export default function ApplicationsListScreen() {
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<RelationFilter>('all');
 
   const load = useCallback(async (signal: { active: boolean }) => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -104,6 +94,8 @@ export default function ApplicationsListScreen() {
 
     const uniqueTechIds = [...new Set(apps.map((a) => a.technicianId))];
     const techResults = await Promise.all(uniqueTechIds.map((id) => technicianRepositoryV2.getWithRelations(id)));
+    const views = await Promise.all(uniqueTechIds.map((id) => technicianRepositoryV2.getViewForCompany(id, companyId)));
+    const viewsMap = new Map(uniqueTechIds.map((id, i) => [id, views[i]]));
     const techsMap: Record<string, TechnicianWithRelations> = {};
     uniqueTechIds.forEach((id, i) => { if (techResults[i]) techsMap[id] = techResults[i]!; });
 
@@ -120,12 +112,10 @@ export default function ApplicationsListScreen() {
 
     const built: AppEntry[] = apps.map((app) => {
       const offer = offersMap[app.offerId] ?? null;
-      const tech = techsMap[app.technicianId] ?? null;
       return {
         app,
         offer,
-        tech,
-        safePreview: tech ? getSafeTechnicianPreview(tech) : null,
+        safePreview: viewsMap.get(app.technicianId) ?? null,
         match: matchByAppId.get(app.id) ?? null,
       };
     });
@@ -174,17 +164,14 @@ export default function ApplicationsListScreen() {
     setRefreshing(false);
   }
 
-  const filtered = statusFilter === 'all'
-    ? entries
-    : entries.filter((e) => e.app.status === statusFilter);
-
-  const pendingCount = entries.filter((e) => e.app.status === 'pending').length;
+  const filtered = entries.filter((e) => matchesRelationFilter(e.app.status, statusFilter));
+  const counts = relationFilterCounts(entries.map((e) => e.app.status));
 
   if (loading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadingScreen color={colors.blue} role="company" />
+        <LoadingScreen color={colors.primary} role="company" />
       </>
     );
   }
@@ -192,232 +179,248 @@ export default function ApplicationsListScreen() {
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[companyStyles.content, isWide && companyStyles.contentWide]}
+      {!wide ? <PageBar title="Applications" large onBack={goBack} /> : null}
+      <PageBody
+        wide={wide}
+        gap={wide ? 18 : 12}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
       >
-        <CompanyPageHeader
-          eyebrow="Candidate review"
-          title="Applications"
-          subtitle={`${entries.length} total - ${pendingCount} pending review`}
-          onBack={goBack}
+        {wide ? <DesktopTitle title="Applications" /> : null}
+
+        <FilterChipRow
+          wide={wide}
+          options={(['all', 'pending', 'accepted', 'rejected'] as RelationFilter[]).map((key) => ({
+            key,
+            label: FILTER_LABELS[key],
+            count: counts[key],
+          }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
         />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterRow}
-          contentContainerStyle={styles.filterContent}
-        >
-          {(['all', 'pending', 'accepted', 'rejected'] as StatusFilter[]).map((f) => (
-            <CompanyChip
-              key={f}
-              label={`${f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}${f === 'pending' && pendingCount > 0 ? ` (${pendingCount})` : ''}`}
-              selected={statusFilter === f}
-              onPress={() => setStatusFilter(f)}
-            />
-          ))}
-        </ScrollView>
-
         {filtered.length === 0 ? (
-          <EmptyPanel
+          <EmptyBlock
             title={entries.length === 0 ? 'No applications yet' : 'No applications in this category'}
-            subtitle={entries.length === 0
+            text={entries.length === 0
               ? 'When technicians apply to your offers, their applications will appear here.'
               : 'Try switching to All to see every application.'}
           />
-        ) : null}
-
-        {filtered.map(({ app, offer, tech, safePreview, match }) => {
-          const status = statusInfo(app.status);
-          const score = match?.eligible ? match.score : null;
-          const accent = score ? scoreColor(score.total) : companyUi.textMuted;
-          const isUnread = unreadIds.has(app.id);
-          // A technician account deleted after applying resolves to null
-          // here (technician_public_view excludes non-active profiles,
-          // migration 024) — the application itself is real history and
-          // stays in the list, just visibly deactivated with no live
-          // technician data to show.
-          const isDeletedTechnician = !tech;
-
-          return (
-            <TouchableOpacity
-              key={app.id}
-              onPress={() => router.push(`/company/applications/${app.id}` as any)}
-              activeOpacity={0.75}
-            >
-              <CompanyCard style={[styles.card, { borderLeftColor: accent }, isUnread && styles.cardUnread, isDeletedTechnician && styles.cardDeactivated]}>
-                {isUnread ? <ActivityDot /> : null}
-                <View style={styles.cardTop}>
-                  <IconBox icon={ClipboardCheck} color={accent} backgroundColor={score && score.total >= 60 ? companyUi.blueSoft : companyUi.surfaceSoft} />
-                  <View style={styles.cardTitleBlock}>
-                    <Text style={styles.offerTitle} numberOfLines={2}>{offer?.title ?? 'Unknown offer'}</Text>
-                    {safePreview ? (
-                      <Text style={styles.applicantLine} numberOfLines={1}>
-                        {safePreview.anonymousCode} - {technicianTypeLabels(safePreview.technicianTypes)}
-                      </Text>
-                    ) : isDeletedTechnician ? (
-                      <Text style={styles.deletedLine} numberOfLines={1}>[Deleted user]</Text>
-                    ) : null}
-                  </View>
-                  {score ? <MatchBadge score={score.total} context="match for this offer" notEligible={score.blockers.length > 0} /> : null}
-                  {match && !match.eligible ? <MatchBadge score={0} context="for this offer" notEligible /> : null}
-                </View>
-
-                {safePreview ? (
-                  <View style={styles.previewRow}>
-                    <CompanyBadge label={formatLocation(safePreview.city, safePreview.country)} tone="muted" small />
-                    <CompanyBadge label={safePreview.verificationStatus} tone={safePreview.verificationStatus === 'verified' ? 'success' : 'warning'} small />
-                  </View>
-                ) : null}
-
-                {app.coverNote ? (
-                  <View style={styles.coverNote}>
-                    <Text style={styles.coverNoteText} numberOfLines={2}>{app.coverNote}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.cardBottom}>
-                  <CompanyBadge label={status.label} tone={status.tone} small />
-                  <View style={styles.dateWrap}>
-                    <Clock color={companyUi.textMuted} size={13} strokeWidth={2} />
-                    <Text style={styles.dateText}>{formatDate(app.createdAt)}</Text>
-                  </View>
-                  {isDeletedTechnician ? (
-                    <View style={[styles.reviewButton, styles.reviewButtonDeactivated]}>
-                      <Text style={styles.reviewButtonTextDeactivated}>View</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.reviewButton}>
-                      <UserRound color={colors.white} size={14} strokeWidth={2} />
-                      <Text style={styles.reviewButtonText}>Review</Text>
-                    </View>
-                  )}
-                </View>
-                {app.status === 'accepted' && !isDeletedTechnician ? (
-                  <ViewTechnicianProfileButton technicianId={app.technicianId} fullWidth />
-                ) : null}
-              </CompanyCard>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+        ) : (
+          <RowList wide={wide}>
+            {filtered.map((entry) => (
+              <ApplicationRow
+                key={entry.app.id}
+                entry={entry}
+                wide={wide}
+                isUnread={unreadIds.has(entry.app.id)}
+                onOpen={() => router.push(`/company/applications/${entry.app.id}` as any)}
+                onViewProfile={() => router.push(`/company/technician/${entry.app.technicianId}` as any)}
+              />
+            ))}
+          </RowList>
+        )}
+      </PageBody>
     </CompanyScreen>
   );
 }
 
+function ApplicationRow({
+  entry,
+  wide,
+  isUnread,
+  onOpen,
+  onViewProfile,
+}: {
+  entry: AppEntry;
+  wide: boolean;
+  isUnread: boolean;
+  onOpen: () => void;
+  onViewProfile: () => void;
+}) {
+  const { app, offer, safePreview, match } = entry;
+  const status = applicationStatusLook(app.status);
+  const score = match?.eligible ? match.score : null;
+  // A technician account deleted after applying resolves to null here
+  // (technician_public_view excludes non-active profiles, migration 024) —
+  // the application itself is real history and stays in the list, just
+  // visibly deactivated with no live technician data to show.
+  const isDeletedTechnician = !safePreview;
+  const faded = isDeletedTechnician || isFinishedRelation(app.status);
+  // El nombre sólo llega cuando la base ya ha desbloqueado la identidad
+  // (technician_public_view lo deja a NULL hasta un contacto aceptado). Con
+  // él, la fila dice el nombre —en pantalla y para el lector de pantalla—, y
+  // sin él, el código anónimo con el avatar genérico.
+  const name = companyTechnicianName(safePreview);
+  const unlockedName = safePreview && isUnlocked(safePreview) ? name : null;
+  const profileLine = safePreview
+    ? technicianProfileLine(safePreview)
+    : '';
+  const metaLine = [
+    `Applied ${relativeTime(app.createdAt)}`,
+    safePreview ? verificationText(safePreview.verificationStatus) : null,
+  ].filter(Boolean).join(' · ');
+
+  const matchText = score
+    ? <Text style={[styles.match, { color: score.blockers.length > 0 ? colors.error : matchScoreColor(score.total) }]}>
+        {score.blockers.length > 0 ? 'Not eligible' : `${score.total}% match`}
+      </Text>
+    : match && !match.eligible
+      ? <Text style={[styles.match, { color: colors.error }]}>Not eligible</Text>
+      : null;
+
+  const action = isDeletedTechnician || app.status !== 'pending' ? 'View' : 'Review';
+  const showProfile = Boolean(unlockedName);
+  const hasActions = wide || showProfile;
+
+  // La fila son DOS pulsables, uno al lado del otro y nunca uno dentro de
+  // otro (en web serían <button> dentro de <button>): la zona principal abre
+  // la candidatura y las acciones van aparte.
+  return (
+    <View style={wide ? styles.rowWide : styles.row}>
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed, hovered }: any) => [wide ? styles.mainWide : styles.main, (pressed || hovered) && styles.mainPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${name}. ${offer?.title ?? 'Unknown offer'}. ${status.label}${isUnread ? '. New' : ''}`}
+      >
+        <View style={[styles.avatar, faded && styles.faded]}>
+          {/* Avatar genérico mientras la identidad está oculta (respuesta 4). */}
+          <Avatar kind="person" size={wide ? 48 : 52} photoPath={companyTechnicianPhoto(safePreview)} anonymous={!unlockedName} name={unlockedName} />
+          {isUnread ? <AvatarDot size={wide ? 12 : 13} /> : null}
+        </View>
+
+        <View style={wide ? styles.copyWide : styles.copy}>
+          <Text style={[styles.name, isDeletedTechnician && styles.deleted]} numberOfLines={1}>{name}</Text>
+          <Text style={styles.offer} numberOfLines={1}>{offer?.title ?? 'Unknown offer'}</Text>
+          {profileLine ? <Text style={styles.meta} numberOfLines={1}>{profileLine}</Text> : null}
+          {!wide ? <Text style={styles.meta} numberOfLines={1}>{metaLine}</Text> : null}
+          {!wide && matchText ? matchText : null}
+          {app.coverNote ? <Text style={styles.cover} numberOfLines={2}>{app.coverNote}</Text> : null}
+        </View>
+
+        {wide ? (
+          <View style={styles.whenWide}>
+            <Text style={styles.meta}>{metaLine}</Text>
+            {matchText}
+          </View>
+        ) : null}
+
+        <View style={styles.status}>
+          <StatusPill label={status.label} tone={status.tone} large={wide} />
+        </View>
+      </Pressable>
+
+      {hasActions ? (
+        <View style={wide ? styles.actionsWide : styles.actions}>
+          {wide ? <PillButton label={action} variant="outline" size="sm" onPress={onOpen} /> : null}
+          {showProfile ? <PillButton label="View profile" variant="accent" size="sm" onPress={onViewProfile} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  filterRow: {
-    marginBottom: spacing.md,
-    flexGrow: 0,
+  row: {
+    paddingVertical: 13,
+    gap: 8,
   },
-  filterContent: {
-    gap: spacing.xs,
-    paddingRight: spacing.lg,
+  rowWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  card: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-    borderLeftWidth: 4,
-  },
-  cardUnread: {
-    borderColor: '#FECACA',
-  },
-  cardDeactivated: {
-    opacity: 0.6,
-  },
-  cardTop: {
+  main: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: 14,
+    borderRadius: 12,
   },
-  cardTitleBlock: {
+  mainWide: {
     flex: 1,
     minWidth: 0,
-  },
-  offerTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: companyUi.text,
-  },
-  applicantLine: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-    color: companyUi.textSoft,
-  },
-  deletedLine: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
-    fontStyle: 'italic',
-    color: companyUi.textMuted,
-  },
-  previewRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  coverNote: {
-    borderLeftWidth: 3,
-    borderLeftColor: companyUi.border,
-    paddingLeft: spacing.sm,
-  },
-  coverNoteText: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-    color: companyUi.textSoft,
-  },
-  cardBottom: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: companyUi.borderSoft,
+    columnGap: 18,
+    rowGap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 14,
   },
-  dateWrap: {
+  mainPressed: {
+    backgroundColor: colors.surfaceSoft,
+  },
+  avatar: {
+    flexShrink: 0,
+  },
+  faded: {
+    opacity: 0.6,
+  },
+  copy: {
     flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  copyWide: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 240,
+    minWidth: 0,
+    gap: 1,
+  },
+  whenWide: {
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 220,
+    gap: 2,
+  },
+  status: {
+    flexShrink: 0,
+  },
+  // Móvil: las acciones debajo, alineadas con el texto (avatar 52 + hueco 14).
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingLeft: 66,
+  },
+  actionsWide: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 10,
+    flexShrink: 0,
   },
-  dateText: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
-    color: companyUi.textMuted,
+  name: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
   },
-  reviewButton: {
-    minHeight: 34,
-    borderRadius: 13,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: companyUi.accent,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
+  deleted: {
+    fontStyle: 'italic',
+    color: colors.textMuted,
   },
-  reviewButtonDeactivated: {
-    backgroundColor: companyUi.surfaceSoft,
-    borderWidth: 1,
-    borderColor: companyUi.borderSoft,
+  offer: {
+    fontSize: 13.5,
+    color: colors.textSecondary,
   },
-  reviewButtonTextDeactivated: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: companyUi.textMuted,
+  meta: {
+    fontSize: 12.5,
+    color: colors.textMuted,
   },
-  reviewButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.white,
+  match: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  cover: {
+    marginTop: 4,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.border,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
   },
 });

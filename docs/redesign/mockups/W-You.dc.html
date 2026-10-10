@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>You</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&amp;family=Nunito+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6A9E}a:hover{color:#08507A}
+</style>
+</helmet>
+<div style="width: 390px; height: 1120px; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; color: #0E1A2B; font-family: 'Nunito Sans', system-ui, sans-serif; overflow: hidden">
+<div style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 22px; padding: 16px 20px 0">
+
+<h1 style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.4px">You</h1>
+
+<div style="display: flex; align-items: center; gap: 16px">
+<span style="flex: none"><dc-import name="WAvatar" who="airbus1" size="68" hint-size="68px,68px"></dc-import></span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 22px; font-weight: 800">Airbus1</span>
+<span style="font-size: 14px; color: #526274">Liège, Belgium</span>
+<span style="display: flex; gap: 6px">
+<span style="height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid #D5DEE6; font-size: 12px; font-weight: 800; display: flex; align-items: center">MRO</span>
+<span style="height: 24px; padding: 0 9px; border-radius: 12px; background: #D3F1E3; color: #0B5B3A; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Verified</span>
+</span>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Marketplace activity</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<a href="W-Direct.dc.html" style="padding: 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 22px; line-height: 1.1">1</span><span style="font-size: 13px; font-weight: 700; color: #526274">Requests sent</span></a>
+<a href="W-Direct.dc.html" style="padding: 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 22px; line-height: 1.1; color: #0B5B3A">1</span><span style="font-size: 13px; font-weight: 700; color: #526274">Accepted</span></a>
+<a href="W-Direct.dc.html" style="padding: 12px; border-radius: 14px; background: #F3F6F9; display: flex; flex-direction: column; text-decoration: none; color: #0E1A2B"><span style="font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 22px; line-height: 1.1">0</span><span style="font-size: 13px; font-weight: 700; color: #526274">Awaiting reply</span></a>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 16px; font-weight: 800">Company details</h2>
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="C-EditCompany.dc.html" style="height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 800; text-decoration: none; color: {{primary}}">Edit</a>
+</sc-if>
+</div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; color: #526274">Type</span><span style="font-size: 14.5px; font-weight: 700">MRO</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; color: #526274">Country</span><span style="font-size: 14.5px; font-weight: 700">Belgium</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; color: #526274">City</span><span style="font-size: 14.5px; font-weight: 700">Liège</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #E6ECF1"><span style="flex: none; font-size: 14.5px; color: #526274">Email</span><span style="min-width: 0; font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">josecuentaparaia1@gmail.com</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #E6ECF1"><span style="font-size: 14.5px; color: #526274">Phone</span><span style="font-size: 14.5px; font-weight: 600; color: #66768A">Not provided</span></div>
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 11px 0"><span style="font-size: 14.5px; color: #526274">Website</span><span style="font-size: 14.5px; font-weight: 700">avsmartech.com</span></div>
+</section>
+
+<sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+<a href="W-Team.dc.html" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; border: 1px solid #DDE5EC; text-decoration: none; color: #0E1A2B">
+<span style="flex: none; width: 44px; height: 44px; border-radius: 13px; background: #E3E8EE; color: #33465A; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</span>
+<span style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column">
+<span style="font-size: 15.5px; font-weight: 800">Team access</span>
+<span style="font-size: 13px; color: #526274">2 members · 1 admin, 1 recruiter</span>
+</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+</a>
+</sc-if>
+
+<section style="display: flex; flex-direction: column">
+<h2 style="margin: 0 0 2px; font-size: 16px; font-weight: 800">Account</h2>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; border-bottom: 1px solid #E6ECF1">
+<span style="font-size: 14.5px; color: #526274">Signed in as</span>
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-size: 14.5px; font-weight: 700">{{userName}}</span><span style="height: 24px; padding: 0 9px; border-radius: 12px; background: {{roleBg}}; color: {{roleFg}}; font-size: 12px; font-weight: 800; display: flex; align-items: center">{{roleLabel}}</span></span>
+</div>
+<a href="#" style="display: flex; align-items: center; justify-content: space-between; min-height: 48px; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 700">Settings<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+<a href="#" style="display: flex; align-items: center; justify-content: space-between; min-height: 48px; border-bottom: 1px solid #E6ECF1; text-decoration: none; color: #0E1A2B; font-size: 15px; font-weight: 700">Help<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66768A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>
+<button type="button" style="display: flex; align-items: center; min-height: 48px; padding: 0; border: 0; background: transparent; font-family: inherit; color: #B42318; font-size: 15px; font-weight: 800; text-align: left; cursor: pointer">Log out</button>
+</section>
+</div>
+
+<div style="flex: none">
+<dc-import name="WTabBar" active="you" role="{{role}}" primary="{{primary}}" hint-size="390px,84px"></dc-import>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"role":{"editor":"enum","options":["admin","recruiter","viewer"],"default":"admin"},"primary":{"editor":"color","default":"#0B6A9E","options":["#0B6A9E","#0E8FB0","#13314D"]},"$preview":{"width":390,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const role = this.props.role ?? 'admin';
+    const isAdmin = role === 'admin';
+    const labels = { admin: 'Admin', recruiter: 'Recruiter', viewer: 'Viewer' };
+    return {
+      primary: this.props.primary ?? '#0B6A9E',
+      isAdmin: isAdmin,
+      role: role,
+      userName: isAdmin ? 'Jose 1' : 'rober',
+      roleLabel: labels[role] || 'Admin',
+      roleBg: isAdmin ? '#0E1A2B' : '#DCE7FB',
+      roleFg: isAdmin ? '#FFFFFF' : '#1E4FB8'
+    };
+  }
+}
+</script>
+</body>
+</html>

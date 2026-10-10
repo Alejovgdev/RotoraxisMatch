@@ -1,7 +1,8 @@
 // Legacy route kept for backward navigation only.
 // TODO: Remove this screen once all deep links to /company/requests are gone.
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text } from '../../src/components/ui/Text';
 import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../src/state/useGoBack';
 import { BriefcaseBusiness, ClipboardCheck } from 'lucide-react-native';

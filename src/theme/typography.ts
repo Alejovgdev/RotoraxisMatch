@@ -4,25 +4,25 @@ import { colors } from './colors';
 export const typography = {
   h1: {
     fontSize: 32,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     lineHeight: 40,
   } as TextStyle,
   h2: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     lineHeight: 32,
   } as TextStyle,
   h3: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '800',
     color: colors.text,
     lineHeight: 28,
   } as TextStyle,
   h4: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
     color: colors.text,
     lineHeight: 24,
   } as TextStyle,
@@ -46,7 +46,7 @@ export const typography = {
   } as TextStyle,
   label: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
     color: colors.textSecondary,
     lineHeight: 18,
     letterSpacing: 0.5,

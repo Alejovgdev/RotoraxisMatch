@@ -7,11 +7,11 @@ export interface DateFieldPalette {
 }
 
 export const DEFAULT_DATE_FIELD_PALETTE: DateFieldPalette = {
-  text: '#1A2332',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
+  text: '#0E1A2B',
+  muted: '#66768A',
+  border: '#D5DEE6',
   surface: '#FFFFFF',
-  accent: '#2563EB',
+  accent: '#0B6A9E',
 };
 
 export interface DateFieldProps {
