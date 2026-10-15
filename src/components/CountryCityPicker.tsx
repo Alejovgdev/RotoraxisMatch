@@ -29,21 +29,14 @@ import { CityDirectory } from '../repositories/v2/cityDirectoryRepository';
 // OPCIONAL que puede venir del directorio (con coordenadas) o escribirse a
 // mano (sin ellas).
 //
-// ⚠ NO SUSTITUYE TODAVÍA A NADA. `LocationPicker.tsx` sigue vivo, intacto y
-// es el que usan las 4 pantallas actuales; éste no lo usa nadie aún. El
-// cambio de uno por otro es F2b/F2c.
+// Sustituyó al antiguo `LocationPicker.tsx` (por aeropuerto), que se quedó sin
+// ningún import y se borró el 2026-10-15. Con él se fue la única carga de
+// banderas desde FlagCDN: aquí las banderas son emoji (`countryFlag`).
 //
 // ── Por qué NO se llama LocationPicker ─────────────────────
-// Tener dos `LocationPicker` a la vez, uno por aeropuerto y otro por
-// país+ciudad, obliga a mirar el import para saber cuál es cuál. El nombre
-// dice qué elige: país y ciudad. Cuando F2c retire el de aeropuertos, este
-// nombre seguirá siendo el correcto.
-//
-// ── Duplicación consciente ─────────────────────────────────
-// La carcasa del modal (PickerSheet/SearchField) es un calco de la de
-// LocationPicker.tsx. Se duplica a propósito: extraerla a un fichero común
-// obligaría a EDITAR LocationPicker.tsx, que esta tanda tiene prohibido
-// tocar. La duplicación se resuelve sola cuando F2c borre el viejo.
+// El nombre dice qué elige: país y ciudad. Durante la transición convivieron
+// los dos selectores, y llamarlos igual obligaba a mirar el import para saber
+// cuál era cuál.
 //
 // ── Atribución (obligatoria, no decorativa) ────────────────
 // Los datos de ciudades son de GeoNames bajo CC BY 4.0, servidos por

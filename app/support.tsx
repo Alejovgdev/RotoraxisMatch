@@ -16,8 +16,8 @@ import { notify } from '../src/utils/platformAlert';
 import { AccountShell, useAccountShellRole } from '../src/components/AccountShell';
 import { colors, spacing } from '../src/theme';
 
+// Único correo de contacto, también para privacidad (decisión del 2026-10-15).
 const SUPPORT_EMAIL = 'support@aviationjobtalent.com';
-const PRIVACY_EMAIL = 'management@rotoraxisconsulting.com';
 
 export default function SupportScreen() {
   // Escritorio: barra de desplazamiento visible (fase 8).
@@ -48,8 +48,8 @@ export default function SupportScreen() {
         icon="🔒"
         title="Privacy and data requests"
         description="Exercise your GDPR rights: access, rectification, erasure, portability."
-        action="Email privacy team"
-        onPress={() => openEmail(PRIVACY_EMAIL, 'Privacy request — Aviation Job Talent')}
+        action="Email a privacy request"
+        onPress={() => openEmail(SUPPORT_EMAIL, 'Privacy request — Aviation Job Talent')}
       />
 
       <SupportCard

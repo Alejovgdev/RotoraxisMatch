@@ -17,6 +17,7 @@ import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/theme';
 import { fonts } from '../../src/theme/fonts';
 import { AppRole } from '../../src/types/enums';
+import { checkEmailHref } from '../../src/auth/emailConfirmationRules';
 
 function roleRoute(role: AppRole): string {
   if (role === 'admin') return '/admin';
@@ -48,7 +49,14 @@ export default function LoginScreen() {
     }
     setError(null);
     setLoading(true);
-    const { error: signInError } = await signIn(email.trim(), password);
+    const { error: signInError, emailNotConfirmed } = await signIn(email.trim(), password);
+    if (emailNotConfirmed) {
+      // Sólo con la confirmación activada: la cuenta existe pero falta abrir
+      // el enlace. Allí puede pedir otro correo.
+      setLoading(false);
+      router.push(checkEmailHref(email.trim(), 'unconfirmed') as any);
+      return;
+    }
     if (signInError) {
       setError(signInError);
       setLoading(false);

@@ -13,7 +13,13 @@ import { Stack } from 'expo-router';
 import { useGoBack } from '../src/state/useGoBack';
 import { AccountShell, useAccountShellRole } from '../src/components/AccountShell';
 import { colors, spacing } from '../src/theme';
-import { TERMS_OF_SERVICE_LAST_UPDATED } from '../src/constants/legal';
+import {
+  TERMS_OF_SERVICE_LAST_UPDATED,
+  LEGAL_ENTITY_NAME,
+  LEGAL_ENTITY_VAT,
+  LEGAL_ADDRESS,
+  LEGAL_JURISDICTION,
+} from '../src/constants/legal';
 
 export default function TermsOfServiceScreen() {
   // Escritorio: barra de desplazamiento visible (fase 8).
@@ -30,7 +36,7 @@ export default function TermsOfServiceScreen() {
           By creating an account or using Aviation Job Talent (the "Platform"), you agree to these Terms of Service ("Terms") and acknowledge that you have read our Privacy Policy. If you do not agree to the Terms, do not use the Platform.
         </P>
         <P>
-          The Platform is operated by <Bold>[LEGAL_ENTITY_NAME]</Bold>, <Bold>[LEGAL_ADDRESS]</Bold>.
+          The Platform is operated by <Bold>{LEGAL_ENTITY_NAME}</Bold> (VAT {LEGAL_ENTITY_VAT}), <Bold>{LEGAL_ADDRESS}</Bold>.
         </P>
       </Section>
 
@@ -51,7 +57,7 @@ export default function TermsOfServiceScreen() {
 
       <Section title="4. Technician identity and privacy">
         <P>
-          Your full name, email, phone and professional links are <Bold>never visible to companies</Bold> by default. They are only disclosed to the specific company with which you have an accepted connection.
+          Your full name, email, phone, profile photo and professional links are <Bold>never visible to companies</Bold> by default. They are only disclosed to the specific company with which you have an accepted connection.
         </P>
         <P>
           By accepting a connection (accepting a direct offer or having your application accepted), you consent to your identity and permitted admin-verified professional documents, such as licences, training records and resumes, being disclosed to that company.
@@ -81,6 +87,10 @@ export default function TermsOfServiceScreen() {
           'Post content that is illegal, defamatory, obscene or discriminatory.',
           'Disclose another user\'s identity information obtained through the Platform to third parties.',
         ]} />
+        {/* App Store 1.2 y Google Play (contenido de usuarios), 2026-10-15. */}
+        <P>
+          <Bold>Zero tolerance.</Bold> We do not tolerate objectionable content, such as offensive, abusive, hateful, sexually explicit or threatening material, or abusive users. You can report a profile, an offer or a message, and block another user, from within the Platform. We review reports promptly, remove offending content and suspend or terminate the accounts of users who post it.
+        </P>
       </Section>
 
       <Section title="7. Verification">
@@ -103,7 +113,7 @@ export default function TermsOfServiceScreen() {
 
       <Section title="9. Intellectual property">
         <P>
-          The Platform, its design, code and brand are owned by <Bold>[LEGAL_ENTITY_NAME]</Bold>. You retain ownership of the documents and content you upload. By uploading content, you grant us a limited licence to store and process it solely for the purposes described in our Privacy Policy.
+          The Platform, its design, code and brand are owned by <Bold>{LEGAL_ENTITY_NAME}</Bold>. You retain ownership of the documents and content you upload. By uploading content, you grant us a limited licence to store and process it solely for the purposes described in our Privacy Policy.
         </P>
       </Section>
 
@@ -121,13 +131,14 @@ export default function TermsOfServiceScreen() {
           The Platform is provided "as is." We make no warranties about uninterrupted access, accuracy of match scores, or employment outcomes.
         </P>
         <P>
-          To the maximum extent permitted by law, <Bold>[LEGAL_ENTITY_NAME]</Bold> is not liable for indirect, incidental, consequential or punitive damages arising from your use of the Platform.
+          To the maximum extent permitted by law, <Bold>{LEGAL_ENTITY_NAME}</Bold> is not liable for indirect, incidental, consequential or punitive damages arising from your use of the Platform.
         </P>
       </Section>
 
+      {/* Malta, provisional (2026-10-14) hasta que lo confirme el asesor. */}
       <Section title="12. Governing law">
         <P>
-          These Terms are governed by the laws of <Bold>[LEGAL_JURISDICTION]</Bold>. Any disputes shall be subject to the exclusive jurisdiction of the courts of <Bold>[LEGAL_JURISDICTION]</Bold>.
+          These Terms are governed by the laws of <Bold>{LEGAL_JURISDICTION}</Bold>. Any disputes shall be subject to the exclusive jurisdiction of the courts of <Bold>{LEGAL_JURISDICTION}</Bold>.
         </P>
       </Section>
 
@@ -140,7 +151,7 @@ export default function TermsOfServiceScreen() {
       <Section title="14. Contact">
         <P>
           General support: <Bold>support@aviationjobtalent.com</Bold>{'\n'}
-          Legal: <Bold>[LEGAL_ENTITY_NAME]</Bold>, <Bold>[LEGAL_ADDRESS]</Bold>
+          Legal: <Bold>{LEGAL_ENTITY_NAME}</Bold>, <Bold>{LEGAL_ADDRESS}</Bold>
         </P>
       </Section>
 

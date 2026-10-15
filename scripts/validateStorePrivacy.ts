@@ -195,6 +195,34 @@ check('privacy policy avoids claiming exit feedback is anonymous', policy.includ
 check('privacy policy does not mislabel pseudonymous profiles as anonymised', !policy.includes('anonymised technician profile'));
 check('stale offer-view collection claim was removed', !policy.includes('offer views'));
 check('stale base-airport disclosure was removed', !policy.includes('base airport'));
+check('privacy policy documents who can see profile photos', policy.includes('Profile photos (technicians)'));
+check('privacy policy documents that company logos are public', policy.includes('Company logos are public'));
+check('privacy policy documents website hosting by Vercel', policy.includes('Vercel'));
+
+function listSourceFiles(start: string): string[] {
+  const files: string[] = [];
+  const pending = [start];
+  while (pending.length > 0) {
+    const directory = pending.pop()!;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name)) files.push(path);
+    }
+  }
+  return files;
+}
+
+const appSources = [...listSourceFiles(join(root, 'app')), ...listSourceFiles(join(root, 'src'))]
+  .map((path) => readFileSync(path, 'utf8'));
+check(
+  'remote flag images are not loaded without a FlagCDN disclosure',
+  policy.includes('FlagCDN') || !appSources.some((source) => source.includes('flagcdn.com')),
+);
+check(
+  'support@aviationjobtalent.com is the only contact address in app/ and src/',
+  !appSources.some((source) => source.includes('@rotoraxisconsulting.com')),
+);
 
 const inventoryPath = join(root, 'docs', 'STORE_PRIVACY_DECLARATIONS.md');
 check('store declaration inventory exists', existsSync(inventoryPath));
@@ -206,6 +234,11 @@ releaseGate(
   'legal identity and jurisdiction are finalised',
   !policy.includes('[LEGAL_') && !terms.includes('[LEGAL_'),
   'Replace [LEGAL_ENTITY_NAME], [LEGAL_ADDRESS] and [LEGAL_JURISDICTION] before release.',
+);
+releaseGate(
+  'draft retention periods are finalised',
+  !policy.includes('[DRAFT'),
+  'Approve or replace every [DRAFT] retention period in the Privacy Policy, and enforce it, before release.',
 );
 releaseGate(
   'public production URLs are finalised',

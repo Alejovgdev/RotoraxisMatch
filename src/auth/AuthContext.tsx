@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { AppRole, UserStatus } from '../types/enums';
 import { persistedLocationFromAirport } from '../utils/locationBridge';
+import { authErrorText, isEmailNotConfirmed } from './emailConfirmationRules';
 
 export interface SupabaseProfile {
   id: string;
@@ -16,7 +17,12 @@ interface AuthContextValue {
   profile: SupabaseProfile | null;
   /** True until initial session restore + optional profile fetch completes */
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  /**
+   * `emailNotConfirmed`: la cuenta existe pero falta confirmar el email (sólo
+   * pasa con la confirmación activada en Supabase). El login lleva entonces a
+   * "Check your email" en vez de mostrar el error.
+   */
+  signIn: (email: string, password: string) => Promise<{ error: string | null; emailNotConfirmed: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -251,10 +257,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signIn(
     email: string,
     password: string
-  ): Promise<{ error: string | null }> {
+  ): Promise<{ error: string | null; emailNotConfirmed: boolean }> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return { error: null };
+    if (error) return { error: authErrorText(error), emailNotConfirmed: isEmailNotConfirmed(error) };
+    return { error: null, emailNotConfirmed: false };
   }
 
   async function signOut(): Promise<void> {

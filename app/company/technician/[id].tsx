@@ -48,6 +48,8 @@ import { Document } from '../../../src/types/document';
 import { notify } from '../../../src/utils/platformAlert';
 import { formatLocation } from '../../../src/utils/formatLocation';
 import { isProfileOpenedFromChat } from '../../../src/utils/companyNavigation';
+import { canBlockContacts } from '../../../src/utils/companyPermissionsV2';
+import { ModerationMenu } from '../../../src/components/moderation/ModerationMenu';
 
 // Perfil completo de un técnico (rediseño, fase 3; maquetas C-Tech y
 // W-D-Tech). Sólo se abre tras un contacto aceptado, como antes (respuesta 18):
@@ -227,6 +229,15 @@ export default function CompanyTechnicianProfileScreen() {
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
   const socials = Object.entries(profile.socialLinks ?? {}).filter(([, url]) => Boolean(url)) as [string, string][];
   const openRoom = (room: ChatRoom) => router.push(`/company/chats/${room.id}` as any);
+  // Denunciar el perfil y bloquear al técnico (100). El viewer sólo denuncia.
+  const moderation = companyId && id ? (
+    <ModerationMenu
+      report={{ type: 'technician_profile', id }}
+      block={canBlockContacts(companySession?.companyMemberRole)
+        ? { companyId, technicianId: id, counterpart: 'technician', name: fullName }
+        : null}
+    />
+  ) : null;
 
   const hero = (
     <PersonHero
@@ -314,7 +325,10 @@ export default function CompanyTechnicianProfileScreen() {
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
         <PageBody wide refreshControl={refresh}>
-          <BackLink onPress={goBack} />
+          <View style={styles.moderationRow}>
+            <BackLink onPress={goBack} />
+            {moderation}
+          </View>
           <TwoColumns
             main={(
               <>
@@ -348,7 +362,7 @@ export default function CompanyTechnicianProfileScreen() {
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageBar title="Technician profile" onBack={goBack} />
+      <PageBar title="Technician profile" onBack={goBack} right={moderation} />
       <PageBody wide={false} refreshControl={refresh}>
         {hero}
         <View style={styles.contactCard}>
@@ -403,6 +417,13 @@ function ContactRow({
 }
 
 const styles = StyleSheet.create({
+  // Escritorio: la miga (o "‹ Back") a la izquierda y el "⋯" de 100 a la derecha.
+  moderationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   contactCard: {
     padding: 16,
     borderRadius: 16,

@@ -1,6 +1,6 @@
 # Store privacy declarations
 
-Last technical review: 14 August 2026  
+Last technical review: 14 October 2026  
 App: Aviation Job Talent  
 iOS bundle ID / Android package: `com.aviationjobtalent.app`
 
@@ -15,20 +15,27 @@ The code-level data inventory, iOS privacy manifest, Android permission guard,
 public legal routes and console-answer worksheet are prepared. A public store
 submission still requires these external or business decisions:
 
-- Replace `[LEGAL_ENTITY_NAME]`, `[LEGAL_ADDRESS]` and
-  `[LEGAL_JURISDICTION]` in the legal documents. The support and privacy
-  addresses already used elsewhere in the app have been filled in; confirm
-  both mailboxes exist and are monitored before publishing.
+- Legal identity filled in on 14 October 2026 (`src/constants/legal.ts`):
+  Rotoraxis Consulting Ltd., VAT MT32563308, Birkirkara, Malta, is the data
+  controller. The governing law and courts (Malta) are **provisional** until
+  the legal adviser confirms them. Since 15 October 2026
+  `support@aviationjobtalent.com` is the only contact address in the app and
+  on the website, privacy requests included. Confirm that it exists and is
+  monitored before publishing.
 - Decide the deletion behaviour for the only administrator of a company. The
   current function requires another administrator to be assigned first; this
   is a store-review risk and cannot be changed safely without deciding whether
   the company and offers should be deleted, preserved or transferred.
-- Decide a defensible retention period for deleted-account tombstones, the
-  retained technician professional/relationship record, company invitation
-  logs and external authentication/security logs. Both technician and company
-  tombstones retain the original account UUID; the current Privacy Policy
-  describes what remains but does not invent a period that the implementation
-  does not enforce.
+- Approve the **draft** retention periods in Privacy Policy section 8
+  (proposed 14 October 2026, every one marked `[DRAFT]`): inactive accounts
+  24 months plus 30 days' notice; deleted-account tombstones and the retained
+  technician professional/relationship record 24 months; authentication and
+  security logs 90 days; invitation/rate-limit records 12 months; catalogue
+  requests 12 months after resolution; exit survey 24 months; backups 30 days.
+  **No automated purge enforces any of them yet** (the project has no
+  `pg_cron` or other scheduler), so before publishing either implement them or
+  change the text. `npm run validate:store-privacy -- --release` fails while a
+  `[DRAFT` marker remains in the policy.
 - Enforce the Terms' 18+ technician rule in both the signup UI and database,
   or revise that eligibility rule. The current fixed year range still permits
   some under-18 dates.
@@ -44,7 +51,7 @@ submission still requires these external or business decisions:
   the services that require an Organization account; its updated Play Console
   Requirements take effect on 30 September 2026.
 - Confirm the contractual/privacy role and retention practices of Supabase,
-  countries.dev, OpenStreetMap Foundation, jsDelivr, unpkg and FlagCDN.
+  Vercel, countries.dev, OpenStreetMap Foundation, jsDelivr and unpkg.
 - Audit the existing `technician-documents` bucket once for historic orphaned
   objects created before failed database inserts were automatically rolled
   back.
@@ -65,6 +72,13 @@ and requires a new review.
 - Supabase provides authentication, database, storage, realtime and server
   functions. Supabase Auth audit logs can include user ID, IP address, user
   agent, action and timestamp.
+- Vercel hosts the website (`vercel.json`, built with
+  `npx expo export --platform web`). Every visit sends Vercel the visitor's IP
+  address, user agent and requested page, including a password-reset link
+  opened from the email (`redirectTo` in `app/auth/forgot-password.tsx`). The
+  repository includes neither Vercel Web Analytics nor Speed Insights. The
+  native apps bundle their code and do not load it from Vercel, so this does
+  not change the Apple or Google answers below.
 - Signup stores the legal-text version and acceptance time in Auth metadata.
   If email confirmation delays the authenticated session, the first confirmed
   session creates the matching append-only `user_consents` audit row using
@@ -79,14 +93,44 @@ and requires a new review.
 - Documents are selected through the operating-system document picker. PDF,
   JPEG, PNG and WebP can be uploaded. Medical uploads have a separate consent
   control, and its audit row must succeed before the file is transmitted.
+- Profile photos and company logos (migrations 098/099) are chosen with
+  `expo-image-picker` from the photo library only: `cameraPermission` and
+  `microphonePermission` are `false` in `app.json`. The image is cropped to a
+  square and resized to at most 512 px on the device before upload.
+- Technician photos live in the **private** `technician-photos` bucket (JPEG,
+  2 MB). Readers: the technician, active platform admins, and members of a
+  company with an accepted application or direct offer with that technician
+  (`offer_accepted_between`, the same gate as the name). Companies without
+  acceptance get `photo_path = NULL` from `technician_public_view`. Signed
+  URLs are blocked by the Storage policy, including for the owner. Replaced
+  photos are removed by the client; `delete-account` (version 8) deletes the
+  technician's photo folder.
+- Company logos live in the **public** `company-logos` bucket (PNG, 2 MB).
+  Anyone with the URL can download one, including unauthenticated visitors.
+  Only an admin of that company or a platform admin can upload, change or
+  remove it. A logo stays with the company profile; deleting a member account
+  does not remove it.
+- Bucket visibility verified on dev (`rwauwuremzkizeoginza`) on
+  14 October 2026: `technician-photos` `public = false`, `company-logos`
+  `public = true`; the installed Storage policies match 098 plus 099.
 - Before acceptance, companies see a privacy-limited technician profile. After
   the relevant application or direct offer is accepted, they can see identity,
   contact details and verified professional documents. Medical and identity
   documents remain admin-only.
 - The device calls countries.dev for city searches, OpenStreetMap Foundation
-  for map tiles, jsDelivr/unpkg for Leaflet assets, and FlagCDN for flags. These
-  requests can expose search or requested-resource data plus ordinary network
+  for map tiles and jsDelivr/unpkg for Leaflet assets. These requests can
+  expose search or requested-resource data plus ordinary network
   metadata such as IP address and user agent to those providers.
+- **countries.dev is declared as if it stores searches** (decision of
+  14 October 2026, as a precaution): treat the typed city text and country
+  filter as search history retained by a third party, whatever the provider
+  documents.
+- FlagCDN is no longer used. Its only caller, `src/components/LocationPicker.tsx`
+  (web only, imported by nothing), was deleted on 15 October 2026, and FlagCDN
+  left the policy, this inventory and the provider table with it. The live
+  `CountryCityPicker` draws emoji flags, so no screen loads remote flag images.
+  `validate:store-privacy` fails if `flagcdn.com` reappears in `app/` or `src/`
+  without the policy disclosing it.
 - Account deletion is available in-app. Once the public web build is deployed,
   `/delete-account` also lets a user sign in and delete without reinstalling
   the mobile app; email is the fallback.
@@ -111,13 +155,16 @@ and requires a new review.
 | Applications/direct offers | Status, cover note/message, response and connection flags | User initiated | Yes | Marketplace workflow; counterpart |
 | Chat | Message, sender, room and timestamp | Optional | Yes | Communication; counterpart |
 | Files/document metadata | Filename, type, path, review/expiry and PDF/image content | Optional | Yes | Verification; permitted professional files to connected company |
+| Profile photo | Technician photo (JPEG ≤ 512 px) and its private Storage path | Optional | Yes | Identity shown with the name; the technician, platform admins and companies with an accepted connection |
+| Company logo | Company logo (PNG ≤ 512 px) and its public Storage path | Optional | Yes (company account) | Company branding; public to anyone with the URL, shown to technicians |
 | Health | Medical certificate and metadata | Optional with consent | Yes | Admin verification only |
 | Activity | Application, offer, chat and read events/status | Automatic in used features | Yes | Functionality and unread indicators; some status shared with counterpart |
-| City search history | Query text and country filter | Optional | Potentially linked by network/account context | City results; countries.dev |
+| Reports and blocks | Report: reporter account ID, reported content type and ID, chosen reason, time and when support was notified. Block: technician and company IDs, which side blocked, the account that blocked and time (migration 100) | User initiated | Yes | Moderation (App Store 1.2, Google Play user-generated content); reports visible only to platform admins and support. Covered by the declared Other User Content and User ID types |
+| City search history | Query text and country filter | Optional | Potentially linked by network/account context | City results; countries.dev (declared as retained by the provider) |
 | Catalogue requests | Free text, context, status and admin notes | Optional | Yes | Maintain professional catalogues |
 | Team invitations | Invitee email, inviter/company ID and time | Optional | Yes | Invitations and abuse prevention |
 | Authentication/security logs | User ID, IP, user agent, event and time | Automatic | Yes | Authentication, fraud prevention and security |
-| Network/resource request data | IP, user agent, requested tiles/assets/flags | Automatic when feature loads | Provider-dependent | Deliver maps and UI resources |
+| Network/resource request data | IP, user agent, requested tiles/assets, and requested pages on the website | Automatic when a feature loads or the website is visited | Provider-dependent | Deliver the website, maps and UI resources |
 | Consent records | Type, version and timestamp | Automatic after action | Yes | Compliance evidence |
 | Deletion feedback | Role, reason, optional comment and calendar day | Optional | No stored account ID; indirect identification remains possible | Service analytics |
 
@@ -149,17 +196,23 @@ see it.
 | Usage Data → Product Interaction | Yes | No | App Functionality |
 | Other Data → Other Data Types | Yes | No | App Functionality; Product Personalization |
 
+**User Content → Photos or Videos** covers image documents, technician
+profile photos and company logos. Profile photos are optional, linked to the
+technician account and used only for App Functionality (showing identity with
+the name once the privacy gate opens); logos are linked to the company account
+and public. Neither is used for tracking, advertising or analytics.
+
 The Device ID entry is intentionally conservative because linked security logs
 and external resource requests use IP/user-agent data. Apple instructs
 developers to classify retained IP addresses according to their use, which can
 include device identifiers or diagnostics.
 
-Search History is likewise conservative until countries.dev confirms whether
-queries are retained beyond serving the request. If the provider documents no
-retention, remove Search History from the Apple manifest/label (Google still
-counts transmission off-device). If no provider uses IP/user-agent to identify
-a device, remove Device ID rather than declaring the same network data under
-multiple types.
+Search History stays declared: countries.dev is treated as if it stores the
+searches it receives (decision of 14 October 2026), so the city text and
+country filter count as search history collected and retained off-device. Do
+not remove it on the strength of provider documentation alone. If no provider
+uses IP/user-agent to identify a device, remove Device ID rather than
+declaring the same network data under multiple types.
 
 Do **not** select precise location, contacts/address book, audio, payment or
 financial information, purchases, browsing history, advertising data, crash
@@ -212,9 +265,13 @@ disclosure and the recipient's contractual role.
 | Photos and videos → Photos | Yes | Yes | Optional | No | App functionality |
 | Files and docs → Files and docs | Yes | Yes | Optional | No | App functionality |
 | App activity → App interactions | Yes | Yes | Required | No | App functionality; Security |
-| App activity → In-app search history | Yes | Yes | Optional | **TBD — countries.dev retention** | App functionality |
+| App activity → In-app search history | Yes | Yes | Optional | No — treated as retained by countries.dev | App functionality |
 | App activity → Other user-generated content | Yes | Yes | Optional | No | App functionality; Personalization; Analytics |
 | Device or other IDs → Device or other IDs | Yes | Yes | Required | No | App functionality; Security |
+
+**Photos and videos → Photos** covers image documents, technician profile
+photos and company logos. It is **Shared: Yes** because a profile photo
+reaches a company after an accepted connection and logos are public.
 
 Do **not** select precise location, physical address, contacts, email/SMS inbox
 content, videos, audio, calendar, web browsing history, installed apps,
@@ -261,19 +318,20 @@ nearest listed medical category because a certificate is stored as a record,
 but the app does not provide healthcare services, so do not assert that
 category without confirmation.
 
-If provider research later removes the conservative Apple Search History or
-Device ID entries, update the Apple table, `app.json` and
-`EXPECTED_DATA_TYPES` in `scripts/validateStorePrivacy.ts` together.
+If provider research later removes the conservative Apple Device ID entry,
+update the Apple table, `app.json` and `EXPECTED_DATA_TYPES` in
+`scripts/validateStorePrivacy.ts` together. Search History stays declared
+(see above).
 
 ## External providers to verify before submission
 
 | Provider | Feature | Data sent directly | Release check |
 |---|---|---|---|
 | Supabase | Auth, DB, Storage, Realtime, functions | All backend/account data; IP/user agent in Auth logs | DPA, subprocessors, region, retention and TLS |
-| countries.dev / GeoNames data | City search | Search term, country filter, IP/user agent | Provider privacy/retention and availability |
-| OpenStreetMap Foundation | Map tiles | Tile coordinates, IP/user agent/request metadata | Current tile/privacy policy and usage compliance |
-| jsDelivr and unpkg | Leaflet code/styles | Requested asset, IP/user agent | Current privacy terms or bundle locally |
-| FlagCDN | Flag images | Country flag request, IP/user agent | Current privacy terms or bundle locally |
+| Vercel | Website hosting, including `/privacy-policy`, `/delete-account` and the password-reset page | IP address, user agent and requested page of every website visitor | DPA, region and request-log retention; keep Web Analytics/Speed Insights off unless this inventory and the policy are updated |
+| countries.dev / GeoNames data | City search | Typed text, country code, result limit, IP/user agent | Declared as retaining searches; provider privacy terms and availability |
+| OpenStreetMap Foundation | Map tiles (company and technician map screens) | Tile coordinates and zoom (the area viewed), IP/user agent, referrer on web | Current tile/privacy policy and usage compliance |
+| jsDelivr (native map WebView) and unpkg (web) | Leaflet code/styles | Requested asset, IP/user agent, referrer on web | Current privacy terms or bundle locally |
 
 ## Console URLs
 

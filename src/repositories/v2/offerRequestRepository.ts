@@ -5,6 +5,7 @@ import { evaluateDirectOfferConflict } from '../../utils/offerRelationStateMachi
 import { isOfferOpenForTechnicians, offerRepository } from './offerRepository';
 import { technicianRepositoryV2 } from './technicianRepositoryV2';
 import { mapOfferApplicationRow, mapOfferRequestRow, throwIfError } from './supabaseMappers';
+import { throwIfContactBlocked } from '../../utils/moderation';
 
 const SELECT_FIELDS = 'id, company_id, technician_id, offer_id, status, identity_revealed, documents_unlocked, message, created_at, updated_at';
 
@@ -125,6 +126,8 @@ export const offerRequestRepository = {
       })
       .select(SELECT_FIELDS)
       .single();
+    // 100: con un bloqueo entre las partes no se envía.
+    throwIfContactBlocked(error);
     throwIfError(error);
     return mapOfferRequestRow(inserted as any);
   },
@@ -136,6 +139,8 @@ export const offerRequestRepository = {
       .eq('id', id)
       .select(SELECT_FIELDS)
       .maybeSingle();
+    // 100: con un bloqueo entre las partes no se acepta.
+    throwIfContactBlocked(error);
     throwIfError(error);
     return data ? mapOfferRequestRow(data as any) : null;
   },

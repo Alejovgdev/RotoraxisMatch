@@ -53,6 +53,7 @@ import {
 } from '../../../src/utils/technicianRelations';
 import { companyCanSeeIdentity, declinedNote, directOfferConfirm } from '../../../src/utils/technicianPrivacy';
 import { isOpenedFromChat } from '../../../src/utils/technicianNavigation';
+import { ModerationMenu } from '../../../src/components/moderation/ModerationMenu';
 
 // Detalle de una oferta directa recibida (rediseño, fase 5B; el patrón de
 // C-DirectDetail con lo que el técnico veía antes).
@@ -256,6 +257,14 @@ export default function DirectOfferDetailScreen() {
   const visibleOffer = offer && (offerOpen || isAccepted) ? offer : null;
   const title = visibleOffer?.title ?? 'Direct offer';
   const companyType = company.companyType ? COMPANY_TYPE_LABELS[company.companyType] ?? company.companyType : 'Company';
+  // Denunciar la oferta y bloquear a la empresa (100). Una oferta directa
+  // antigua sin oferta enlazada sólo se puede bloquear.
+  const moderation = technicianId ? (
+    <ModerationMenu
+      report={offer ? { type: 'offer', id: offer.id } : null}
+      block={{ companyId: request.companyId, technicianId, counterpart: 'company', name: company.name }}
+    />
+  ) : null;
 
   const hero = (
     <View style={styles.hero}>
@@ -358,7 +367,10 @@ export default function DirectOfferDetailScreen() {
       <TechnicianScreen>
         <Stack.Screen options={{ headerShown: false }} />
         <PageBody wide refreshControl={refresh}>
-          <Breadcrumb parent="Direct offers" onParent={() => router.navigate('/technician/direct-offers' as never)} current={title} />
+          <View style={styles.moderationRow}>
+            <Breadcrumb parent="Direct offers" onParent={() => router.navigate('/technician/direct-offers' as never)} current={title} />
+            {moderation}
+          </View>
           <TwoColumns
             main={(
               <>
@@ -387,7 +399,7 @@ export default function DirectOfferDetailScreen() {
   return (
     <TechnicianScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageBar title="Direct offer" onBack={goBack} />
+      <PageBar title="Direct offer" onBack={goBack} right={moderation} />
       <PageBody wide={false} refreshControl={refresh}>
         {hero}
         {statusNote}
@@ -405,6 +417,13 @@ export default function DirectOfferDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Escritorio: la miga (o "‹ Back") a la izquierda y el "⋯" de 100 a la derecha.
+  moderationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   hero: {
     flexDirection: 'row',
     alignItems: 'center',

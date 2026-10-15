@@ -12,9 +12,12 @@
 // (?from=chat), para que esa página no ofrezca "Open chat" y no haya bucle: la
 // misma regla que el perfil del técnico en empresa.
 import React, { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Avatar } from '../ui';
-import { ChatView } from '../chat/ChatView';
+import { ChatHeaderActions, ChatView } from '../chat/ChatView';
+import { ModerationMenu } from '../moderation/ModerationMenu';
+import { ReportSheet } from '../moderation/ReportSheet';
 import { PillButton } from '../company/CompanyPage';
 import { chatRepository } from '../../repositories/v2/chatRepository';
 import { offerRequestRepository } from '../../repositories/v2/offerRequestRepository';
@@ -25,6 +28,7 @@ import { activityRepository } from '../../repositories/v2/activityRepository';
 import { useTechnicianSession } from '../../state/SessionContext';
 import { chatContextHref } from '../../utils/technicianNavigation';
 import { notify } from '../../utils/platformAlert';
+import { reportMessageHint, type ReportTarget } from '../../utils/moderation';
 import type { ChatMessage, ChatRoom } from '../../types/chat';
 import type { Offer } from '../../types/offer';
 
@@ -33,6 +37,7 @@ export function TechnicianChatPanel({
   mode,
   onBack,
   onMessageSent,
+  onBlocked,
 }: {
   roomId: string;
   mode: 'screen' | 'pane';
@@ -40,6 +45,8 @@ export function TechnicianChatPanel({
   onBack?: () => void;
   /** Para que la lista de al lado (escritorio) refresque el último mensaje. */
   onMessageSent?: () => void;
+  /** Tras bloquear a la empresa (100): el chat ya no existe para ninguno de los dos. */
+  onBlocked?: () => void;
 }) {
   const router = useRouter();
   const technicianSession = useTechnicianSession();
@@ -57,6 +64,7 @@ export function TechnicianChatPanel({
   const [locked, setLocked] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const load = useCallback(async () => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -146,7 +154,18 @@ export function TechnicianChatPanel({
     ? (offer ? `about ${offer.title}` : 'Accepted contact')
     : offer?.title ?? 'Accepted contact';
 
+  const contextButton = pane && openContext ? <PillButton label={contextLabel} variant="outline" size="sm" onPress={openContext} /> : null;
+  // Denunciar y bloquear (100).
+  const moderation = room && technicianId && !loading && !locked ? (
+    <ModerationMenu
+      block={{ companyId: room.companyId, technicianId, counterpart: 'company', name: companyName }}
+      hint={reportMessageHint(Platform.OS)}
+      onBlocked={onBlocked}
+    />
+  ) : null;
+
   return (
+    <>
     <ChatView
       mode={mode}
       onBack={onBack}
@@ -155,13 +174,16 @@ export function TechnicianChatPanel({
       avatar={<Avatar kind="company" size={pane ? 44 : 40} name={companyName} logoPath={logoPath} />}
       title={companyName}
       subtitle={subtitle}
-      headerRight={pane && openContext ? <PillButton label={contextLabel} variant="outline" size="sm" onPress={openContext} /> : null}
+      headerRight={contextButton || moderation ? <ChatHeaderActions>{contextButton}{moderation}</ChatHeaderActions> : null}
       offer={offer}
       onOpenOffer={openContext}
       systemText="Your identity is revealed to this company. Messages are private between both parties."
       messages={messages}
       isMine={(msg) => msg.senderRole === 'technician'}
+      onReportMessage={(msg) => setReportTarget({ type: 'chat_message', id: msg.id })}
       composer={{ kind: 'input', text, onChangeText: setText, sending, onSend: handleSend }}
     />
+    <ReportSheet target={reportTarget} onClose={() => setReportTarget(null)} />
+    </>
   );
 }

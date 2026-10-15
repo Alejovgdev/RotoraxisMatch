@@ -9,7 +9,16 @@
 export const LEGAL_CONSENT_VERSION = '2026-08-14';
 
 /** Human-readable date displayed on the current Privacy Policy. */
-export const PRIVACY_POLICY_LAST_UPDATED = '14 August 2026';
+export const PRIVACY_POLICY_LAST_UPDATED = '15 October 2026';
 
 /** Human-readable date displayed on the current Terms of Service. */
-export const TERMS_OF_SERVICE_LAST_UPDATED = '14 August 2026';
+export const TERMS_OF_SERVICE_LAST_UPDATED = '15 October 2026';
+
+/** Company that operates the app and is the data controller. */
+export const LEGAL_ENTITY_NAME = 'Rotoraxis Consulting Ltd.';
+export const LEGAL_ENTITY_VAT = 'MT32563308';
+export const LEGAL_ADDRESS =
+  'Area 2 Unit 35 BUSINESSLABS, Serviced Office Centre Level One, Triq Dun Karm, Birkirkara BKR 9037, Malta';
+
+/** Governing law and courts in the Terms. Provisional until legal review confirms it. */
+export const LEGAL_JURISDICTION = 'Malta';

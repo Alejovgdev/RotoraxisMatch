@@ -20,7 +20,7 @@ export default function CompanyChatDetailScreen() {
     return (
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <CompanyChatPanel roomId={id ?? ''} mode="screen" onBack={goBack} />
+        <CompanyChatPanel roomId={id ?? ''} mode="screen" onBack={goBack} onBlocked={goBack} />
       </CompanyScreen>
     );
   }
@@ -46,7 +46,8 @@ function WideChat({ roomId }: { roomId: string }) {
         // no recorre todas las que se han mirado.
         onOpen={(other) => { if (other !== roomId) router.replace(`/company/chats/${other}` as any); }}
       >
-        <CompanyChatPanel key={roomId} roomId={roomId} mode="pane" onMessageSent={reload} />
+        {/* Bloqueado (100), el chat desaparece: de vuelta al Inbox, que lo recarga. */}
+        <CompanyChatPanel key={roomId} roomId={roomId} mode="pane" onMessageSent={reload} onBlocked={() => router.replace('/company/chats' as any)} />
       </CompanyInboxSplit>
     </CompanyScreen>
   );

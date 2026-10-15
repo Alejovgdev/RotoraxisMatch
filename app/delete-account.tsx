@@ -70,7 +70,7 @@ export default function PublicDeleteAccountScreen() {
         <Text style={styles.cardTitle}>What is deleted and what can remain</Text>
         <Text style={styles.p}>
           <Text style={styles.bold}>Technicians: </Text>
-          Names, contact details, date of birth, uploaded documents, cover notes, message content and authentication credentials are removed. A limited record of professional qualifications, coarse location and marketplace history remains linked by an internal account identifier, as explained in the Privacy Policy.
+          Names, contact details, date of birth, profile photo, uploaded documents, cover notes, message content and authentication credentials are removed. A limited record of professional qualifications, coarse location and marketplace history remains linked by an internal account identifier, as explained in the Privacy Policy.
         </Text>
         <Text style={styles.p}>
           <Text style={styles.bold}>Company users: </Text>

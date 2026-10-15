@@ -122,6 +122,7 @@ export default function DeleteAccountScreen() {
           <>
             <BulletItem text="Your direct profile identifiers and personal contact information" />
             <BulletItem text="All uploaded documents (licenses, medicals, IDs) — files removed from storage" />
+            <BulletItem text="Your profile photo — removed from storage" />
             <BulletItem text="Cover notes on applications" />
             <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
             <BulletItem text="Your authentication credentials" />

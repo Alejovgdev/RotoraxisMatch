@@ -5,6 +5,7 @@ import { evaluateApplicationConflict, isActiveOfferRelationStatus } from '../../
 import { isOfferOpenForTechnicians, offerRepository } from './offerRepository';
 import { mapOfferApplicationRow, mapOfferRequestRow, throwIfError } from './supabaseMappers';
 import { IneligibilityReason, ineligibilityReasonText } from '../../utils/offerMatchExplain';
+import { throwIfContactBlocked } from '../../utils/moderation';
 
 const SELECT_FIELDS = 'id, technician_id, offer_id, company_id, status, identity_revealed, documents_unlocked, cover_note, created_at, updated_at';
 
@@ -179,6 +180,8 @@ export const offerApplicationRepository = {
       // Re-aplicar también pasa por la elegibilidad: el trigger de la 080 mira
       // la transición a pending, no sólo el INSERT.
       throwIfIneligible(reactivateError);
+      // 100: con un bloqueo entre las partes, re-aplicar tampoco se puede.
+      throwIfContactBlocked(reactivateError);
       throwIfError(reactivateError);
       return mapOfferApplicationRow(reactivated as any);
     }
@@ -197,6 +200,7 @@ export const offerApplicationRepository = {
     // pantalla ya quita el botón, pero una llamada que se la salte llega aquí
     // con el rechazo del trigger.
     throwIfIneligible(error);
+    throwIfContactBlocked(error);
     throwIfError(error);
     return mapOfferApplicationRow(inserted as any);
   },
@@ -210,6 +214,7 @@ export const offerApplicationRepository = {
       .maybeSingle();
     // 092: aceptar vuelve a comprobar la elegibilidad en la base.
     if (status === 'accepted') throwIfIneligible(error, NO_LONGER_ELIGIBLE_TO_ACCEPT);
+    throwIfContactBlocked(error);
     throwIfError(error);
     return data ? mapOfferApplicationRow(data as any) : null;
   },

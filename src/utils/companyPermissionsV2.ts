@@ -42,3 +42,8 @@ export function canReviewApplications(role: CompanyMemberRole | undefined): bool
 export function canSendChatMessages(role: CompanyMemberRole | undefined): boolean {
   return role === 'admin' || role === 'recruiter';
 }
+
+/** Bloquear a un técnico (100). El viewer sólo denuncia; la base lo impone. */
+export function canBlockContacts(role: CompanyMemberRole | undefined): boolean {
+  return role === 'admin' || role === 'recruiter';
+}

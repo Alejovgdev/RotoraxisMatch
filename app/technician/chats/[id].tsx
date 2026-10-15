@@ -21,7 +21,7 @@ export default function TechnicianChatDetailScreen() {
     return (
       <TechnicianScreen>
         <Stack.Screen options={{ headerShown: false }} />
-        <TechnicianChatPanel roomId={id ?? ''} mode="screen" onBack={goBack} />
+        <TechnicianChatPanel roomId={id ?? ''} mode="screen" onBack={goBack} onBlocked={goBack} />
       </TechnicianScreen>
     );
   }
@@ -47,7 +47,8 @@ function WideChat({ roomId }: { roomId: string }) {
         // no recorre todas las que se han mirado.
         onOpen={(other) => { if (other !== roomId) router.replace(`/technician/chats/${other}` as never); }}
       >
-        <TechnicianChatPanel key={roomId} roomId={roomId} mode="pane" onMessageSent={reload} />
+        {/* Bloqueado (100), el chat desaparece: de vuelta al Inbox, que lo recarga. */}
+        <TechnicianChatPanel key={roomId} roomId={roomId} mode="pane" onMessageSent={reload} onBlocked={() => router.replace('/technician/chats' as never)} />
       </TechnicianInboxSplit>
     </TechnicianScreen>
   );

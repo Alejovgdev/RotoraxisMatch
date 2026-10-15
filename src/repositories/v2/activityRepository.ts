@@ -124,7 +124,16 @@ export const activityRepository = {
     recipientRole: 'technician' | 'company',
     recipientId: string,
   ): Promise<Set<string>> {
-    return this.getUnreadEntityIds(recipientRole, recipientId, ['chat_message_received']);
+    const unread = await this.getUnreadEntityIds(recipientRole, recipientId, ['chat_message_received']);
+    if (unread.size === 0) return unread;
+    // 100: un chat bloqueado desaparece para los dos (RLS de chat_rooms) y sus
+    // mensajes sin leer no pueden seguir contando en el número de Inbox.
+    const { data: rooms, error } = await supabase
+      .from('chat_rooms')
+      .select('id')
+      .in('id', [...unread]);
+    if (error) return unread;
+    return new Set((rooms ?? []).map((room: any) => room.id as string));
   },
 
   // Marks all unread chat_message_received events for a room as read.

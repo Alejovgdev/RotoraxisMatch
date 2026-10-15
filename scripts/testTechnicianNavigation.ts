@@ -77,7 +77,9 @@ function test(name: string, fn: () => void) {
 }
 
 const ROOT = process.cwd();
-const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+// Con core.autocrlf los ficheros salen con CRLF en Windows: se normalizan a LF
+// para que las comprobaciones con "\n" valgan en cualquier sistema.
+const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
 // ── Navegación ─────────────────────────────────────────────────────────────
 

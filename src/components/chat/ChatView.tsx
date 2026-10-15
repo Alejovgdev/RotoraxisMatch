@@ -8,7 +8,7 @@
 //   - 'pane' (escritorio): el panel derecho del Inbox, al lado de la lista.
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { ChevronLeft, ChevronRight, Lock, Send } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Flag, Lock, Send } from 'lucide-react-native';
 import { Text, TextInput } from '../ui';
 import { EmptyBlock, OfferTileSquare, PillButton } from '../company/CompanyPage';
 import { colors } from '../../theme';
@@ -41,6 +41,7 @@ export function ChatView({
   systemText,
   messages,
   isMine,
+  onReportMessage,
   composer,
 }: {
   mode: 'screen' | 'pane';
@@ -59,6 +60,12 @@ export function ChatView({
   systemText?: string;
   messages?: ChatMessage[];
   isMine?: (message: ChatMessage) => boolean;
+  /**
+   * Denunciar un mensaje de la otra parte (100): en iOS y Android, manteniéndolo
+   * pulsado (o con la acción de accesibilidad); en web, con la banderita junto
+   * a la hora.
+   */
+  onReportMessage?: (message: ChatMessage) => void;
   composer?: ChatComposer;
 }) {
   const scrollRef = useRef<ScrollView>(null);
@@ -172,12 +179,42 @@ export function ChatView({
 
         {list.map((msg) => {
           const mine = isMine ? isMine(msg) : false;
+          const report = !mine && onReportMessage ? () => onReportMessage(msg) : null;
+          const bubble = (
+            <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+              <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{msg.body}</Text>
+            </View>
+          );
           return (
             <View key={msg.id} style={[styles.messageWrap, mine ? styles.mineWrap : styles.theirsWrap, pane && styles.messageWrapPane]}>
-              <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{msg.body}</Text>
-              </View>
-              <Text style={[styles.time, mine && styles.timeMine]}>{formatTime(msg.sentAt)}</Text>
+              {report && Platform.OS !== 'web' ? (
+                <Pressable
+                  onLongPress={report}
+                  delayLongPress={400}
+                  style={({ pressed }) => [pressed && styles.bubblePressed]}
+                  accessibilityHint="Press and hold to report this message"
+                  accessibilityActions={[{ name: 'longpress', label: 'Report message' }]}
+                  onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') report(); }}
+                >
+                  {bubble}
+                </Pressable>
+              ) : bubble}
+              {report && Platform.OS === 'web' ? (
+                <View style={styles.timeRow}>
+                  <Text style={styles.time}>{formatTime(msg.sentAt)}</Text>
+                  <Pressable
+                    onPress={report}
+                    hitSlop={8}
+                    style={({ hovered }: any) => [styles.flag, hovered && styles.flagHover]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report message"
+                  >
+                    <Flag color={colors.textMuted} size={13} strokeWidth={2.2} />
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={[styles.time, mine && styles.timeMine]}>{formatTime(msg.sentAt)}</Text>
+              )}
             </View>
           );
         })}
@@ -240,6 +277,11 @@ function OfferCardBody({ offer }: { offer: Offer }) {
   );
 }
 
+/** Varias acciones a la derecha de la cabecera (el enlace y el "⋯" de 100). */
+export function ChatHeaderActions({ children }: { children: React.ReactNode }) {
+  return <View style={styles.headerActions}>{children}</View>;
+}
+
 /** El enlace "Profile" / "Offer" de la cabecera en móvil. */
 export function ChatHeaderLink({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel: string }) {
   return (
@@ -295,6 +337,11 @@ const styles = StyleSheet.create({
   headerSub: {
     fontSize: 12.5,
     color: colors.textSecondary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerLink: {
     minHeight: TOUCH_TARGET,
@@ -403,6 +450,24 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 11.5,
     color: colors.textMuted,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  flag: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flagHover: {
+    backgroundColor: HOVER_BG,
+  },
+  bubblePressed: {
+    opacity: 0.7,
   },
   timeMine: {
     textAlign: 'right',

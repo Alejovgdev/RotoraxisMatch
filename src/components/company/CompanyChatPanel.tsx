@@ -13,9 +13,12 @@
 // no escribe ("Viewer role cannot send messages.", respuesta 20); si la cuenta
 // del técnico se borró, el historial se ve pero no se envía nada.
 import React, { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Avatar } from '../ui';
-import { ChatHeaderLink, ChatView } from '../chat/ChatView';
+import { ChatHeaderActions, ChatHeaderLink, ChatView } from '../chat/ChatView';
+import { ModerationMenu } from '../moderation/ModerationMenu';
+import { ReportSheet } from '../moderation/ReportSheet';
 import { chatRepository } from '../../repositories/v2/chatRepository';
 import { offerRequestRepository } from '../../repositories/v2/offerRequestRepository';
 import { offerApplicationRepository } from '../../repositories/v2/offerApplicationRepository';
@@ -24,7 +27,8 @@ import { technicianRepositoryV2 } from '../../repositories/v2/technicianReposito
 import { activityRepository } from '../../repositories/v2/activityRepository';
 import { isUnlocked } from '../../types/privacy';
 import { useCompanySession } from '../../state/SessionContext';
-import { canSendChatMessages } from '../../utils/companyPermissionsV2';
+import { canBlockContacts, canSendChatMessages } from '../../utils/companyPermissionsV2';
+import { reportMessageHint, type ReportTarget } from '../../utils/moderation';
 import { credentialLabel } from '../../constants/licenses';
 import { technicianProfileHref } from '../../utils/companyNavigation';
 import { notify } from '../../utils/platformAlert';
@@ -37,6 +41,7 @@ export function CompanyChatPanel({
   mode,
   onBack,
   onMessageSent,
+  onBlocked,
 }: {
   roomId: string;
   mode: 'screen' | 'pane';
@@ -44,6 +49,8 @@ export function CompanyChatPanel({
   onBack?: () => void;
   /** Para que la lista de al lado (escritorio) refresque el último mensaje. */
   onMessageSent?: () => void;
+  /** Tras bloquear al técnico (100): el chat ya no existe para ninguno de los dos. */
+  onBlocked?: () => void;
 }) {
   const router = useRouter();
   const companySession = useCompanySession();
@@ -65,6 +72,7 @@ export function CompanyChatPanel({
   const [profileUnlocked, setProfileUnlocked] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const load = useCallback(async () => {
     // Fase 5.4 — sesion sin resolver: no se dispara ninguna query con un id
@@ -168,7 +176,25 @@ export function CompanyChatPanel({
     ? [techLine, `about ${offer.title}`].filter(Boolean).join(' · ')
     : techLine || (offer?.title ?? 'Accepted contact');
 
+  const profileLink = profileUnlocked ? (
+    pane
+      ? <PillButton label="View profile" variant="outline" size="sm" onPress={openProfile} />
+      : <ChatHeaderLink label="Profile" onPress={openProfile} accessibilityLabel="View profile for technician" />
+  ) : null;
+  // Denunciar y bloquear (100). El viewer no bloquea: sin opciones, sin "⋯";
+  // denuncia igual manteniendo pulsado un mensaje (o con la banderita en web).
+  const moderation = room && companyId && !loading && !locked ? (
+    <ModerationMenu
+      block={canBlockContacts(companyMemberRole)
+        ? { companyId, technicianId: room.technicianId, counterpart: 'technician', name: headerTitle }
+        : null}
+      hint={reportMessageHint(Platform.OS)}
+      onBlocked={onBlocked}
+    />
+  ) : null;
+
   return (
+    <>
     <ChatView
       mode={mode}
       onBack={onBack}
@@ -177,11 +203,7 @@ export function CompanyChatPanel({
       avatar={<Avatar kind="person" size={pane ? 44 : 40} photoPath={photoPath} anonymous={!profileUnlocked} name={profileUnlocked ? headerTitle : null} />}
       title={headerTitle}
       subtitle={subtitle}
-      headerRight={profileUnlocked ? (
-        pane
-          ? <PillButton label="View profile" variant="outline" size="sm" onPress={openProfile} />
-          : <ChatHeaderLink label="Profile" onPress={openProfile} accessibilityLabel="View profile for technician" />
-      ) : null}
+      headerRight={profileLink || moderation ? <ChatHeaderActions>{profileLink}{moderation}</ChatHeaderActions> : null}
       offer={offer}
       onOpenOffer={offer ? () => router.push(`/company/offers/${offer.id}` as any) : undefined}
       systemText={technicianDeleted
@@ -189,11 +211,14 @@ export function CompanyChatPanel({
         : "Identity revealed — this technician's identity and admin-verified documents are visible to your company. Messages are private between both parties."}
       messages={messages}
       isMine={(msg) => msg.senderRole === 'company'}
+      onReportMessage={(msg) => setReportTarget({ type: 'chat_message', id: msg.id })}
       composer={technicianDeleted
         ? { kind: 'blocked', text: "This technician's account has been deleted — no new messages can be sent." }
         : canSend
           ? { kind: 'input', text, onChangeText: setText, sending, onSend: handleSend }
           : { kind: 'blocked', text: 'Viewer role cannot send messages.', withLock: true }}
     />
+    <ReportSheet target={reportTarget} onClose={() => setReportTarget(null)} />
+    </>
   );
 }

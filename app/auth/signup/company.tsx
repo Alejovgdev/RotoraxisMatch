@@ -21,6 +21,13 @@ import { persistedLocationFromValue } from '../../../src/utils/locationBridge';
 import { Button } from '../../../src/components/Button';
 import { colors, spacing } from '../../../src/theme';
 import { LEGAL_CONSENT_VERSION } from '../../../src/constants/legal';
+import { EMAIL_CONFIRMATION_REDIRECT_URL } from '../../../src/auth/emailConfirmation';
+import {
+  ALREADY_REGISTERED_TEXT,
+  authErrorText,
+  checkEmailHref,
+  signUpOutcome,
+} from '../../../src/auth/emailConfirmationRules';
 
 function isValidEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -87,6 +94,9 @@ export default function CompanySignupScreen() {
       email: email.trim(),
       password,
       options: {
+        // Sólo se usa con la confirmación activada: el enlace del correo
+        // vuelve a /auth/confirm.
+        emailRedirectTo: EMAIL_CONFIRMATION_REDIRECT_URL,
         data: {
           role: 'company_user',
           company_name: companyName.trim(),
@@ -100,12 +110,28 @@ export default function CompanySignupScreen() {
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      setError(authErrorText(signUpError));
       setLoading(false);
       return;
     }
 
+    // With email confirmation enabled there is no session yet: the user goes
+    // to "Check your email", and AuthContext.ensureRoleProfile() calls the RPC
+    // once the confirmation link signs them in. An email that already had an
+    // account comes back without error and without an email sent.
+    const outcome = signUpOutcome(data);
+    if (outcome === 'already_registered') {
+      setError(ALREADY_REGISTERED_TEXT);
+      setLoading(false);
+      return;
+    }
+    if (outcome === 'needs_confirmation') {
+      router.replace(checkEmailHref(email.trim(), 'signup') as any);
+      return;
+    }
+
     // Step 2: Create company + company_member via SECURITY DEFINER RPC
+    // (email confirmation disabled: the session exists immediately).
     if (data.session) {
       const { error: rpcError } = await supabase.rpc('signup_company', {
         p_company_name: companyName.trim(),

@@ -1,0 +1,28 @@
+{
+  "cli": {
+    "version": ">= 24.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://rwauwuremzkizeoginza.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_LDOCKOXRPV3R46rYawT_Pw_Nl2_mZba",
+        "EXPO_PUBLIC_APP_URL": "https://ajt-dev.vercel.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://<prod-project-ref>.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "<prod-publishable-key>",
+        "EXPO_PUBLIC_APP_URL": "https://<prod-web-url>"
+      }
+    }
+  }
+}

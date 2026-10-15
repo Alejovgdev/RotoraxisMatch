@@ -10,6 +10,7 @@ import { ExternalLink } from '../../../src/components/ExternalLink';
 import { TechnicianScreen } from '../../../src/components/technician/TechnicianUI';
 import { MatchPill } from '../../../src/components/technician/OfferCards';
 import { OfferAboutRole, OfferChecklistSection, OfferTags } from '../../../src/components/technician/OfferDetailParts';
+import { ModerationMenu } from '../../../src/components/moderation/ModerationMenu';
 import { ScoreHeadline } from '../../../src/components/company/MatchBreakdownBars';
 import {
   AsideCard,
@@ -295,6 +296,11 @@ export default function OfferDetailScreen() {
   const displayLabel = score ? getMatchDisplayLabel(offer, score) : undefined;
   const companyName = company?.name ?? null;
   const companyLine = [companyName, offerPlaceLine(offer)].filter(Boolean).join(' · ');
+  // Denunciar la oferta y bloquear a la empresa (100).
+  const moderationTargets = technicianId ? {
+    report: { type: 'offer' as const, id: offer.id },
+    block: { companyId: offer.companyId, technicianId, counterpart: 'company' as const, name: companyName },
+  } : null;
 
   const banners = (
     <>
@@ -418,6 +424,7 @@ export default function OfferDetailScreen() {
                     <Text style={styles.subtitle}>{companyLine}</Text>
                     {chips}
                   </View>
+                  {moderationTargets ? <ModerationMenu {...moderationTargets} /> : null}
                 </View>
                 {banners}
                 {checklist}
@@ -455,6 +462,11 @@ export default function OfferDetailScreen() {
             <ChevronLeft color={colors.text} size={26} strokeWidth={2.2} />
           </Pressable>
           <Avatar kind="company" size={104} name={companyName} logoPath={company?.logoPath} />
+          {moderationTargets ? (
+            <View style={styles.heroMenu}>
+              <ModerationMenu {...moderationTargets} overlay />
+            </View>
+          ) : null}
           {score || filteredOut ? (
             <View style={styles.heroPill}>
               <MatchPill total={score?.total ?? 0} notEligible={notEligible} label={displayLabel} large />
@@ -495,6 +507,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroMenu: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
   },
   heroBack: {
     position: 'absolute',

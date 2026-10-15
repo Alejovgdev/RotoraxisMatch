@@ -43,7 +43,8 @@ import { isUnlocked, TechnicianView } from '../../../src/types/privacy';
 import { useCompanySession } from '../../../src/state/SessionContext';
 import { useAircraftTypeRatingsCatalog } from '../../../src/state/useAircraftTypeRatingsCatalog';
 import { useEnginesCatalog } from '../../../src/state/useEnginesCatalog';
-import { canReviewApplications } from '../../../src/utils/companyPermissionsV2';
+import { canBlockContacts, canReviewApplications } from '../../../src/utils/companyPermissionsV2';
+import { ModerationMenu } from '../../../src/components/moderation/ModerationMenu';
 import { OfferApplication } from '../../../src/types/offerRequest';
 import { OfferWithRequirements } from '../../../src/types/offer';
 import { MatchScore } from '../../../src/types/matching';
@@ -278,6 +279,15 @@ export default function ApplicationDetailScreen() {
   const pending = app.status === 'pending';
   const openChat = chatRoom ? () => router.push(`/company/chats/${chatRoom.id}` as any) : undefined;
   const openProfile = unlockedView ? () => router.push(`/company/technician/${techView.id}` as any) : undefined;
+  // Denunciar el perfil y bloquear al técnico (100). El viewer sólo denuncia.
+  const moderation = companyId ? (
+    <ModerationMenu
+      report={{ type: 'technician_profile', id: app.technicianId }}
+      block={canBlockContacts(companyMemberRole)
+        ? { companyId, technicianId: app.technicianId, counterpart: 'technician', name }
+        : null}
+    />
+  ) : null;
 
   const hero = (
     <PersonHero
@@ -422,7 +432,10 @@ export default function ApplicationDetailScreen() {
       <CompanyScreen>
         <Stack.Screen options={{ headerShown: false }} />
         <PageBody wide refreshControl={refresh}>
-          <Breadcrumb parent="Applications" onParent={() => router.navigate('/company/applications' as any)} current={name} />
+          <View style={styles.moderationRow}>
+            <Breadcrumb parent="Applications" onParent={() => router.navigate('/company/applications' as any)} current={name} />
+            {moderation}
+          </View>
           <TwoColumns
             main={(
               <>
@@ -451,7 +464,7 @@ export default function ApplicationDetailScreen() {
   return (
     <CompanyScreen>
       <Stack.Screen options={{ headerShown: false }} />
-      <PageBar title="Application" onBack={goBack} />
+      <PageBar title="Application" onBack={goBack} right={moderation} />
       <PageBody wide={false} refreshControl={refresh}>
         {hero}
         {identity}
@@ -469,6 +482,13 @@ export default function ApplicationDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Escritorio: la miga (o "‹ Back") a la izquierda y el "⋯" de 100 a la derecha.
+  moderationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   identity: {
     gap: 4,
   },

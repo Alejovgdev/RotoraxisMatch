@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from '../src/components/AppSafeAreaProvider';
 import { colors } from '../src/theme';
 import { FONT_ASSETS, fonts } from '../src/theme/fonts';
 import { SessionProvider } from '../src/state/SessionContext';

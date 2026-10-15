@@ -125,7 +125,9 @@ async function mounted(fn, props) {
 function nodes(element) {
   if (!element || typeof element !== 'object') return [];
   if (Array.isArray(element)) return element.flatMap(nodes);
-  if (!('type' in element)) return [];
+  // Un elemento tiene type Y props: un objeto de datos con `type` (el
+  // report={{ type, id }} del "⋯" de la 100) no lo es.
+  if (!('type' in element) || !('props' in element)) return [];
   return [element, ...(element.children ?? []).flatMap(nodes), ...Object.values(element.props).flatMap(nodes)];
 }
 function assertIdentity(label, element, unlocked) {
