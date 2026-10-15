@@ -36,7 +36,7 @@ export function DateField({ value, onChange, placeholder, minimumDate, maximumDa
       backgroundColor: disabled ? p.border : p.surface,
       color: p.text,
       padding: '8px 10px',
-      fontSize: 12,
+      fontSize: 16,
       fontFamily: 'inherit',
     },
   } as any);

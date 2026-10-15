@@ -82,7 +82,7 @@ export function TabBar({ items, action }: { items: TabBarItem[]; action: TabBarA
   return (
     // En un tablet los cinco huecos van en la columna de móvil, no repartidos a
     // todo el ancho (fase 8); el fondo y la línea sí ocupan todo.
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+    <View nativeID="ajt-tab-bar" style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
       <View style={styles.row}>
         {noteVisible && action.disabledNote ? (
           <View style={styles.note} accessibilityRole="alert" accessibilityLiveRegion="polite">

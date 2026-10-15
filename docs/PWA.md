@@ -7,12 +7,17 @@ normal del navegador. La barra del sistema (hora, batería y gestos) sigue visib
 ## Archivos
 
 - `public/manifest.webmanifest`: Aviation Job Talent / AJT, `standalone`, inicio y
-  ámbito `/`, colores `#03295B`.
+  ámbito `/`, colores `#FFFFFF`.
 - `public/icons/`: PNG de 192, 512 y 180 px derivados de `icon.png`; maskable de
   512 px derivado del lienzo completo de `adaptive-icon.png`, sobre `#03295B`.
   El logo cabe dentro del círculo seguro de radio 40 % del icono.
 - `app/+html.tsx`: etiquetas comunes de todas las páginas web, manifest, icono
-  de Apple, viewport y `black-translucent` aprobado para iPhone.
+  de Apple, viewport con `viewport-fit=cover`, barra de estado `default` para
+  iPhone, zonas seguras y ajuste de alto del iPhone instalado (ver abajo).
+- `src/components/ui/TabBar.tsx`: `nativeID="ajt-tab-bar"`, para que el CSS del
+  iPhone instalado ajuste el margen inferior de la barra de menú.
+- `src/components/ui/Text.tsx` y `src/components/DateField.web.tsx`: letra de
+  16 px en los campos y sin `autoFocus` en web (ver abajo).
 - `src/components/AppSafeAreaProvider.web.tsx`: en el navegador conserva las
   zonas seguras globales en CSS y los insets interiores cero. En la PWA de iPhone,
   CSS reserva arriba y a los lados; abajo lo reserva la barra de pestañas o el
@@ -88,74 +93,79 @@ Consecuencias del código actual, sin cambios de autenticación en esta tarea:
 - `EXPO_PUBLIC_APP_URL` y las URLs permitidas en Supabase deben seguir apuntando
   al dominio publicado. El manifest no cambia las redirecciones de los correos.
 
-## Comprobaciones realizadas (2026-10-15)
+## Colores y barra de estado
 
-- TypeScript y `expo export --platform web` correctos: 81 páginas estáticas.
-- Las 81 páginas se sirven por HTTP con un único viewport y las etiquetas PWA.
-- Manifest y cuatro iconos: HTTP 200, MIME correcto, dimensiones correctas y
-  contenido exportado idéntico a `public/`. Ningún icono tiene transparencia;
-  el logo maskable permanece dentro del círculo seguro.
-- Chromium analiza el manifest sin errores y devuelve cero errores de
-  instalabilidad en localhost. Cero registros de service worker.
-- Navegador: márgenes simulados de iPhone en vertical (59 px arriba, 34 abajo)
-  y horizontal (59 a cada lado, 21 abajo), sin desbordamiento horizontal ni
-  duplicación del margen superior. Comprobadas pantalla de acceso y ventana del
-  selector de país, incluidos los portales de diálogos.
-- Conservados los cambios previos: comparación de huellas de los archivos
-  versionados; sólo cambia la importación en `app/_layout.tsx` durante esta tarea.
+Las barras se ven como antes de la PWA, con el fondo de la app:
 
-La simulación en Chromium no sustituye una instalación en iPhone/Android reales.
-Queda comprobar allí el aspecto exacto de la barra del sistema, rotación y teclado,
-y las pantallas con sesión iniciada. No se ha publicado la web ni se han ejecutado
-flujos reales de autenticación o correos durante estas comprobaciones.
+- Sin `theme-color` en `<head>` y sin color de fondo en `html` ni `body`: el
+  navegador pinta su blanco por defecto, igual que antes de la PWA.
+- `manifest.webmanifest`: `theme_color` y `background_color` en `#FFFFFF`, para la
+  app instalada en Android.
+- iPhone instalado: `apple-mobile-web-app-status-bar-style` en `default`. La barra
+  de estado es clara, con la hora y la batería en oscuro, e iOS coloca la página
+  debajo de ella; en vertical la zona segura superior vale 0.
+- iOS suele conservar el estilo de barra de estado con el que se añadió el icono.
+  Si tras un cambio sigue viéndose el anterior, borrar el icono AJT y añadirlo de
+  nuevo desde Safari.
 
-## Corrección del borde inferior en iPhone instalado (2026-10-15)
+## Zonas seguras y borde inferior en iPhone instalado
 
-El diseño anterior aplicaba `safe-area-inset-bottom` como padding de `#root`:
-levantaba toda la app, incluida la barra de pestañas, y descubría el fondo azul
-marino del documento. Además, el reset de Expo fija `html`, `body` y `#root` al
-`100%`. Si iOS calcula esa altura excluyendo la barra de estado, ambos huecos se
-suman. Con 59 px de barra de estado y 34 px de zona segura inferior, son 93 px.
-La simulación reproduce esa suma; no demuestra qué altura comunica el iPhone
-del usuario. WebKit tiene registrados problemas de este tipo con `black-translucent`
-y los insets de apps instaladas:
+En todos los navegadores, `app/+html.tsx` reserva las zonas seguras una sola vez
+gracias a `viewport-fit=cover`: padding de `#root` y límites de los portales
+modales con `env(safe-area-inset-*)`. `html` y `body` llevan `overflow: hidden`.
+
+Un script del documento marca el iPhone instalado antes del primer pintado
+(`data-ajt-iphone-pwa`), sólo si el dispositivo es un iPhone y
+`navigator.standalone` o `display-mode: standalone` indica apertura instalada.
+Con esa marca:
+
+- **Alto.** La página termina exactamente en el borde inferior de lo visible
+  (`window.innerHeight`). Se prueba en orden y se queda el primer paso que lo
+  consigue: `calc(100% + env(safe-area-inset-top))` (con `default` la zona
+  superior vale 0, así que equivale a `100%`), `100lvh` y, por último,
+  `--app-height` con el valor de `window.innerHeight`. Se recalcula al cambiar el
+  tamaño o girar el teléfono. `body` y `#root` heredan ese alto.
+- **Borde inferior.** `#root` no lleva padding inferior global. La barra de menú
+  (`#ajt-tab-bar`) llega al borde y usa `padding-bottom:
+  env(safe-area-inset-bottom)`, así que sus botones quedan por encima de la raya
+  de inicio. Las pantallas sin barra y los portales (`AppModal.web.tsx`) llegan
+  también al borde y reservan ese espacio dentro de su propio fondo, una sola vez.
+- En un iPhone instalado sin raya de inicio (zona inferior 0), la barra queda sin
+  margen inferior en lugar de los 14 px que usa en el navegador.
+
+Origen del problema: con `black-translucent` la página ocupaba también la zona de
+la hora, iOS calculaba el `100%` sin esa zona y la barra de menú no llegaba al
+borde inferior, dejando una franja azul marino debajo. WebKit tiene registrados
+problemas de este tipo:
 [reporte 236445](https://bugs.webkit.org/show_bug.cgi?id=236445) y
-[reporte 254868](https://bugs.webkit.org/show_bug.cgi?id=254868).
+[reporte 254868](https://bugs.webkit.org/show_bug.cgi?id=254868). Con `default` la
+página empieza debajo de la hora; por eso el objetivo del alto es lo visible y no
+`screen.height`, que empujaría la barra de menú fuera de la pantalla.
 
-Un script en el documento activa la corrección antes del primer pintado sólo si
-el dispositivo es un iPhone y `navigator.standalone` o `display-mode: standalone`
-indica apertura instalada. En ese caso `#root` usa `position: fixed; inset: 0;
-height: auto`, sin padding inferior global. No calcula alturas con `innerHeight`
-ni suma una altura de barra de estado. La barra existente usa el inset inferior
-real, una sola vez; las pantallas sin barra lo aplican dentro de su fondo.
+## Zoom en los campos de texto (web)
 
-Validación local en Chromium mediante Playwright, con los proveedores,
-`SafeAreaView`, `TabBar`, `Modal` y `BottomSheet` reales. Los insets se simulan en
-CSS, incluida la sonda de la librería; se reduce deliberadamente en 59 px la
-altura porcentual del documento para reproducir el caso descrito.
+Safari de iOS amplía la página al enfocar un campo con letra menor de 16 px.
 
-| Caso | Resultado medido |
-| --- | --- |
-| Diseño anterior, pantalla de 852 px | Barra termina en 759 px: franja de 93 px |
-| PWA iPhone vertical, 59 px arriba y 34 abajo | Raíz y barra terminan en 852 px; fondo blanco en el último píxel; padding inferior de barra 34 px y de escena 0 |
-| Pantalla sin barra, con pestañas ocultas detrás | Fondo hasta 852 px; último control hasta 818 px; inset de 34 px una vez |
-| Navegador de pestañas sin barra visible | Fondo hasta 852 px; inset inferior de 34 px |
-| Modal y hoja inferior abiertos desde una pestaña | Fondo hasta 852 px; contenido protegido por 34 px una vez |
-| Rotación en la misma página, 852 × 393 px | Barra hasta 393 px; padding inferior 21 px; laterales protegidos por 59 px |
-| iPhone pequeño, 375 × 667 px, inset inferior cero | Barra hasta 667 px; conserva los 14 px de espaciado de diseño |
-| iPhone en navegador, Android instalado, iPad instalado y escritorio | Geometría idéntica al diseño anterior; corrección desactivada |
-| Detección mediante `display-mode: standalone` | Corrección activada aunque `navigator.standalone` sea falso |
-| `/auth/login` de la exportación Expo, después de hidratar | Fondo hasta 852 px; arriba 59 px y abajo 34 px; último píxel blanco |
+- `src/components/ui/Text.tsx`: en web, el `TextInput` de la app sube la letra a
+  16 px cuando es menor y conserva la altura de línea (la indicada o 20 px).
+  También ignora `autoFocus` en web, para que ninguna pantalla abra el teclado ni
+  amplíe la página al cargarse.
+- `src/components/DateField.web.tsx`: el selector de fecha usa 16 px.
 
-Sin desbordamiento horizontal ni errores de JavaScript en estos casos. Capturas
-e informe locales en `.tmp-pwa-check/`, ignorado por Git. Comprobaciones correctas:
-`npm run ts`, `npx expo export --platform web` (81 páginas),
-`test:company-nav`, `test:technician-nav`, `test:location`, `test:web-notices`
-y `check:nested-buttons`.
+Las apps nativas no cambian.
 
-Esto verifica el reparto del espacio y el alcance de la corrección en componentes
-reales, además de la pantalla de acceso exportada. No reproduce el compositor de
-iOS, la barra del sistema ni el teclado real; las pantallas autenticadas se prueban
-mediante una composición local de componentes, sin iniciar sesión ni escribir en
-el backend. Queda comprobar una instalación real en iPhone, especialmente teclado,
-rotación y reapertura desde el icono. No se ha publicado ni hecho commit.
+## Comprobaciones (2026-10-15)
+
+- `npm run ts` y `npx expo export --platform web` correctos: 81 páginas estáticas,
+  sin `theme-color` ni azul marino en el documento y con el manifest en `#FFFFFF`.
+- Manifest y cuatro iconos: HTTP 200, MIME y dimensiones correctos, sin
+  transparencia. Chromium analiza el manifest sin errores de instalabilidad y sin
+  service worker.
+- Chromium, iPhone instalado simulado con `default` (pantalla de 852 px, 793
+  visibles): `html`, `body` y `#root` terminan en 793 con el primer paso. Forzando
+  el fallo de los dos primeros pasos, el último también deja la página en 793. En
+  el navegador normal la geometría no cambia y el fondo queda sin color.
+- iPhone real instalado, comprobado por el dueño: barra de estado clara con la
+  hora en negro, la barra de menú llega al borde inferior y las medidas cuadran.
+
+No se ha comprobado una instalación en un Android real.

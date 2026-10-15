@@ -1,6 +1,7 @@
 // El <Text> y el <TextInput> de toda la app (rediseño, respuesta 3 de la
 // revisión). Mismas props que los de React Native; lo único que hacen distinto
 // es poner la fuente Nunito Sans del grosor pedido.
+// En web, los campos mantienen al menos 16 px y no toman el foco al montarse.
 //
 // POR QUÉ HACE FALTA: en Android una fuente propia no respeta `fontWeight`. Cada
 // grosor es un fichero con su propio nombre de familia, así que este componente
@@ -17,6 +18,7 @@
 // respeta tal cual, y sus hijos la heredan sin que este componente la pise.
 import React, { createContext, forwardRef, useContext } from 'react';
 import {
+  Platform,
   StyleSheet,
   Text as RNText,
   TextInput as RNTextInput,
@@ -62,7 +64,19 @@ export const Text = forwardRef<RNText, TextProps>(function Text({ style, ...rest
   );
 });
 
-export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextInput({ style, ...rest }, ref) {
-  const font = resolveFont(StyleSheet.flatten(style) ?? {}, null);
-  return <RNTextInput ref={ref} {...rest} style={[style, fontOverride(font)]} />;
+export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextInput({ style, autoFocus, ...rest }, ref) {
+  const flatStyle = StyleSheet.flatten(style) ?? {};
+  const font = resolveFont(flatStyle, null);
+  // Keep the line box of the app's auto-sized fields when increasing the font.
+  const webInputStyle = Platform.OS === 'web' && (flatStyle.fontSize ?? 14) < 16
+    ? { fontSize: 16, lineHeight: flatStyle.lineHeight ?? 20 }
+    : null;
+  return (
+    <RNTextInput
+      ref={ref}
+      {...rest}
+      autoFocus={Platform.OS === 'web' ? false : autoFocus}
+      style={[style, fontOverride(font), webInputStyle]}
+    />
+  );
 });
