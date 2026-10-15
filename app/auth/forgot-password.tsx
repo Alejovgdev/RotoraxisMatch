@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Text, TextInput } from '../../src/components/ui/Text';
+import { AppIcon } from '../../src/components/ui/AppIcon';
 import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -71,7 +72,9 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <Text style={styles.logoIcon}>✈</Text>
+            <View style={styles.logo}>
+              <AppIcon size={40} radius={12} />
+            </View>
             <Text style={styles.title}>Forgot password</Text>
             <Text style={styles.subtitle}>
               Enter your email and we&apos;ll send you a link to reset your password.
@@ -140,7 +143,8 @@ const styles = StyleSheet.create({
   back: { paddingVertical: spacing.sm, alignSelf: 'flex-start' },
   backText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
-  logoIcon: { fontSize: 40, marginBottom: spacing.md },
+  // El alto de la línea del ✈ de 40 pt al que sustituye: el título no se mueve.
+  logo: { height: 56, justifyContent: 'center', marginBottom: spacing.md },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   subtitle: {
     fontSize: 13,

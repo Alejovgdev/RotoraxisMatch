@@ -7,6 +7,7 @@ export { TopBar } from './TopBar';
 export type { TopBarProps, TopBarSection } from './TopBar';
 export { ShortcutCircle } from './ShortcutCircle';
 export { StepHeader } from './StepHeader';
+export { AppIcon } from './AppIcon';
 export { Avatar, AvatarFrame, avatarInitials, useAvatarImage } from './Avatar';
 export type { AvatarImageSource } from './Avatar';
 export { Chip, RemovableChip, StatusChip } from './Chip';

@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Text } from '../ui/Text';
+import { AppIcon } from '../ui/AppIcon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '../../theme';
 
@@ -128,7 +129,7 @@ function HeroVisual({ active }: { active: boolean }) {
         style={[hv.ring, hv.ring2, { transform: [{ scale: ring2Scale }], opacity: ring2Opacity }]}
       />
       <Animated.View style={[hv.logo, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-        <Text style={hv.logoIcon}>✈</Text>
+        <AppIcon size={100} radius={30} />
       </Animated.View>
     </Animated.View>
   );
@@ -149,7 +150,8 @@ const hv = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 30,
-    backgroundColor: colors.cyan,
+    // El azul marino del icono: debajo sólo asoma en el borde de las esquinas.
+    backgroundColor: colors.logo,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.cyan,
@@ -158,7 +160,6 @@ const hv = StyleSheet.create({
     shadowRadius: 20,
     elevation: 12,
   },
-  logoIcon: { fontSize: 44, color: colors.white },
 });
 
 // ── Slide 2: Profiles visual ───────────────────────────────────────────────

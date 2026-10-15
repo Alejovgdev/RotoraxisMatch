@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Text } from '../src/components/ui/Text';
+import { AppIcon } from '../src/components/ui/AppIcon';
 import { useDesktopScrollbar } from '../src/components/ui/useDesktopScrollbar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -87,7 +88,7 @@ export default function HomeScreen() {
       >
         <View style={styles.hero}>
           <View style={styles.logoWrap}>
-            <Text style={styles.logoIcon}>✈</Text>
+            <AppIcon size={80} radius={24} />
           </View>
           <Text style={styles.appName}>Aviation Job Talent</Text>
           <Text style={styles.tagline}>
@@ -231,7 +232,8 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: colors.cyan,
+    // El azul marino del icono: debajo sólo asoma en el borde de las esquinas.
+    backgroundColor: colors.logo,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
@@ -241,7 +243,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  logoIcon: { fontSize: 38 },
   appName: {
     fontFamily: fonts.logo,
     fontSize: 30,
