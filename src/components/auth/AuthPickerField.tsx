@@ -2,12 +2,12 @@ import React, { useMemo, useState } from 'react';
 import {
   View,
   TouchableOpacity,
-  Modal,
   FlatList,
   StyleSheet,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Modal } from '../AppModal';
 import { Text, TextInput } from '../ui/Text';
 import { focusRingWithin } from '../ui/webFocusRing';
 import { SafeAreaView } from 'react-native-safe-area-context';

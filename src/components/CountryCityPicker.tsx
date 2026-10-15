@@ -2,15 +2,14 @@ import React, { useMemo, useState } from 'react';
 import {
   View,
   TouchableOpacity,
-  Modal,
   FlatList,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   Platform,
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import { Modal, SafeAreaView } from './AppModal';
 import { Text, TextInput } from './ui/Text';
 import { focusRingWithin } from './ui/webFocusRing';
 import { ChevronDown, Search, X, MapPin, PenLine } from 'lucide-react-native';

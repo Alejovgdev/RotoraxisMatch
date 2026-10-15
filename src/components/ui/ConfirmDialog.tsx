@@ -17,7 +17,8 @@
 // Tocar fuera, "atrás" en Android o "Cancel" resuelven a false: una promesa que
 // nunca se resuelve dejaría el handler colgado sin decir nada.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Modal } from '../AppModal';
 import { Text } from './Text';
 import { ModalBackdrop } from './ModalBackdrop';
 import { colors } from '../../theme';

@@ -19,6 +19,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <ScrollViewStyleReset />
+        <script dangerouslySetInnerHTML={{ __html: iphonePwaScript }} />
         <style id="ajt-pwa" dangerouslySetInnerHTML={{ __html: safeAreaStyles }} />
         {headNodes}
       </head>
@@ -30,9 +31,16 @@ export default function RootHtml({ children }: PropsWithChildren) {
   );
 }
 
-// Keep the navy background behind the system indicators. Reserve all four
-// edges once, including landscape. The web provider prevents nested screens
-// from adding the same insets again. Native apps retain their original provider.
+// Run before the first paint. Neither regular Safari nor other platforms opt in.
+const iphonePwaScript = `
+if (/iPhone/.test(navigator.userAgent) &&
+    (navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches)) {
+  document.documentElement.setAttribute('data-ajt-iphone-pwa', '');
+}
+`;
+
+// Keep the existing browser layout. On installed iPhones, the root fills the
+// fixed viewport; the bottom inset belongs inside screens/the tab bar instead.
 const safeAreaStyles = `
 :root {
   --ajt-safe-area-top: env(safe-area-inset-top, 0px);
@@ -53,5 +61,14 @@ body [aria-modal="true"] {
   right: var(--ajt-safe-area-right);
   bottom: var(--ajt-safe-area-bottom);
   left: var(--ajt-safe-area-left);
+}
+html[data-ajt-iphone-pwa] #root {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  padding-bottom: 0;
+}
+html[data-ajt-iphone-pwa] body [aria-modal="true"] {
+  bottom: 0;
 }
 `;

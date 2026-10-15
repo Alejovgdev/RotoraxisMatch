@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { CompanyTabBar } from '../../../src/components/company/CompanyNavBars';
 import { companyUi } from '../../../src/components/company/CompanyUI';
 import { WIDE_BREAKPOINT } from '../../../src/theme/ui';
+import { TabSceneSafeArea } from '../../../src/components/AppSafeAreaProvider';
 
 // Las cuatro pestañas de empresa (rediseño, fase 2). El grupo (tabs) no cambia
 // ninguna URL: /company, /company/search, /company/chats y /company/profile son
@@ -18,6 +19,7 @@ export default function CompanyTabsLayout() {
   return (
     <Tabs
       backBehavior="history"
+      screenLayout={({ children }) => <TabSceneSafeArea hasTabBar={!wide}>{children}</TabSceneSafeArea>}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: companyUi.page } }}
       tabBar={() => (wide ? null : <CompanyTabBar />)}
     >

@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { TechnicianTabBar } from '../../../src/components/technician/TechnicianNavBars';
 import { techUi } from '../../../src/components/technician/TechnicianUI';
 import { WIDE_BREAKPOINT } from '../../../src/theme/ui';
+import { TabSceneSafeArea } from '../../../src/components/AppSafeAreaProvider';
 
 // Las cuatro pestañas del técnico (rediseño, fase 5A; T1). El grupo (tabs) no
 // cambia ninguna URL: /technician, /technician/offers, /technician/chats y
@@ -18,6 +19,7 @@ export default function TechnicianTabsLayout() {
   return (
     <Tabs
       backBehavior="history"
+      screenLayout={({ children }) => <TabSceneSafeArea hasTabBar={!wide}>{children}</TabSceneSafeArea>}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: techUi.page } }}
       tabBar={() => (wide ? null : <TechnicianTabBar />)}
     >

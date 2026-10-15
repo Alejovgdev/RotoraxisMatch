@@ -11,7 +11,6 @@
 import React from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -19,7 +18,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Modal, useModalSafeAreaInsets as useSafeAreaInsets } from '../AppModal';
 import { X } from 'lucide-react-native';
 import { Text } from './Text';
 import { ModalBackdrop } from './ModalBackdrop';

@@ -16,7 +16,7 @@ export const colors = {
   primaryPressed: '#08507A',
   primarySoft: '#E6F1F8',
   /** El color del logo "Aviation Job Talent". */
-  logo: '#0E8FB0',
+  logo: '#03295B',
 
   // Nombres heredados: mismo papel, valores nuevos.
   navy: '#0E1A2B',

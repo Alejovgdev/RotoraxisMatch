@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Modal,
   ScrollView,
   StyleProp,
   StyleSheet,
@@ -12,7 +11,7 @@ import {
 import { Text } from '../ui/Text';
 import { ModalBackdrop } from '../ui/ModalBackdrop';
 import { X } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Modal, useModalSafeAreaInsets as useSafeAreaInsets } from '../AppModal';
 import { spacing } from '../../theme';
 import { techUi } from '../technician/TechnicianUI';
 import { dialogShadow, WIDE_BREAKPOINT } from '../../theme/ui';
