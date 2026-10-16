@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -22,8 +22,16 @@ import {
   DeletionReasonCode,
   deletionReasonLabel,
 } from '../../src/constants/deletionReasons';
+import { accountDeletionRepository } from '../../src/repositories/v2/accountDeletionRepository';
+import { CompanyDeletionImpact } from '../../src/types/accountDeletion';
+import { companyAccountCanBeDeleted, companyDeletionNotice } from '../../src/utils/accountDeletionNotice';
 
 const CONFIRM_WORD = 'DELETE';
+
+type ImpactState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; impact: CompanyDeletionImpact | null };
 
 export default function DeleteAccountScreen() {
   // Escritorio: barra de desplazamiento visible (fase 8).
@@ -46,10 +54,33 @@ export default function DeleteAccountScreen() {
   const [comment, setComment] = useState('');
 
   const isTechnician = profile?.role === 'technician';
+  const isCompanyUser = profile?.role === 'company_user';
   const confirmed = confirmText.trim().toUpperCase() === CONFIRM_WORD;
 
+  // Migración 105: qué pasa con la empresa. Hasta saberlo no se puede borrar,
+  // para que nadie se lleve su empresa por delante sin haberlo leído.
+  const [impactState, setImpactState] = useState<ImpactState>({ status: 'loading' });
+  const loadImpact = useCallback(async () => {
+    setImpactState({ status: 'loading' });
+    try {
+      const impact = await accountDeletionRepository.getCompanyDeletionImpact();
+      setImpactState({ status: 'ready', impact });
+    } catch {
+      setImpactState({ status: 'error' });
+    }
+  }, []);
+  useEffect(() => {
+    if (isCompanyUser) loadImpact();
+  }, [isCompanyUser, loadImpact]);
+
+  const impact = impactState.status === 'ready' ? impactState.impact : null;
+  const notice = companyDeletionNotice(impact);
+  const companyReady = !isCompanyUser
+    || (impactState.status === 'ready' && companyAccountCanBeDeleted(impactState.impact));
+  const canDelete = confirmed && companyReady;
+
   async function handleDelete() {
-    if (!confirmed) return;
+    if (!canDelete) return;
     setError(null);
     setLoading(true);
     try {
@@ -97,7 +128,11 @@ export default function DeleteAccountScreen() {
         <View style={styles.doneWrap}>
           <Text style={styles.doneIcon}>✓</Text>
           <Text style={styles.doneTitle}>Account deleted</Text>
-          <Text style={styles.doneSub}>Your account, direct identifiers and uploaded files have been removed. Redirecting…</Text>
+          <Text style={styles.doneSub}>
+            {notice.kind === 'deletes_company' && impact
+              ? `Your account and ${impact.companyName} have been deleted. Redirecting…`
+              : 'Your account, direct identifiers and uploaded files have been removed. Redirecting…'}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -134,19 +169,53 @@ export default function DeleteAccountScreen() {
             <BulletItem text="Chat messages you sent (replaced with [Message deleted])" />
             <BulletItem text="Your authentication credentials" />
             <BulletItem text="A limited deleted-account record retains the internal account identifier" />
-            <BulletItem text="The company profile, offers and marketplace history can remain for other members and platform integrity" />
+            {notice.kind !== 'deletes_company' ? (
+              <BulletItem text="The company profile, offers and marketplace history can remain for other members and platform integrity" />
+            ) : null}
           </>
         )}
       </View>
 
-      {/* Last-admin warning for company */}
-      {!isTechnician && (
+      {/* La empresa (migración 105): se borra con su último miembro, o el
+          único admin tiene que nombrar otro antes. */}
+      {isCompanyUser && impactState.status === 'loading' ? (
+        <View style={styles.card}>
+          <ActivityIndicator color={colors.cyan} size="small" />
+          <Text style={styles.surveyIntro}>Checking your company…</Text>
+        </View>
+      ) : null}
+      {isCompanyUser && impactState.status === 'error' ? (
         <View style={styles.warningCard}>
           <Text style={styles.warningText}>
-            If you are the only administrator of your company, you must assign another administrator before deleting your account.
+            We couldn't check what happens to your company. You can delete your account once this loads.
           </Text>
+          <TouchableOpacity onPress={loadImpact} style={styles.inlineAction} accessibilityRole="button">
+            <Text style={styles.footerLink}>Try again</Text>
+          </TouchableOpacity>
         </View>
-      )}
+      ) : null}
+      {notice.kind === 'deletes_company' ? (
+        <View style={styles.dangerCard}>
+          <Text style={styles.dangerTitle}>{notice.title}</Text>
+          <Text style={styles.dangerText}>{notice.intro}</Text>
+          {notice.items.map((item) => (
+            <BulletItem key={item} text={item} />
+          ))}
+          <Text style={styles.dangerText}>{notice.footer}</Text>
+        </View>
+      ) : null}
+      {notice.kind === 'must_assign_admin' ? (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningText}>{notice.text}</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/company/team' as any)}
+            style={styles.inlineAction}
+            accessibilityRole="link"
+          >
+            <Text style={styles.footerLink}>Go to Team</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Exit survey — optional, never a gate. */}
       <View style={styles.card}>
@@ -211,16 +280,20 @@ export default function DeleteAccountScreen() {
       <TouchableOpacity
         style={[
           styles.deleteBtn,
-          (!confirmed || loading) && styles.deleteBtnDisabled,
+          (!canDelete || loading) && styles.deleteBtnDisabled,
         ]}
         onPress={handleDelete}
-        disabled={!confirmed || loading}
+        disabled={!canDelete || loading}
         activeOpacity={0.8}
       >
         {loading ? (
           <ActivityIndicator color={colors.white} size="small" />
         ) : (
-          <Text style={styles.deleteBtnText}>Permanently delete my account</Text>
+          <Text style={styles.deleteBtnText}>
+            {notice.kind === 'deletes_company'
+              ? 'Permanently delete my account and company'
+              : 'Permanently delete my account'}
+          </Text>
         )}
       </TouchableOpacity>
 
@@ -376,6 +449,31 @@ const styles = StyleSheet.create({
     color: colors.warning,
     lineHeight: 19,
     fontWeight: '500',
+  },
+  inlineAction: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  dangerCard: {
+    backgroundColor: 'rgba(180, 35, 24, 0.10)',
+    borderRadius: 16,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(180, 35, 24, 0.35)',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  dangerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.error,
+  },
+  dangerText: {
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 19,
   },
   surveyIntro: {
     fontSize: 12,

@@ -192,7 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             p_years_experience: meta.years_experience ?? null,
           });
         }
-      } else if (role === 'company_user') {
+      } else if (role === 'company' || role === 'company_user') {
+        // Existing accounts may still carry company_user in Auth metadata.
+        // signup_company checks the authoritative profiles.role in the database.
         const { data } = await supabase
           .from('company_members')
           .select('id')

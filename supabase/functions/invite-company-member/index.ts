@@ -34,6 +34,8 @@ const RATE = {
 
 // ── Helpers ───────────────────────────────────────────────
 const VALID_ROLES = new Set(['admin', 'recruiter', 'viewer']);
+// Roles de alta de una cuenta de empresa en los metadatos de Auth.
+const COMPANY_SIGNUP_ROLES = new Set(['company', 'company_user']);
 
 class AppError extends Error {
   constructor(status, message) {
@@ -216,15 +218,21 @@ Deno.serve(async (req) => {
       const authUser = await findAuthUserByEmail(supabaseAdmin, email);
 
       if (authUser) {
+        // `company` es el nombre de alta desde la migración 102; `company_user`,
+        // el de las cuentas creadas antes.
         const metadataRole = authUser.user_metadata?.role;
-        if (metadataRole && metadataRole !== 'company_user') {
+        if (metadataRole && !COMPANY_SIGNUP_ROLES.has(metadataRole)) {
           throw new AppError(400, 'This email cannot be invited as a company member.');
         }
         targetUserId = authUser.id;
       } else {
+        // Rol de ALTA `company`, el único de empresa que acepta el trigger de
+        // auth.users desde la 102 (con `company_user` rechaza la cuenta y la
+        // invitación no sale). La base la guarda como company_user pendiente;
+        // el paso 8 la activa y la añade al equipo, como antes de la 102.
         const { data: inviteData, error: inviteError } =
           await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-            data: { role: 'company_user' },
+            data: { role: 'company' },
             redirectTo,
           });
         if (inviteError) throw new AppError(400, 'The invitation could not be sent. Please try again.');

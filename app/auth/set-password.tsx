@@ -14,6 +14,8 @@ import { useDesktopScrollbar } from '../../src/components/ui/useDesktopScrollbar
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
+import { authErrorText } from '../../src/auth/emailConfirmationRules';
+import { newPasswordError, PASSWORD_PLACEHOLDER } from '../../src/auth/passwordRules';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/theme';
 import type { AppRole, UserStatus } from '../../src/types/enums';
@@ -160,12 +162,9 @@ export default function SetPasswordScreen() {
       setError('Open the invitation email link again to set your password.');
       return;
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+    const passwordError = newPasswordError(password, confirmPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -173,7 +172,7 @@ export default function SetPasswordScreen() {
     setError(null);
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw new Error(updateError.message);
+      if (updateError) throw new Error(authErrorText(updateError));
 
       const destination = await destinationAfterPassword();
       router.replace(destination as any);
@@ -220,7 +219,7 @@ export default function SetPasswordScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
-                  placeholder="Min 8 characters"
+                  placeholder={PASSWORD_PLACEHOLDER}
                   placeholderTextColor={colors.placeholder}
                   autoComplete="new-password"
                   editable={sessionReady && !saving}

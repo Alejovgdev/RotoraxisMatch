@@ -3,6 +3,7 @@
 // --installed checks the applied schema without replaying the migration.
 const fs = require('node:fs');
 const path = require('node:path');
+require('./lib/devDatabaseGuard.cjs').assertDevDatabase();
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const env = Object.fromEntries(fs.readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/)

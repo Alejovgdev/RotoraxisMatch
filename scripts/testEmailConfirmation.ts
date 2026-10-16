@@ -232,10 +232,12 @@ async function main() {
       assert.match(source, /signUpOutcome\(data\)/, `${file}: no mira el resultado del alta`);
       assert.match(source, /outcome === 'already_registered'[\s\S]*?setError\(ALREADY_REGISTERED_TEXT\)/, `${file}: ya registrado`);
       assert.match(source, /outcome === 'needs_confirmation'[\s\S]*?checkEmailHref\(email\.trim\(\), 'signup'\)/, `${file}: por confirmar`);
-      // Confirmación desactivada: el camino de siempre, RPC y pending-verification.
+      // With a session, both create their profile. Home resolves technician
+      // access by account status; company signup still goes to the waiting room.
       const signedIn = source.slice(source.indexOf("outcome === 'needs_confirmation'"));
       assert.match(signedIn, new RegExp(`supabase\\.rpc\\('${rpc}'`), `${file}: sin RPC con sesión`);
-      assert.match(signedIn, /router\.replace\('\/auth\/pending-verification'/, `${file}: sin pending-verification`);
+      const destination = rpc === 'signup_technician' ? '/' : '/auth/pending-verification';
+      assert.ok(signedIn.includes(`router.replace('${destination}'`), `${file}: wrong signup destination`);
     }
   });
 

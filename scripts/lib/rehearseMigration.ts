@@ -12,8 +12,20 @@ import { findRepoRoot } from './loadEnv';
 // (scripts/testDatabaseRegressions.cjs): el de test explícito, luego el
 // SUPABASE_ACCESS_TOKEN del .env del proyecto, luego el heredado.
 
+// Ensayar escribe en la base (dentro de ROLLBACK): sólo contra dev. El candado
+// es CommonJS para compartirlo con los .cjs, y se carga del árbol de fuentes
+// porque tsc no lo copia a .tmp-*.
+function assertDevDatabase(extra: Record<string, string> = {}): void {
+  const guard = require(path.join(findRepoRoot(__dirname), 'scripts/lib/devDatabaseGuard.cjs')) as {
+    assertDevDatabase(extra: Record<string, string>): void;
+  };
+  guard.assertDevDatabase(extra);
+}
+
 export function rehearseArgument(): string | undefined {
-  return process.argv.find((a) => a.startsWith('--rehearse='))?.slice('--rehearse='.length);
+  const file = process.argv.find((a) => a.startsWith('--rehearse='))?.slice('--rehearse='.length);
+  if (file !== undefined) assertDevDatabase();
+  return file;
 }
 
 function managementToken(): string | undefined {
@@ -27,6 +39,7 @@ function managementToken(): string | undefined {
 
 /** Filas de `selectSql`, ejecutada después de `migrationFile` dentro de BEGIN … ROLLBACK. */
 export async function queryWithRehearsedMigration<T>(supabaseUrl: string, migrationFile: string, selectSql: string): Promise<T[]> {
+  assertDevDatabase({ script: supabaseUrl });
   const token = managementToken();
   const host = new URL(supabaseUrl).hostname;
   if (!token || !/^[a-z0-9]+\.supabase\.co$/.test(host)) throw new Error('--rehearse necesita un proyecto alojado y un token de la Management API');

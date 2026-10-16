@@ -99,7 +99,8 @@ export default function SignupScreen() {
         </View>
 
         <Text style={styles.footerNote}>
-          All accounts require verification before full access.{'\n'}
+          Technician accounts do not require admin approval.{'\n'}
+          Company accounts require verification before full access.{'\n'}
           Admin accounts are created by the platform team only.
         </Text>
       </ScrollView>

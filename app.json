@@ -7,8 +7,11 @@
     "icon": "./assets/images/brand/icon.png",
     "scheme": "aviationjobtalent",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.aviationjobtalent.app",
       "config": {
         "usesNonExemptEncryption": false

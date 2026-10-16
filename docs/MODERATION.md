@@ -94,6 +94,80 @@ DELETE FROM contact_blocks
 
 Si las dos partes se bloquearon, hay dos filas: con una sola, el bloqueo sigue.
 
+## Cuentas de prueba para los revisores
+
+Para las cuentas que piden Apple y Google: un técnico, una empresa y una cuenta
+desechable para probar el borrado. Migración `106_test_accounts.sql`.
+
+Una cuenta marcada (`profiles.is_test_account`) y las cuentas reales no se ven
+entre sí, en ningún sentido: ni en la búsqueda y el mapa de técnicos, ni en los
+técnicos de una oferta, ni en las ofertas publicadas (lista, mapa y detalle), ni
+en las empresas. Las de prueba sí se ven entre ellas, así que el revisor ve la
+app funcionando con los datos de prueba. Una empresa es de prueba si alguno de
+sus miembros está marcado, y entonces todos sus miembros cuentan como de prueba
+(también los que invite). El admin de la plataforma las sigue viendo todas.
+
+La marca sólo se pone o se quita desde el SQL editor del panel de Supabase.
+Desde la app no la cambia nadie: ni el propio usuario, ni el admin, ni las
+funciones.
+
+### Preparar las cuentas
+
+1. Registrar cada cuenta en la app como un usuario normal y **marcarla nada más
+   registrarla**, antes de completar el perfil o publicar nada:
+
+   ```sql
+   UPDATE public.profiles SET is_test_account = true
+    WHERE email IN ('<técnico>', '<empresa>', '<desechable>');
+   ```
+
+   Un técnico recién registrado ya aparece en la búsqueda de las empresas reales
+   (con los datos del registro) hasta que se marca. La empresa no se ve hasta que
+   se verifica.
+2. Verificar la empresa como cualquier otra: App → Admin → Companies → *Verify*.
+3. Con la empresa de prueba, publicar una o dos ofertas que encajen con el
+   técnico de prueba, para que el revisor vea búsqueda, matching y candidaturas.
+   Si se quiere que la app se vea más llena, registrar y marcar más técnicos.
+4. Poner los correos y contraseñas en App Store Connect (App Review Information →
+   Sign-In Information) y en Google Play Console (App content → App access).
+
+**No marcar cuentas que ya tengan candidaturas, ofertas directas o chats con
+cuentas reales**: esas relaciones se siguen viendo por los dos lados.
+
+### Ver cuáles están marcadas
+
+```sql
+SELECT p.email, p.role, p.status, c.name AS company,
+       p.is_test_account AS marked, public.is_test_company(c.id) AS test_company
+  FROM public.profiles p
+  LEFT JOIN public.company_members m ON m.user_id = p.id
+  LEFT JOIN public.companies c ON c.id = m.company_id
+ WHERE p.is_test_account OR public.is_test_company(m.company_id)
+ ORDER BY c.name NULLS FIRST, p.email;
+```
+
+`marked` false con `test_company` true es un miembro sin marca de una empresa de
+prueba.
+
+### Quitar la marca
+
+```sql
+UPDATE public.profiles SET is_test_account = false WHERE email = '<email>';
+```
+
+La cuenta vuelve a verse al momento. Una empresa sigue siendo de prueba mientras
+le quede algún miembro marcado.
+
+La cuenta desechable se borra desde la propia app (*Delete account*), sin quitarle
+la marca. Si es de empresa y era su único miembro, la empresa se borra con ella
+(migración 105). Para volver a probar el borrado, registrar otra cuenta y marcarla.
+
+### Lo que no hace
+
+- No impide una candidatura o una oferta directa entre una cuenta de prueba y una
+  real: no hay forma de crearla porque no se ven, pero la base no lo bloquea.
+- Los totales del panel de admin incluyen las cuentas de prueba.
+
 ## Activar el aviso por correo (cuando haya correo propio)
 
 La función `supabase/functions/notify-report` está en el repo, sin desplegar. Manda
@@ -141,6 +215,6 @@ Comprobado el 2026-10-15 en la base de dev:
 
 ### Nota para el revisor de Apple (App Review Information → Notes)
 
-> Aviation Job Talent is a B2B marketplace for aviation maintenance technicians and companies. Every technician and company account that registers is reviewed and verified manually by our team before it can publish job offers, apply to offers, send direct offers or send chat messages. Additional company team members can only be invited by the administrator of an already verified company. Chat is only available between a technician and a company after one of them has accepted the other's application or direct offer.
+> Aviation Job Talent is a B2B marketplace for aviation maintenance technicians and companies. New technician accounts become active on registration without manual admin approval. Company accounts are reviewed and verified manually by our team before gaining access to the platform. Additional company team members can only be invited by the administrator of an already verified company. Chat is only available between a technician and a company after one of them has accepted the other's application or direct offer.
 >
 > Users can report a profile, a job offer or an individual chat message (the "⋯" menu on profiles and offers; press and hold a message in the chat) and can block another user, which removes the conversation for both sides and stops further contact. Reports go to our moderation team, who act on them promptly by removing the content and suspending the account responsible. Our Terms of Service (section 6) state that there is zero tolerance for objectionable content and abusive users.

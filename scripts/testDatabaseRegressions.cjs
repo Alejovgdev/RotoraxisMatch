@@ -2,6 +2,7 @@
 // Needs a Management API token for the project in EXPO_PUBLIC_SUPABASE_URL.
 const fs = require('node:fs');
 const path = require('node:path');
+require('./lib/devDatabaseGuard.cjs').assertDevDatabase();
 const root = path.resolve(__dirname, '..');
 const fileEnv = fs.existsSync(path.join(root, '.env'))
   ? Object.fromEntries(fs.readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/)

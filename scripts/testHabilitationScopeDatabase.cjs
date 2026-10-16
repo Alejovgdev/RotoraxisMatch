@@ -2,6 +2,7 @@
 // --installed tests the production functions/triggers without replacing them.
 const fs = require('node:fs');
 const path = require('node:path');
+require('./lib/devDatabaseGuard.cjs').assertDevDatabase();
 const root = path.resolve(__dirname, '..');
 const env = Object.fromEntries(fs.readFileSync(path.join(root, '.env'), 'utf8').split(/\r?\n/)
   .filter(line => /^[A-Z_]+=/.test(line)).map(line => {

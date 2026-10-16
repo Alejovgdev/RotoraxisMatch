@@ -28,6 +28,7 @@ import {
   checkEmailHref,
   signUpOutcome,
 } from '../../../src/auth/emailConfirmationRules';
+import { newPasswordError, PASSWORD_PLACEHOLDER } from '../../../src/auth/passwordRules';
 
 function isValidEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -60,8 +61,8 @@ export default function CompanySignupScreen() {
     if (!companyName.trim()) return 'Company name is required.';
     if (!companyType) return 'Select a company type.';
     if (!isValidEmail(email)) return 'Enter a valid email address.';
-    if (password.length < 8) return 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) return 'Passwords do not match.';
+    const passwordError = newPasswordError(password, confirmPassword);
+    if (passwordError) return passwordError;
     // Sólo el país es obligatorio; la ciudad es opcional.
     if (!location.country) return 'Select your country.';
     if (!tosAccepted) return 'You must agree to the Terms of Service and acknowledge the Privacy Policy to continue.';
@@ -98,7 +99,8 @@ export default function CompanySignupScreen() {
         // vuelve a /auth/confirm.
         emailRedirectTo: EMAIL_CONFIRMATION_REDIRECT_URL,
         data: {
-          role: 'company_user',
+          // Public signup role; the database stores the internal company_user enum.
+          role: 'company',
           company_name: companyName.trim(),
           company_type: companyType,
           // Fase 7 F2c: país y ciudad, no un aeropuerto.
@@ -246,7 +248,7 @@ export default function CompanySignupScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                placeholder="Min 8 characters"
+                placeholder={PASSWORD_PLACEHOLDER}
                 placeholderTextColor={colors.placeholder}
                 returnKeyType="next"
               />

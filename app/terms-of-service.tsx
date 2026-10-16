@@ -95,7 +95,7 @@ export default function TermsOfServiceScreen() {
 
       <Section title="7. Verification">
         <P>
-          All technician profiles and companies are subject to verification by our team before gaining full platform access. We reserve the right to reject or revoke verification at any time.
+          Technician accounts can access the Platform after registration without prior admin approval. Companies are subject to verification by our team before gaining full platform access. We reserve the right to reject or revoke verification at any time.
         </P>
         <P>
           Verification status displayed on the Platform is for informational purposes only and does not constitute a professional endorsement or employment recommendation.
@@ -119,7 +119,7 @@ export default function TermsOfServiceScreen() {
 
       <Section title="10. Termination">
         <P>
-          You may delete your account via Settings → Delete account. A sole company administrator must first assign another administrator or contact support so the company record can be handled without being orphaned. We may suspend or terminate accounts that violate these Terms.
+          You may delete your account via Settings → Delete account. If you are the last active member of your company, deleting your account also permanently deletes the company with everything in it (its profile, logo, offers, applications, direct offers and chats with technicians, including their messages) and cancels any pending invitations; invited people who have never signed in do not count as members. If other active members remain and you are the only administrator, first make another member an administrator from Team. We may suspend or terminate accounts that violate these Terms.
         </P>
         <P>
           Upon termination, your personal data is handled in accordance with our Privacy Policy (Section 8).

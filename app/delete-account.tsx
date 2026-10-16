@@ -62,7 +62,7 @@ export default function PublicDeleteAccountScreen() {
         <Step n={2} text='Open Settings from your dashboard.' />
         <Step n={3} text='Scroll down to the Account section and tap "Delete account…"' />
         <Step n={4} text='Read the information about what will be deleted.' />
-        <Step n={5} text='Type DELETE in the confirmation field and tap "Permanently delete my account".' />
+        <Step n={5} text='Type DELETE in the confirmation field and tap "Permanently delete my account" (or "Permanently delete my account and company" if you are the last active member of a company).' />
         <Step n={6} text='The app confirms success only after your account credentials and uploaded files have been removed.' />
       </View>
 
@@ -74,11 +74,15 @@ export default function PublicDeleteAccountScreen() {
         </Text>
         <Text style={styles.p}>
           <Text style={styles.bold}>Company users: </Text>
-          Your name, contact details, membership, message content and authentication credentials are removed. A limited deleted-account record retains the internal account identifier. The company profile, offers and marketplace history can remain for other members and platform integrity.
+          Your name, contact details, membership, message content and authentication credentials are removed. A limited deleted-account record retains the internal account identifier. If other active members remain, the company profile, offers and marketplace history stay with the company.
         </Text>
         <Text style={styles.p}>
-          <Text style={styles.bold}>Only company administrator: </Text>
-          The current deletion flow requires you to assign another administrator before deleting your membership. If you cannot do this, contact support for help with the company record and your deletion request.
+          <Text style={styles.bold}>Last active member of a company: </Text>
+          Deleting your account also permanently deletes the company with everything in it: its profile, logo, offers, applications, direct offers and chats with technicians, including their messages. Pending invitations are cancelled; invited people who have never signed in do not count as members. The app shows what will be deleted before you confirm.
+        </Text>
+        <Text style={styles.p}>
+          <Text style={styles.bold}>Only administrator, with other members: </Text>
+          Make another member an administrator from Team before deleting your account.
         </Text>
       </View>
 

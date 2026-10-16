@@ -31,20 +31,11 @@ import {
   checkEmailHref,
   signUpOutcome,
 } from '../../../src/auth/emailConfirmationRules';
+import { newPasswordError, PASSWORD_PLACEHOLDER } from '../../../src/auth/passwordRules';
+import { birthDateError, buildBirthDate, MINIMUM_TECHNICIAN_AGE } from '../../../src/auth/birthDateRules';
 
 function isValidEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
-}
-
-function buildDate(y: string, m: string, d: string): string | null {
-  const year = parseInt(y);
-  const month = parseInt(m);
-  const day = parseInt(d);
-  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-  if (year < 1930 || year > 2010) return null;
-  if (month < 1 || month > 12) return null;
-  if (day < 1 || day > 31) return null;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 export default function TechnicianSignupScreen() {
@@ -78,10 +69,11 @@ export default function TechnicianSignupScreen() {
     if (!firstName.trim()) return 'First name is required.';
     if (!lastName.trim()) return 'Last name is required.';
     if (!isValidEmail(email)) return 'Enter a valid email address.';
-    if (password.length < 8) return 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) return 'Passwords do not match.';
-    if (!birthYear || !birthMonth || !birthDay) return 'Date of birth is required.';
-    if (!buildDate(birthYear, birthMonth, birthDay)) return 'Enter a valid date of birth.';
+    const passwordError = newPasswordError(password, confirmPassword);
+    if (passwordError) return passwordError;
+    // Fecha real y 18 años cumplidos; la base lo vuelve a imponer (104).
+    const birthError = birthDateError(birthYear, birthMonth, birthDay);
+    if (birthError) return birthError;
     if (technicianTypes.length === 0) return 'Select at least one profile type.';
     const yearsError = validateSignupYearsExperience(yearsExperience);
     if (yearsError) return yearsError;
@@ -101,7 +93,7 @@ export default function TechnicianSignupScreen() {
     setError(null);
     setLoading(true);
 
-    const birthDate = buildDate(birthYear, birthMonth, birthDay)!;
+    const birthDate = buildBirthDate(birthYear, birthMonth, birthDay)!;
     // Non-null: validate() above rejected anything parseYearsExperience
     // cannot read, including the empty string.
     const years = parseYearsExperience(yearsExperience)!;
@@ -223,8 +215,9 @@ export default function TechnicianSignupScreen() {
       if (consentError) console.error('Failed to record ToS consent:', consentError);
     }
 
-    // Step 5: Redirect to pending verification
-    router.replace('/auth/pending-verification' as any);
+    // The home screen waits for the profile and routes by its actual status.
+    // This also works if manual approval is restored in the database later.
+    router.replace('/' as any);
   }
 
   return (
@@ -246,7 +239,7 @@ export default function TechnicianSignupScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Technician account</Text>
             <Text style={styles.subtitle}>
-              All fields are required. Your profile will be reviewed before activation.
+              All fields are required. Start using the platform after registration.
             </Text>
           </View>
 
@@ -303,7 +296,7 @@ export default function TechnicianSignupScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                placeholder="Min 8 characters"
+                placeholder={PASSWORD_PLACEHOLDER}
                 placeholderTextColor={colors.placeholder}
                 returnKeyType="next"
               />
@@ -367,6 +360,9 @@ export default function TechnicianSignupScreen() {
                 </FormField>
               </View>
             </View>
+            <Text style={styles.fieldHint}>
+              You must be at least {MINIMUM_TECHNICIAN_AGE} years old.
+            </Text>
 
             {/* Tipos de perfil — varios, mínimo uno. Mismo componente y
                 mismo comportamiento que en la pantalla de perfil. */}
@@ -457,7 +453,7 @@ export default function TechnicianSignupScreen() {
           />
 
           <Text style={styles.footerNote}>
-            Your profile will be verified before you can access the platform.
+            No admin approval is needed to access the platform. Documents are reviewed separately.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -520,6 +516,12 @@ const styles = StyleSheet.create({
   dateDay: { width: 72 },
   dateMonth: { width: 72 },
   dateYear: { flex: 1 },
+  fieldHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+    marginTop: -8,
+  },
   fieldWrap: { gap: 6 },
   fieldLabel: {
     fontSize: 13,

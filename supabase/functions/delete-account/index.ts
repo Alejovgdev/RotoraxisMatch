@@ -86,18 +86,19 @@ async function recordDeletionFeedback(supabaseAdmin, role, feedback) {
 }
 
 /**
- * Enumerate every real object below one technician-owned prefix, including
- * nested folders. Paths from the public `documents` table are deliberately
- * not trusted here: a forged row must never let service_role delete another
+ * Enumerate every real object below one owned prefix (a technician's or a
+ * company's id), including nested folders. Paths stored in tables
+ * (`documents.storage_path`, `companies.logo_path`) are deliberately not
+ * trusted here: a forged row must never let service_role delete another
  * user's object during account deletion.
  */
-async function listTechnicianStoragePaths(bucket, technicianId) {
+async function listStoragePaths(bucket, rootFolder) {
   const paths = [];
-  const folders = [technicianId];
+  const folders = [rootFolder];
 
   for (let folderIndex = 0; folderIndex < folders.length; folderIndex += 1) {
     if (folders.length > 10000) {
-      throw new AppError(500, 'The uploaded-document folder is too complex to delete safely.');
+      throw new AppError(500, 'An uploaded-file folder is too complex to delete safely.');
     }
 
     const folder = folders[folderIndex];
@@ -107,7 +108,7 @@ async function listTechnicianStoragePaths(bucket, technicianId) {
         offset,
       });
       if (listErr) {
-        throw new AppError(500, 'Could not inspect the uploaded-document folder. The account was not deleted.');
+        throw new AppError(500, 'Could not inspect the uploaded files. The account was not deleted.');
       }
 
       for (const entry of entries ?? []) {
@@ -121,6 +122,31 @@ async function listTechnicianStoragePaths(bucket, technicianId) {
   }
 
   return [...new Set(paths)];
+}
+
+function listTechnicianStoragePaths(bucket, technicianId) {
+  return listStoragePaths(bucket, technicianId);
+}
+
+/**
+ * Borra el logo de una empresa que se va con esta cuenta: todo lo que haya
+ * bajo `<companyId>/` en el bucket público company-logos. Storage es externo
+ * a la transacción de la base, así que va ANTES del borrado de la cuenta y,
+ * si no se confirma, no se borra nada más (reintentable, como en el técnico).
+ */
+async function removeCompanyLogos(bucket, companyId) {
+  const paths = await listStoragePaths(bucket, companyId);
+  for (let start = 0; start < paths.length; start += STORAGE_BATCH_SIZE) {
+    const { error: logoErr } = await bucket.remove(paths.slice(start, start + STORAGE_BATCH_SIZE));
+    if (logoErr) {
+      throw new AppError(500, 'Could not remove the company logo. The account was not deleted; retry account deletion.');
+    }
+  }
+
+  const remainingLogos = await listStoragePaths(bucket, companyId);
+  if (remainingLogos.length > 0) {
+    throw new AppError(500, 'Storage did not confirm removal of the company logo. Retry account deletion.');
+  }
 }
 
 async function deleteAccountTechnician(supabaseAdmin, userId) {
@@ -163,39 +189,37 @@ async function deleteAccountTechnician(supabaseAdmin, userId) {
 }
 
 async function deleteAccountCompanyUser(supabaseAdmin, userId) {
-  // 1. Resolve company membership
-  const { data: member, error: memberErr } = await supabaseAdmin
-    .from('company_members')
-    .select('id, company_id, role')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (memberErr) throw new AppError(500, 'Could not retrieve company membership.');
+  // 1. Qué pasa con la empresa (migración 105). La base decide quién cuenta
+  //    como miembro con la misma regla con la que luego borra: las
+  //    invitaciones pendientes (cuentas que nunca han entrado) no cuentan.
+  const { data: impactRows, error: impactErr } = await supabaseAdmin
+    .rpc('company_account_deletion_impact', { p_user_id: userId });
+  if (impactErr) throw new AppError(500, 'Could not check your company membership. The account was not deleted.');
+  const impact = impactRows?.[0] ?? null;
 
-  if (member && member.role === 'admin') {
-    // 2. Count admins in this company — block if last admin
-    const { count, error: countErr } = await supabaseAdmin
-      .from('company_members')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', member.company_id)
-      .eq('role', 'admin');
-    if (countErr) throw new AppError(500, 'Could not verify company admin count.');
-    if ((count ?? 0) <= 1) {
-      throw new AppError(
-        409,
-        'You are the only administrator of your company. Assign another administrator before deleting your account.',
-      );
-    }
+  // 2. Único admin con otros miembros que sí han entrado: tiene que nombrar
+  //    otro antes. Regla de producto ("no dejes a tu empresa sin
+  //    administrador"), no invariante de integridad, así que vive AQUÍ y no en
+  //    el trigger: un borrado que no pase por esta función se la salta.
+  if (impact?.must_assign_admin) {
+    throw new AppError(
+      409,
+      'You are the only administrator of your company. Make another member an administrator before deleting your account. Pending invitations do not count as members.',
+    );
   }
 
-  // 3. Borrar el usuario de auth. El trigger `on_auth_user_deleted` quita la
-  //    membresía de company_members, anonimiza los mensajes de chat y marca
-  //    profiles.status='deleted', todo en esta misma transacción.
-  //
-  //    El guard de último admin de arriba se queda AQUÍ a propósito: es una
-  //    regla de producto ("no dejes a tu empresa sin administrador"), no un
-  //    invariante de integridad, así que no se replica en el trigger. Un
-  //    borrado que no pase por esta función se la salta — pero sigue sin poder
-  //    dejar un fantasma, que es lo que el trigger sí garantiza.
+  // 3. Si no queda nadie más que haya entrado, la empresa se va con la cuenta:
+  //    primero su logo (Storage, fuera de la transacción).
+  if (impact?.deletes_company) {
+    await removeCompanyLogos(supabaseAdmin.storage.from('company-logos'), impact.company_id);
+  }
+
+  // 4. Borrar el usuario de auth. El trigger `on_auth_user_deleted`
+  //    (handle_deleted_user) quita la membresía, anonimiza los mensajes de
+  //    chat y marca profiles.status='deleted'; desde la 105, si la empresa se
+  //    queda sin nadie que haya entrado, la borra con sus ofertas,
+  //    candidaturas, ofertas directas y chats y cancela sus invitaciones
+  //    pendientes. Todo en esta misma transacción: o todo o nada.
   const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (deleteErr) throw new AppError(500, 'Could not remove authentication credentials.');
 }
