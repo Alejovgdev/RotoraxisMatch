@@ -1,5 +1,8 @@
 # Product Context V2 — AviationJobTalent
 
+> **Historical context (June 2026).** It may be out of date: the code and
+> `supabase/migrations/` are the source of truth (see CLAUDE.md, "Important docs").
+
 AviationJobTalent V2 is a bidirectional aviation marketplace connecting verified technicians with companies, MROs, airlines, operators, and recruitment agencies.
 
 ## Marketplace model

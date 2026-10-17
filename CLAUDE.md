@@ -1,10 +1,11 @@
 # AviationJobTalent — Claude Context
 
-   > **UI redesign:** before touching any screen in `app/company` or `app/technician`, read `docs/UI_REDESIGN.md`. Its mockups (`docs/redesign/mockups/`) were removed on 2026-10-16, once the redesign was finished; they remain in git history (parent of commit `c618f53`).
+> **UI redesign:** finished (merged into `main` on 2026-10-10, commit `26f5960`). Its mockups no longer exist; `docs/UI_REDESIGN.md` remains only as a style reference for `app/company` and `app/technician`.
 
-> **V2 is the source of truth.** AviationJobTalent V2 is now the active product definition.
-> Read `docs/PRODUCT_CONTEXT_V2.md`, `docs/DATA_MODEL_V2.md` and `docs/USER_FLOWS_V2.md`
-> before any major work.
+> **Source of truth: the code and the migrations** (`app/`, `src/`, `supabase/migrations/`).
+> `docs/PRODUCT_CONTEXT_V2.md` and `docs/USER_FLOWS_V2.md` are historical context from June 2026
+> and may be out of date: where they disagree with the code, the code wins. The current docs
+> are listed under "Important docs".
 
 AviationJobTalent is a cross-platform aviation technician matching app.
 
@@ -231,13 +232,19 @@ Avoid generic UI.
 
 ## Important docs
 
-V2 docs (source of truth):
-- docs/PRODUCT_CONTEXT_V2.md
-- docs/DATA_MODEL_V2.md
-- docs/USER_FLOWS_V2.md
+The code and `supabase/migrations/` are the source of truth. Current docs:
+- docs/UI_REDESIGN.md — visual style reference for the company and technician areas
+- docs/fase-10.md — engines, authorities, matching and eligibility (Fase 10, migrations 064–097)
+- docs/ACCOUNTS_AND_SIGNUP.md — signup, roles, offer writes, minimum age, account deletion and invitations (101–105)
+- docs/MODERATION.md — reports, blocks and the store-review test accounts (100, 106)
+- docs/PHASE_7_IMAGES_PLAN.md — profile photos and company logos (098, 099)
+- docs/OFFER_SALARY.md — optional gross remuneration on offers (062, 063)
+- docs/STORE_PRIVACY_DECLARATIONS.md — App Store / Play privacy declarations (`validate:store-privacy`)
+- docs/PWA.md — the installable web app
 
-V2 technical model (read before any implementation):
-- docs/RLS_PLAN_V2.md — security / RLS policies
+Out of date, pending a merge into `docs/DEPLOYMENT.md`: docs/ENVIRONMENT.md, docs/DEPLOYMENT_CHECKLIST.md, docs/V2_S1_ADMIN_BOOTSTRAP_SQL.sql.
+
+Historical context, may be out of date: docs/PRODUCT_CONTEXT_V2.md, docs/USER_FLOWS_V2.md. Historical records (not current rules): docs/MISSION_PART66.md, docs/FINAL_AUDIT_REPORT.md, docs/PHASE5_INVENTORY.md, docs/RLS_OPERATION_AUDIT_2026-07-23_REPORT.md, docs/OFFER_DELETE_SOFT_DELETE_PROPOSAL.md, docs/DELETED_ACCOUNT_ANONYMIZATION_PROPOSAL.md, docs/archive/.
 
 ## Working rules
 

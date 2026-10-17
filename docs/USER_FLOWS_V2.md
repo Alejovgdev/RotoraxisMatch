@@ -1,5 +1,8 @@
 # User Flows V2 — AviationJobTalent
 
+> **Historical context (June 2026).** It may be out of date: the code and
+> `supabase/migrations/` are the source of truth (see CLAUDE.md, "Important docs").
+
 ## 1. Technician registration and profile setup
 
 1. User opens app → selects "I am a technician".
