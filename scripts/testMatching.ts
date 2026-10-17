@@ -765,7 +765,7 @@ async function main() {
   // approximately anymore, only exactly as a license+rating pair.
   //
   // The same-row invariant Case 5 guarded (a license and an aircraft only
-  // count when held in the SAME technician_habilitations row — see CLAUDE.md)
+  // count when held in the SAME technician_habilitations row — see docs/DOMAIN_RULES.md)
   // is NOT left uncovered: it now lives exclusively in the exact path, where
   // "Matching — Case 2: no false combination across categories" above asserts
   // exactly that, and Case 5b's family-vs-engine coverage is Case 3's job.

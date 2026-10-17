@@ -51,7 +51,7 @@ export type OfferKind = 'aircraft' | 'engine';
  *    así que "tres obligatorias" significaba en la práctica "una cualquiera".
  *    Lo sustituye `Offer.requiresAllAircraft`, una decisión por oferta.
  *
- * ⚠ La invariante de MISMA FILA de CLAUDE.md sigue viva y NO se ha relajado:
+ * ⚠ La invariante de MISMA FILA de docs/DOMAIN_RULES.md sigue viva y NO se ha relajado:
  * es una regla sobre el TÉCNICO (`technician_habilitations`, cuyo
  * `licenseCode` sigue siendo NOT NULL). Aquí desaparece la ambigüedad que la
  * hacía necesaria — con una sola licencia por oferta no hay dos entre las

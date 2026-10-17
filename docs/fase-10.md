@@ -259,7 +259,7 @@ registrada** como `20260929094519` (md5 de `statements` idéntico al fichero).
    oficio) de `isEngineOfferCandidate` y del núcleo SQL, que pierde
    `p_engine_count`. Quien entra por (b) sin ser Engine Technician puntúa con
    `PROFILE_TYPE_MISMATCH_CAP` (19) y la aclaración de tipo distinto: se quita
-   la excepción que lo saltaba en ofertas de motor (ver CLAUDE.md, punto 4 de
+   la excepción que lo saltaba en ofertas de motor (ver docs/DOMAIN_RULES.md, punto 4 de
    las ofertas de motor, para el porqué).
 
 Ensayo de la 091, todo dentro de transacciones que revierten, sobre la base

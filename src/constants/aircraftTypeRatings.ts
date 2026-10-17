@@ -86,7 +86,7 @@ export function getAircraftFamilyKey(rating: Pick<AircraftTypeRatingCatalog, 'ma
 // mismo, o una empresa vería en la búsqueda técnicos que el matching luego
 // puntúa a cero, y al revés. Dos copias es la forma de que eso pase sin que
 // nadie se entere. Vive aquí porque es una función pura sobre el catálogo,
-// que es lo que este fichero contiene por contrato (ver CLAUDE.md).
+// que es lo que este fichero contiene por contrato (ver docs/DOMAIN_RULES.md).
 export function habilitationCoversFamilyKey(
   habilitation: { aircraftTypeRatingId?: string },
   familyKey: string,

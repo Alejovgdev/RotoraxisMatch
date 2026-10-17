@@ -9,7 +9,7 @@
 // aircraft. See docs/archive/PART66_AIRCRAFT_MODEL_ANALYSIS.md section 6 for the
 // original bug report.
 //
-// Business principle (see CLAUDE.md "Backend / data model notes"): a
+// Business principle (see docs/DOMAIN_RULES.md): a
 // technician who holds exactly what an offer requires must score clearly
 // above one who does not, regardless of how good the rest of their profile
 // looks — a missing required qualification is a legal blocker, not a minor
@@ -890,7 +890,7 @@ interface BroadOutcome {
 //
 // The same-row rule the deleted branch enforced is NOT lost — it lives on
 // where it actually matters, in the exact path (see the "same row" contract
-// in evaluateHabilitationRequirement and CLAUDE.md). Nothing here combines
+// in evaluateHabilitationRequirement and docs/DOMAIN_RULES.md). Nothing here combines
 // an independent license check with an independent aircraft check, because
 // there is no aircraft check left to combine.
 // Fase 6 tanda D: `offer.requiredLicenses` (array) pasó a `offer.licenseCode`
