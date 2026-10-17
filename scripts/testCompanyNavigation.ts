@@ -82,7 +82,7 @@ test('Secciones — las interiores cuelgan de su sección', () => {
 });
 
 test('Secciones — search, inbox, you y el perfil de un técnico no son sección', () => {
-  for (const p of ['/company/search', '/company/chats', '/company/chats/1', '/company/profile', '/company/technician/3', '/company/requests']) {
+  for (const p of ['/company/search', '/company/chats', '/company/chats/1', '/company/profile', '/company/technician/3']) {
     assert.equal(companySectionForPath(p), null, p);
   }
   assert.equal(companySectionForPath('/company/offersx'), null, 'un prefijo no basta: hace falta la barra');

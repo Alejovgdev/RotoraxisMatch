@@ -101,7 +101,6 @@ test('Pestañas — una pantalla interior no es raíz (ahí no hay barra inferio
     '/technician/direct-offers/4',
     '/technician/map',
     '/technician/documents',
-    '/technician/requests',
   ]) {
     assert.equal(technicianTabForPath(p), null, p);
   }
@@ -117,8 +116,8 @@ test('Secciones de escritorio — Home, Offers, Applications, Direct offers y Ma
   assert.equal(technicianSectionForPath('/technician/map'), 'map');
 });
 
-test('Secciones — Inbox, You, Documents y la pantalla vieja de solicitudes no son sección', () => {
-  for (const p of ['/technician/chats', '/technician/chats/1', '/technician/profile', '/technician/documents', '/technician/requests']) {
+test('Secciones — Inbox, You y Documents no son sección', () => {
+  for (const p of ['/technician/chats', '/technician/chats/1', '/technician/profile', '/technician/documents']) {
     assert.equal(technicianSectionForPath(p), null, p);
   }
   assert.equal(technicianSectionForPath('/technician/offersx'), null, 'un prefijo no basta: hace falta la barra');
