@@ -1,5 +1,5 @@
 // Paleta del rediseño (docs/UI_REDESIGN.md, sección 1 "Visual system", y los
-// valores de las maquetas de docs/redesign/mockups/).
+// valores de las maquetas, retiradas el 2026-10-16 y conservadas en el historial de git).
 //
 // Los nombres de siempre se conservan y cambian de valor, para que toda la app
 // coja el estilo nuevo a la vez (respuesta 2 de la revisión). Reglas de uso:

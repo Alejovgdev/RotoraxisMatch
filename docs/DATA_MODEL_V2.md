@@ -80,7 +80,7 @@ Aircraft type codes. New types can be added at any time without migrations.
 - Airplanes (24): A220, A318, A319, A320, A321, A330, A340, A350, A380, B737, B747, B757, B767, B777, B787, ATR42, ATR72, Q400, CRJ200, CRJ700, CRJ900, E175, E190, E195
 - Helicopters (9): H125, H135, H145, S76, S92, B407, B412, AW139, R44
 
-**MVP catalog note:** Aircraft type codes are intentionally simplified — one code per aircraft family. More granular variant codes (`B737NG`, `B737CL`, `B737M`, `EC135`, `DH8D`, `AS350`) can be introduced as separate catalog rows in a later migration if clients need them. Codes in `docs/SUPABASE_SCHEMA_V2.sql` and `src/constants/aircraftTypes.ts` must always match.
+**MVP catalog note:** Aircraft type codes are intentionally simplified — one code per aircraft family. More granular variant codes (`B737NG`, `B737CL`, `B737M`, `EC135`, `DH8D`, `AS350`) can be introduced as separate catalog rows in a later migration if clients need them. (Superseded: migration 030 dropped `aircraft_types`; `src/constants/aircraftTypes.ts` and `docs/SUPABASE_SCHEMA_V2.sql` no longer exist.)
 
 ### company_types
 

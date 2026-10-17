@@ -12,7 +12,7 @@ Out of scope: the admin area.
 
 ## 0. Mockups
 
-The mockups live in `docs/redesign/mockups/`. They are the visual reference for every screen: layout, spacing, colours, sizes and copy.
+The mockups lived in `docs/redesign/mockups/` and were the visual reference for every screen: layout, spacing, colours, sizes and copy. They were removed on 2026-10-16, once the redesign was finished; they remain in git history (parent of commit `c618f53`).
 
 - Company screens: `W-*.dc.html` (mobile) and `W-D-*.dc.html` (desktop).
 - Technician screens: `T-*.dc.html` (mobile only, see section 5).
@@ -287,7 +287,7 @@ The owner's answers to the pre-implementation review. They are part of the appro
 Behaviour stays exactly as it is today. The redesign changes the look and the navigation, not what the app does. If a mockup or this document clashes with what the code does today, the code wins. Do not add features that do not exist today, except the ones approved in this document.
 
 ### Material
-- `docs/redesign/mockups/` now holds the 59-mockup set. It replaces the earlier 44.
+- `docs/redesign/mockups/` held the 59-mockup set, which replaced the earlier 44 (removed on 2026-10-16; see section 0).
 - The company mockups — mobile (`W-*`, `C-*`) and desktop (`W-D-*`) — already reflect these answers.
 - The technician mockups (`T-*`) do not yet. Where they clash with these answers, these answers win.
 
