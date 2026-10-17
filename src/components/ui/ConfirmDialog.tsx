@@ -2,11 +2,11 @@
 // W-Offer, W-Team): tarjeta centrada sobre un velo, "Cancel" a la izquierda y
 // la acción a la derecha. Igual en móvil y en escritorio.
 //
-// Sustituye en las pantallas rediseñadas a `confirmAction()` de
-// src/utils/platformAlert.ts con LA MISMA FORMA: recibe título, mensaje y
+// Sustituyó a `confirmAction()` de src/utils/platformAlert.ts (retirado el
+// 2026-10-17, ya sin uso) con LA MISMA FORMA: recibe título, mensaje y
 // rótulos, y devuelve una promesa que se resuelve a true sólo si se confirma.
 // El trabajo sigue escribiéndose después del `await`, en el mismo handler; lo
-// único que cambia es el aspecto (en web, `window.confirm` pintaba el diálogo
+// único que cambió fue el aspecto (en web, `window.confirm` pintaba el diálogo
 // del navegador).
 //
 //   const { confirm, dialog } = useConfirmDialog();

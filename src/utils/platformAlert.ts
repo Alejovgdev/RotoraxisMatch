@@ -1,7 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
 /**
- * Avisos y confirmaciones que funcionan EN LAS TRES PLATAFORMAS.
+ * Avisos que funcionan EN LAS TRES PLATAFORMAS.
  *
  * ── Por qué existe esto ───────────────────────────────────────────────
  * `Alert` de react-native-web (0.21.2) es literalmente una función vacía:
@@ -23,8 +23,9 @@ import { Alert, Platform } from 'react-native';
  * que decirlo**. Un `return` mudo o un aviso que no se renderiza son el
  * mismo bug con distinta cara.
  *
- * No usar `Alert` de react-native directamente en pantallas. Usar `notify()`
- * y `confirmAction()`.
+ * No usar `Alert` de react-native directamente en pantallas: los avisos van por
+ * `notify()` y las confirmaciones por `useConfirmDialog()`
+ * (src/components/ui/ConfirmDialog.tsx), que sustituyó a `confirmAction()`.
  */
 
 export interface WebNotice {
@@ -62,57 +63,4 @@ export function notify(title: string, message?: string): void {
     return;
   }
   Alert.alert(title, message);
-}
-
-/**
- * Confirmación de dos opciones. Devuelve `true` si el usuario confirma.
- *
- * Devolver una promesa (en vez de recibir callbacks como `Alert.alert`) es
- * deliberado: el trabajo se escribe DESPUÉS del await, en el mismo handler,
- * en vez de dentro de un `onPress` anidado que en web nunca se ejecutaba.
- * Esa forma es la que hacía que el fallo fuese silencioso.
- */
-export function confirmAction(options: {
-  title: string;
-  message?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-}): Promise<boolean> {
-  const { title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', destructive } = options;
-
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    return Promise.resolve(window.confirm(message ? `${title}\n\n${message}` : title));
-  }
-
-  return new Promise((resolve) => {
-    // `settle` protege de resolver dos veces: en Android, `onDismiss` se
-    // dispara TAMBIÉN después de pulsar un botón en algunas versiones.
-    let settled = false;
-    const settle = (value: boolean) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    Alert.alert(
-      title,
-      message,
-      [
-        { text: cancelLabel, style: 'cancel', onPress: () => settle(false) },
-        { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: () => settle(true) },
-      ],
-      {
-        // ANDROID: el botón atrás / tocar fuera cierra el diálogo SIN llamar
-        // a ningún onPress. Sin esto la promesa se queda colgada para
-        // siempre y el handler que la espera no continúa nunca — un cuelgue
-        // silencioso, justo la clase de fallo que estamos eliminando.
-        // `cancelable` + `onDismiss` solo tienen efecto en Android; en iOS
-        // el diálogo no se puede descartar sin pulsar un botón.
-        cancelable: true,
-        onDismiss: () => settle(false),
-      },
-    );
-  });
 }

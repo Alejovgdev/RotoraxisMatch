@@ -525,7 +525,7 @@ export type ProfileTypesChange =
   | { status: 'saved'; enginesRemoved: boolean }
   | { status: 'error'; error: string };
 
-/** La misma forma que useConfirmDialog().confirm y confirmAction. */
+/** La misma forma que useConfirmDialog().confirm. */
 export type ConfirmFn = (options: { title: string; message?: string; confirmLabel?: string; destructive?: boolean }) => Promise<boolean>;
 
 /**
