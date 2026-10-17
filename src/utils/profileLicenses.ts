@@ -21,10 +21,6 @@ export interface HeldLicense {
   expiresAt?: string;
 }
 
-export function credentialKey(authority: string, code: string): string {
-  return `${authority}|${code}`;
-}
-
 export function holdsLicense(held: readonly HeldLicense[], authority: string, code: string): boolean {
   return held.some((l) => l.authority === authority && l.code === code);
 }

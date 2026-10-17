@@ -31,6 +31,4 @@ export type OfferStatus = 'draft' | 'published' | 'closed' | 'expired' | 'archiv
 
 export type CompanyMemberRole = 'admin' | 'recruiter' | 'viewer';
 
-export type ExperienceUnit = 'hours' | 'years';
-
 export type SenderRole = 'technician' | 'company';

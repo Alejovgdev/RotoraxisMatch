@@ -21,17 +21,6 @@ export function buildEngineIndex(engines: EngineCatalog[]): EngineIndex {
   return new Map(engines.map((e) => [e.id, e]));
 }
 
-/**
- * ¿Son el mismo motor? Por id, y sólo por id.
- *
- * Existe como función con nombre para que el escalón "motor exacto" no se
- * escriba nunca comparando textos: `displayName` y `family` son datos de
- * presentación y de agrupación, no identidad.
- */
-export function isSameEngine(idA: string | undefined, idB: string | undefined): boolean {
-  return Boolean(idA) && idA === idB;
-}
-
 export function getEngineLabel(id: string, engineIndex: EngineIndex): string {
   return engineIndex.get(id)?.displayName ?? id;
 }

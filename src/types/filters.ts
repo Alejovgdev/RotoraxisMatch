@@ -1,5 +1,4 @@
 import { TechnicianTypeCode, LicenseCode, ContractTypeCode } from './catalog';
-import { VerificationStatus } from './enums';
 import { LocationValue } from './location';
 
 // --- V2 types ---
@@ -14,26 +13,6 @@ export interface TechnicianSearchFilters {
   verifiedOnly?: boolean;
   availableImmediately?: boolean;
   minYearsExperience?: number;
-}
-
-/**
- * ⚠ SIN NINGÚN LECTOR (comprobado por grep, 2026-08-10): nadie construye ni
- * consume este tipo. No es el contrato vivo de la búsqueda de ofertas — es un
- * contrato V2 que se escribió por delante y nunca se conectó.
- *
- * Dos de sus campos ya nombran cosas que el modelo no tiene: `requiredLicenses`
- * (plural) murió con la Fase 6 tanda D — la licencia es una y vive en
- * `Offer.licenseCode` — y `technicianTypes` (plural) con la tanda C. Se dejan
- * como están a propósito: retocar los campos de un tipo que nadie usa daría la
- * impresión de que está vivo. Va entero al barrido de exports muertos, junto a
- * `TechnicianSearchFilters` — ver docs/MISSION_PART66.md, sección "LIMPIEZA".
- */
-export interface OfferSearchFilters {
-  contractTypes?: ContractTypeCode[];
-  requiredLicenses?: LicenseCode[];
-  technicianTypes?: TechnicianTypeCode[];
-  country?: string;
-  city?: string;
 }
 
 // --- V1-compatible UI contracts — intentionally retained until the V2 UI migration ---
@@ -119,4 +98,3 @@ export interface MapFilters {
   availabilityStatus?: string;
 }
 
-export type MapFilterValue = string | string[] | undefined;

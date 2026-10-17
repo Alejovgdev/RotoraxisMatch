@@ -870,22 +870,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: adminUi.textSoft,
   },
-  switchButton: {
-    marginTop: spacing.lg,
-    minHeight: 44,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: adminUi.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: adminUi.surface,
-  },
-  switchText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-    color: adminUi.textSoft,
-  },
   signOutBtn: {
     minHeight: 48,
     borderRadius: 999,

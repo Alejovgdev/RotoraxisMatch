@@ -17,7 +17,7 @@ import type { PairMatch } from './offerMatchExplain';
 // filtro de elegibilidad; ahora piden el par a `matchPairs`. Quien la
 // necesite de verdad (tests, el propio servicio) la importa de
 // offerMatchExplain, que es donde vive.
-export { getMatchLabel, getMatchScoreWeights, getMatchDisplayLabel, ineligibilityReasonText } from './offerMatchExplain';
+export { getMatchDisplayLabel, ineligibilityReasonText } from './offerMatchExplain';
 export type { MatchScoreWeights, PairMatch, IneligibilityReason } from './offerMatchExplain';
 export type { TechnicianMatchResult, OfferMatchResult } from './matchingService';
 

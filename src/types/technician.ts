@@ -92,7 +92,7 @@ export interface Technician {
  * (v2SafePreviewToSafeView / v2UnlockedViewToSafeView). This is the real,
  * working shape behind company/search.tsx, both map implementations
  * (TechnicianMap.native.tsx / TechnicianMapLeafletImpl.tsx),
- * useCompanyDashboard.ts, useMapTechnicians.ts, and useTechnicianSearch.ts
+ * useMapTechnicians.ts and useTechnicianSearch.ts
  * today — NOT dead code and NOT safely deletable as a quick cleanup
  * (consumer grep refreshed after the dead V1 cards/modals were removed,
  * 2026-07-27). Retiring it in favor of

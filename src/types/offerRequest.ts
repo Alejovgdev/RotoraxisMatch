@@ -38,10 +38,3 @@ export interface OfferApplication {
 // Always use the `kind` field to discriminate — never rely on field presence checks.
 export type OfferInboxRecord = OfferRequest | OfferApplication;
 
-export function isDirectOffer(record: OfferInboxRecord): record is OfferRequest {
-  return record.kind === 'direct_offer';
-}
-
-export function isApplication(record: OfferInboxRecord): record is OfferApplication {
-  return record.kind === 'application';
-}

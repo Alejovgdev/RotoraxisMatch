@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { Offer, OfferProductType, OfferRequiredHabilitation, OfferWithRequirements } from '../../types/offer';
+import { Offer, OfferProductType, OfferWithRequirements } from '../../types/offer';
 import { TechnicianTypeCode, AuthorityLicenseCode, ContractTypeCode, AuthorityCode, LicenseCode } from '../../types/catalog';
 // Fase 10, paso 5b: aquí vivía DEFAULT_OFFER_AUTHORITY = 'EASA', el relleno de
 // la autoridad mientras el formulario no la pedía. Se retira con el selector:
@@ -23,7 +23,6 @@ import {
   mapOfferRow,
   throwIfError,
   withRequirements,
-  throwIfNoRows,
 } from './supabaseMappers';
 
 // Una sola lista de columnas para las siete consultas de `offers` de este

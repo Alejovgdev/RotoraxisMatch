@@ -25,9 +25,7 @@ import { OfferRequest, OfferApplication } from '../types/offerRequest';
 import {
   TechnicianWithRelations,
 } from '../types/technician';
-import { SafeTechnicianPreview, UnlockedTechnicianView } from '../types/privacy';
-import { Document } from '../types/document';
-import { LicenseCode } from '../types/catalog';
+import { SafeTechnicianPreview } from '../types/privacy';
 
 // ---------------------------------------------------------------------------
 // Age
@@ -124,30 +122,3 @@ export function getSafeTechnicianPreview(technician: TechnicianWithRelations): S
   };
 }
 
-/**
- * Builds an UnlockedTechnicianView — the full company view after acceptance.
- * Extends SafeTechnicianPreview with identity fields and documents.
- * Only call this when canRevealIdentity() returns true.
- *
- * DOCUMENT CONTRACT: The `documents` parameter must be pre-filtered to verified-only
- * for all company-facing calls. Use documentRepositoryV2.getVerifiedForTechnician().
- * Technician and admin views may pass all documents regardless of status.
- *
- * MVP rule: Company sees only documents with status = 'verified'.
- * Pending, rejected, and expired documents are technician/admin-only.
- */
-export function getUnlockedTechnicianView(
-  technician: TechnicianWithRelations,
-  documents: Document[],
-): UnlockedTechnicianView {
-  return {
-    ...getSafeTechnicianPreview(technician),
-    photoPath: technician.photoPath ?? null,
-    firstName: technician.firstName,
-    lastName: technician.lastName,
-    email: technician.email,
-    phone: technician.phone,
-    socialLinks: technician.socialLinks,
-    documents,
-  };
-}

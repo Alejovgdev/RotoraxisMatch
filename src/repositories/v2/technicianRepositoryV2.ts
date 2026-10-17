@@ -10,7 +10,6 @@ import {
 import type { OwnProfileColumnsPatch } from '../../types/technicianProfileEdit';
 import { SafeTechnicianPreview, TechnicianView, isUnlocked } from '../../types/privacy';
 import { TechnicianMatchCandidate } from '../../types/matching';
-import { LicenseCode } from '../../types/catalog';
 import { typesLockedByLicenses } from '../../constants/licenses';
 import { technicianTypeLabel } from '../../constants/technicianTypes';
 import { buildAircraftRatingIndex } from '../../constants/aircraftTypeRatings';

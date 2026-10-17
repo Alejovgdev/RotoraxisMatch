@@ -67,4 +67,3 @@ export const colors = {
   admin: '#0B6A9E',
 } as const;
 
-export type Color = keyof typeof colors;

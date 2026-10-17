@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { Text, TextInput } from '../../../src/components/ui/Text';
 import { useDesktopScrollbar } from '../../../src/components/ui/useDesktopScrollbar';
@@ -15,7 +14,6 @@ import { Stack, useRouter } from 'expo-router';
 import { useGoBack } from '../../../src/state/useGoBack';
 import { supabase } from '../../../src/lib/supabase';
 import { useTechnicianTypes } from '../../../src/auth/useCatalogOptions';
-import { AuthPickerField, PickerOption } from '../../../src/components/auth/AuthPickerField';
 import { CountryCityPicker } from '../../../src/components/CountryCityPicker';
 import { EMPTY_LOCATION, LocationValue } from '../../../src/types/location';
 import { persistedLocationFromValue } from '../../../src/utils/locationBridge';

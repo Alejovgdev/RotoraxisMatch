@@ -9,8 +9,7 @@
  *
  * In the live app the privacy gate is applied at two entry points:
  *   - technicianRepositoryV2.getViewForCompany() — company screens
- *   - canRevealIdentity() + getUnlockedTechnicianView() / getSafeTechnicianPreview()
- *     (privacyV2.ts) — the search, map and dashboard hooks, which already hold the
+ *   - canRevealIdentity() (privacyV2.ts) — the search and map hooks, which already hold the
  *     acceptance records and build the view themselves.
  * Both populate these same DTOs from view/RPC responses.
  *
@@ -20,8 +19,8 @@
  *
  * Company-facing code must NEVER consume TechnicianProfile or TechnicianWithRelations directly.
  * Go through technicianRepositoryV2.getViewForCompany(), or — when the caller already holds
- * the acceptance records — through canRevealIdentity() plus getUnlockedTechnicianView() /
- * getSafeTechnicianPreview() (privacyV2.ts), so the privacy gate is always applied.
+ * the acceptance records — through canRevealIdentity()
+ * (privacyV2.ts), so the privacy gate is always applied.
  */
 
 import { TechnicianTypeCode, AuthorityLicenseCode, AuthorityCode } from './catalog';

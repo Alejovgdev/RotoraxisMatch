@@ -2,9 +2,11 @@ import { LicenseCode } from '../types/catalog';
 import { AircraftClass, EasaGroup, HabilitationScope, PropulsionType } from '../types/habilitationScope';
 import { getLicenseRatingProductType } from './licenseCategoryProductType';
 
-// Fase 4 (docs/MISSION_PART66.md) — pure scaffolding. canHold() and
-// everything below is NOT wired to any form, matching path, or UI yet —
-// on purpose. No data migration, no production call sites.
+// Fase 4 (docs/MISSION_PART66.md) — scaffolding. canHold() is still NOT
+// wired to any form, matching path, or UI: only scripts/testMatching.ts calls
+// it. getCompatiblePropulsion() is the exception: since H3 (Fase 10, paso 5d)
+// the app uses it through src/utils/individualTypeRatingScope.ts, which
+// checks the scope of profile habilitations (mirror of migration 083).
 
 // Generalizes getLicenseRatingProductType() (Fase 3b) as canHold()'s
 // aircraft-class dimension — imported, never re-implemented, so there is
@@ -120,6 +122,6 @@ export function canHold(licenseCode: LicenseCode, scope: HabilitationScope): boo
 }
 
 // Exported for direct unit testing alongside getLicenseRatingProductType()
-// (see scripts/testMatching.ts) — not intended as a second public API
-// surface for callers; canHold() is the entry point Fase 4 scaffolds.
+// (see scripts/testMatching.ts). getCompatiblePropulsion() also has a
+// production caller, src/utils/individualTypeRatingScope.ts (H3).
 export { getCompatibleAircraftClass, getCompatiblePropulsion };

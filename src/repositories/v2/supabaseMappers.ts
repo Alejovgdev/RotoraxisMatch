@@ -10,7 +10,6 @@ import {
   TechnicianAircraftExperience,
   TechnicianHabilitation,
   TechnicianLicense,
-  TechnicianProfile,
   TechnicianEngineExperience,
   TechnicianWithRelations,
 } from '../../types/technician';

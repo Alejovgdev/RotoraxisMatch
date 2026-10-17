@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -19,7 +18,7 @@ import {
 } from './admin/AdminUI';
 import type { AdminTone } from './admin/AdminUI';
 import { spacing } from '../theme';
-import { notify, confirmAction } from '../utils/platformAlert';
+import { notify } from '../utils/platformAlert';
 
 interface Props {
   document: TechnicianDocument;

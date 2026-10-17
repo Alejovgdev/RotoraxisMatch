@@ -17,7 +17,6 @@ import {
   Technician,
   SafeTechnicianView,
   TechnicianWithRelations,
-  TechnicianProfile,
 } from '../types/technician';
 import { Company, CompanyProfile, CompanyProfileView } from '../types/company';
 import { TechnicianDocument, Document } from '../types/document';

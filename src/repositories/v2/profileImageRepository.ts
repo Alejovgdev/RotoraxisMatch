@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '../../lib/supabase';
-import type { PreparedProfileImage, ProfileImageKind, ProfileImageStore } from '../../usecases/profileImages';
+import type { PreparedProfileImage, ProfileImageStore } from '../../usecases/profileImages';
 
 const buckets = { technician: 'technician-photos', company: 'company-logos' } as const;
 const cache = new Map<string, { promise: Promise<string>; expires: number }>();

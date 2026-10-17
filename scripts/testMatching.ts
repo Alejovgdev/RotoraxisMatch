@@ -114,7 +114,6 @@ import {
 } from '../src/constants/licenses';
 import { getMatchDisplayLabel } from '../src/utils/offerMatchExplain';
 import { GENERAL_COMPATIBILITY_LABEL } from '../src/types/matching';
-import { Technician } from '../src/types';
 import {
   parseYearsExperience,
   validateSignupYearsExperience,

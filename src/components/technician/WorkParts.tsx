@@ -239,11 +239,6 @@ export function LicenceCard({
   );
 }
 
-/** Una franja de la tarjeta, con la línea de arriba. */
-export function CardStrip({ children }: { children: React.ReactNode }) {
-  return <View style={styles.strip}>{children}</View>;
-}
-
 // ── Filas de añadir y elementos ─────────────────────────────────────────────
 
 /** "+ Add a type rating on B1.1": la acción de añadir dentro de una tarjeta o sección. */
@@ -523,10 +518,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  strip: {
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },

@@ -444,10 +444,6 @@ function normalizeAirportCode(code?: string): string {
   return code?.trim().toLowerCase() ?? '';
 }
 
-export function airportLocationId(icao: string): LocationCityId {
-  return `airport:${icao.trim().toUpperCase()}` as LocationCityId;
-}
-
 export function findAirportCityById(locationCityId?: string): AirportCityWithCountry | undefined {
   if (!locationCityId) return undefined;
   return LOCATION_BY_ID.get(locationCityId.trim().toLowerCase());

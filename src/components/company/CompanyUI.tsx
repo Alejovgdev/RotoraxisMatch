@@ -143,10 +143,6 @@ export function EmptyPanel({ title, subtitle }: { title: string; subtitle: strin
   );
 }
 
-export function ActivityDot() {
-  return <View style={companyStyles.activityDot} />;
-}
-
 export function InitialAvatar({
   label,
   size = 42,
@@ -182,83 +178,10 @@ export function IconBox({
   );
 }
 
-// A labelled checkbox row. Same look as the "needs ALL of these aircraft" box in
-// TypeRatingRequirementsEditor, extracted when the offer form grew two more
-// (equivalent authorities, only technicians without a licence).
-export function CompanyCheckRow({
-  label,
-  helper,
-  checked,
-  onChange,
-}: {
-  label: string;
-  helper?: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={checkRowStyles.row}
-      onPress={() => onChange(!checked)}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      accessibilityLabel={label}
-      activeOpacity={0.75}
-    >
-      <View style={[checkRowStyles.box, checked && checkRowStyles.boxOn]}>
-        {checked ? <Text style={checkRowStyles.mark}>✓</Text> : null}
-      </View>
-      <View style={checkRowStyles.copy}>
-        <Text style={checkRowStyles.label}>{label}</Text>
-        {helper ? <Text style={checkRowStyles.helper}>{helper}</Text> : null}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const checkRowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: spacing.xs },
-  box: {
-    width: 18,
-    height: 18,
-    marginTop: 1,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: companyUi.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  boxOn: { borderColor: companyUi.accent, backgroundColor: companyUi.accentSoft },
-  mark: { fontSize: 12, lineHeight: 14, fontWeight: '700', color: companyUi.accent },
-  copy: { flex: 1, minWidth: 0, gap: 2 },
-  label: { fontSize: 12, lineHeight: 17, fontWeight: '600', color: companyUi.textSoft },
-  helper: { fontSize: 11, lineHeight: 15, fontWeight: '500', color: companyUi.textMuted },
-});
-
-export function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={companyStyles.infoRow}>
-      <Text style={companyStyles.infoLabel}>{label}</Text>
-      <Text style={companyStyles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 export const companyStyles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: companyUi.page,
-  },
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxxl,
-  },
-  contentWide: {
-    maxWidth: 900,
-    alignSelf: 'center',
-    width: '100%',
-    paddingHorizontal: spacing.lg,
   },
   pageHeader: {
     marginBottom: spacing.md,
@@ -383,16 +306,6 @@ export const companyStyles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 320,
   },
-  activityDot: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: companyUi.notify,
-    zIndex: 2,
-  },
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -410,27 +323,5 @@ export const companyStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  infoLabel: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: companyUi.textMuted,
-  },
-  infoValue: {
-    flex: 2,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: companyUi.text,
-    textAlign: 'right',
   },
 });

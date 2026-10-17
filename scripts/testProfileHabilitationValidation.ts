@@ -1,8 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
-import ts from 'typescript';
 import { buildAircraftRatingIndex } from '../src/constants/aircraftTypeRatings';
 import { AircraftTypeRatingCatalog, EngineCatalog } from '../src/types/catalog';
 import { blockingHabilitationIssues, explainHabilitationScopeRejection, isHabilitationScopeRejection, profileHabilitationIssues, profileHabilitationProblems } from '../src/utils/profileHabilitationValidation';

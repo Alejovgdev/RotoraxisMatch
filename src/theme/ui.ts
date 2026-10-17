@@ -37,8 +37,6 @@ export const appUi = {
   disabledText: colors.disabledText,
 };
 
-export type AppUi = typeof appUi;
-
 /** Radios de las maquetas: tarjetas 16–24, campos 14, todo lo pulsable en píldora. */
 export const radius = {
   sm: 10,

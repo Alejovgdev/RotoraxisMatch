@@ -8,4 +8,3 @@ export const spacing = {
   xxxl: 64,
 } as const;
 
-export type Spacing = keyof typeof spacing;
