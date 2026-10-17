@@ -1,5 +1,5 @@
 // Every mutation rolls back. Default: rehearse the candidate migration.
-// --installed tests the production functions/triggers without replacing them.
+// --installed tests the functions/triggers already installed on dev without replacing them.
 const fs = require('node:fs');
 const path = require('node:path');
 require('./lib/devDatabaseGuard.cjs').assertDevDatabase();

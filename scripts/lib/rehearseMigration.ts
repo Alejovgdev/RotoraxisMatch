@@ -6,7 +6,7 @@ import { findRepoRoot } from './loadEnv';
 // (`-- --rehearse=supabase/migrations/NNN_x.sql`): aplica la migración y
 // ejecuta una consulta en UNA transacción que termina en ROLLBACK, por la
 // Management API. Es lo que permite comprobar que un núcleo SQL nuevo dice lo
-// mismo que TypeScript antes de llevarlo a producción.
+// mismo que TypeScript antes de aplicarlo a la base (hoy, la de desarrollo).
 //
 // Token: el mismo orden que los runners de test:db
 // (scripts/testDatabaseRegressions.cjs): el de test explícito, luego el
