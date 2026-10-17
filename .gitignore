@@ -23,3 +23,6 @@ supabase/.temp/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Ajustes locales de Claude Code: cambian por máquina, no se versionan.
+.claude/settings.local.json
